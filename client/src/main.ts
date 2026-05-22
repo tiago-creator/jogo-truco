@@ -12,7 +12,8 @@ import feltTealUrl from "./img/table-backgrounds/felt-teal.png";
 
 type TrucoSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
-const serverUrl = 'https://truco-1wfk.onrender.com';//import.meta.env.VITE_SERVER_URL ?? `${window.location.protocol}//${window.location.hostname}:3000`;
+const serverUrl = 'https://truco-1wfk.onrender.com';
+//const serverUrl = import.meta.env.VITE_SERVER_URL ?? `${window.location.protocol}//${window.location.hostname}:3000`;
 const tableBackgrounds = {
   "felt-teal": { label: "Teal", url: feltTealUrl },
   "felt-emerald": { label: "Emerald", url: feltEmeraldUrl },
@@ -252,6 +253,10 @@ class TableScene extends Phaser.Scene {
   private previousRoomState: RoomState | null = null;
   private animatingTableCardIds = new Set<string>();
   private animatingHandCardIds = new Set<string>();
+  private faceDownHandCardIds = new Set<string>();
+  private pendingFaceDownTableCardIds = new Set<string>();
+  private handCardObjects = new Map<string, { container: Phaser.GameObjects.Container; signature: string }>();
+  private tableCardObjects = new Map<string, { container: Phaser.GameObjects.Container; signature: string }>();
   private roomId = "mesa-1";
   private playerName = `Jogador ${Math.floor(Math.random() * 900 + 100)}`;
   private status!: Phaser.GameObjects.Text;
@@ -436,6 +441,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.socket.on("room:state", (state) => {
       this.previousRoomState = this.roomState;
       this.roomState = state;
+      this.syncFaceDownHandCards();
 
       if (state.status === "waiting") {
         showWaitingRoom(state.message);
@@ -537,6 +543,9 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.roomState = null;
     this.previousRoomState = null;
     this.lastAnimatedTrucoValue = null;
+    this.faceDownHandCardIds.clear();
+    this.pendingFaceDownTableCardIds.clear();
+    this.clearCachedCardObjects();
 
     returnToMainMenu();
   }
@@ -943,6 +952,45 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.renderHand(self?.hand ?? [], isMyTurn && !this.roomState.trucoRequest);
   }
 
+  private syncFaceDownHandCards(): void {
+    const hand = this.roomState?.self?.hand ?? [];
+    const handIds = new Set(hand.map((card) => card.id));
+    const previousHandLength = this.previousRoomState?.self?.hand.length ?? 0;
+
+    if (hand.length === 3 && previousHandLength !== 3) {
+      this.faceDownHandCardIds.clear();
+      return;
+    }
+
+    for (const cardId of this.faceDownHandCardIds) {
+      if (!handIds.has(cardId)) {
+        this.faceDownHandCardIds.delete(cardId);
+      }
+    }
+
+    const tableCardIds = new Set((this.roomState?.table ?? []).map((entry) => entry.card.id));
+
+    for (const cardId of this.pendingFaceDownTableCardIds) {
+      if (!handIds.has(cardId) && !tableCardIds.has(cardId)) {
+        this.pendingFaceDownTableCardIds.delete(cardId);
+      }
+    }
+  }
+
+  private canToggleFaceDownCard(): boolean {
+    return (this.roomState?.self?.hand.length ?? 0) < 3;
+  }
+
+  private toggleFaceDownCard(cardId: string): void {
+    if (this.faceDownHandCardIds.has(cardId)) {
+      this.faceDownHandCardIds.delete(cardId);
+    } else {
+      this.faceDownHandCardIds.add(cardId);
+    }
+
+    this.renderState();
+  }
+
   private createCurvedStars(
     count: number,
     centerX: number,
@@ -1177,7 +1225,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     const targetPosition = this.getTableCardPosition(playedEntry.playerId, currentTable.length - 1, currentTable.length);
     const toX = this.tableGroup.x + targetPosition.x;
     const toY = this.tableGroup.y + targetPosition.y;
-    const animatedCard = this.createCard(playedEntry.card, false);
+    const animatedCard = this.createTableCard(playedEntry);
 
     this.animatingTableCardIds.add(playedEntry.card.id);
     animatedCard.setPosition(fromX, fromY);
@@ -1448,22 +1496,33 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
   }
 
   private renderTable(): void {
-    this.tableGroup.removeAll(true);
-
     const cards = this.roomState?.table ?? [];
+    const activeCardIds = new Set<string>();
 
     cards.forEach((entry, index) => {
+      activeCardIds.add(entry.card.id);
+
       if (this.animatingTableCardIds.has(entry.card.id)) {
+        this.destroyCachedTableCard(entry.card.id);
         return;
       }
 
-      const card = this.createCard(entry.card, false);
+      const signature = this.getTableCardSignature(entry);
+      const cached = this.tableCardObjects.get(entry.card.id);
+      const card = cached?.signature === signature
+        ? cached.container
+        : this.replaceCachedTableCard(entry.card.id, this.createTableCard(entry), signature);
       const position = this.getTableCardPosition(entry.playerId, index, cards.length);
 
       card.setPosition(position.x, position.y);
       card.setScale(0.68 * this.uiScale);
-      this.tableGroup.add(card);
     });
+
+    for (const cardId of Array.from(this.tableCardObjects.keys())) {
+      if (!activeCardIds.has(cardId)) {
+        this.destroyCachedTableCard(cardId);
+      }
+    }
   }
 
   private getTableCardPosition(playerId: string, fallbackIndex: number, tableCardCount: number): { x: number; y: number } {
@@ -1481,6 +1540,40 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     const startX = -((tableCardCount - 1) * spacing) / 2;
 
     return { x: startX + fallbackIndex * spacing, y: 120 * this.uiScale };
+  }
+
+  private createTableCard(entry: RoomState["table"][number]): Phaser.GameObjects.Container {
+    return this.isTableCardFaceDown(entry) ? this.createCardBack() : this.createCard(entry.card, false);
+  }
+
+  private getTableCardSignature(entry: RoomState["table"][number]): string {
+    return this.isTableCardFaceDown(entry) ? "back" : "front";
+  }
+
+  private isTableCardFaceDown(entry: RoomState["table"][number]): boolean {
+    return entry.faceDown === true || this.pendingFaceDownTableCardIds.has(entry.card.id);
+  }
+
+  private replaceCachedTableCard(
+    cardId: string,
+    container: Phaser.GameObjects.Container,
+    signature: string
+  ): Phaser.GameObjects.Container {
+    this.destroyCachedTableCard(cardId);
+    this.tableCardObjects.set(cardId, { container, signature });
+    this.tableGroup.add(container);
+    return container;
+  }
+
+  private destroyCachedTableCard(cardId: string): void {
+    const cached = this.tableCardObjects.get(cardId);
+
+    if (!cached) {
+      return;
+    }
+
+    cached.container.destroy();
+    this.tableCardObjects.delete(cardId);
   }
 
   private getHandCardTarget(cards: Card[], index: number): { x: number; y: number; scale: number; rotation: number } {
@@ -1510,21 +1603,70 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
   }
 
   private renderHand(cards: Card[], enabled: boolean): void {
-    this.handGroup.removeAll(true);
-
     const spacing = Math.min(104 * this.uiScale, this.scale.width / 5.6);
     const startX = -((cards.length - 1) * spacing) / 2;
+    const activeCardIds = new Set<string>();
 
     cards.forEach((cardData, index) => {
+      activeCardIds.add(cardData.id);
+
       if (this.animatingHandCardIds.has(cardData.id)) {
+        this.destroyCachedHandCard(cardData.id);
         return;
       }
 
-      const card = this.createCard(cardData, enabled);
+      const faceDown = this.faceDownHandCardIds.has(cardData.id);
+      const signature = this.getHandCardSignature(enabled, faceDown);
+      const cached = this.handCardObjects.get(cardData.id);
+      const card = cached?.signature === signature
+        ? cached.container
+        : this.replaceCachedHandCard(cardData.id, this.createCard(cardData, enabled, faceDown), signature);
+
       card.setPosition(startX + index * spacing, 0);
       card.setScale(1 * this.uiScale);
-      this.handGroup.add(card);
     });
+
+    for (const cardId of Array.from(this.handCardObjects.keys())) {
+      if (!activeCardIds.has(cardId)) {
+        this.destroyCachedHandCard(cardId);
+      }
+    }
+  }
+
+  private getHandCardSignature(enabled: boolean, faceDown: boolean): string {
+    return `${enabled ? "enabled" : "disabled"}:${faceDown ? "back" : "front"}`;
+  }
+
+  private replaceCachedHandCard(
+    cardId: string,
+    container: Phaser.GameObjects.Container,
+    signature: string
+  ): Phaser.GameObjects.Container {
+    this.destroyCachedHandCard(cardId);
+    this.handCardObjects.set(cardId, { container, signature });
+    this.handGroup.add(container);
+    return container;
+  }
+
+  private destroyCachedHandCard(cardId: string): void {
+    const cached = this.handCardObjects.get(cardId);
+
+    if (!cached) {
+      return;
+    }
+
+    cached.container.destroy();
+    this.handCardObjects.delete(cardId);
+  }
+
+  private clearCachedCardObjects(): void {
+    for (const cardId of Array.from(this.handCardObjects.keys())) {
+      this.destroyCachedHandCard(cardId);
+    }
+
+    for (const cardId of Array.from(this.tableCardObjects.keys())) {
+      this.destroyCachedTableCard(cardId);
+    }
   }
 
   private renderOpponentHand(cards: Card[]): void {
@@ -1602,61 +1744,69 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     return container;
   }
 
-  private createCard(card: Card, enabled: boolean): Phaser.GameObjects.Container {
+  private createCard(card: Card, enabled: boolean, faceDown = false): Phaser.GameObjects.Container {
     const container = this.add.container(0, 0);
     const width = 80;
     const height = 118;
     const radius = 10;
     const suitColor = this.suitColor(card.suit);
     const shadow = this.add.graphics();
-    const face = this.add.graphics();
 
     shadow.fillStyle(0x06130f, 0.34);
     shadow.fillRoundedRect(-width / 2 + 4, -height / 2 + 6, width, height, radius);
 
-    face.fillStyle(0xfffbef, 1);
-    face.fillRoundedRect(-width / 2, -height / 2, width, height, radius);
-    face.lineStyle(3, enabled ? 0xffcf5a : 0x3d2f22, 1);
-    face.strokeRoundedRect(-width / 2, -height / 2, width, height, radius);
-    face.lineStyle(1, 0xffffff, 0.65);
-    face.strokeRoundedRect(-width / 2 + 5, -height / 2 + 5, width - 10, height - 10, radius - 3);
+    if (faceDown) {
+      const back = this.add.image(0, 0, "card-back").setDisplaySize(width, height);
 
-    const cornerRank = this.add.text(-28, -44, card.rank, {
-      color: suitColor,
-      fontFamily: "Arial",
-      fontSize: "17px",
-      fontStyle: "bold"
-    }).setOrigin(0.5);
+      container.add([shadow, back]);
+    } else {
+      const face = this.add.graphics();
 
-    const cornerSuit = this.add.text(-28, -27, this.suitSymbol(card.suit), {
-      color: suitColor,
-      fontFamily: "Arial",
-      fontSize: "16px",
-      fontStyle: "bold"
-    }).setOrigin(0.5);
+      face.fillStyle(0xfffbef, 1);
+      face.fillRoundedRect(-width / 2, -height / 2, width, height, radius);
+      face.lineStyle(3, enabled ? 0xffcf5a : 0x3d2f22, 1);
+      face.strokeRoundedRect(-width / 2, -height / 2, width, height, radius);
+      face.lineStyle(1, 0xffffff, 0.65);
+      face.strokeRoundedRect(-width / 2 + 5, -height / 2 + 5, width - 10, height - 10, radius - 3);
 
-    const centerSuit = this.add.text(0, -2, this.suitSymbol(card.suit), {
-      color: suitColor,
-      fontFamily: "Arial",
-      fontSize: "42px",
-      fontStyle: "bold"
-    }).setOrigin(0.5);
+      const cornerRank = this.add.text(-28, -44, card.rank, {
+        color: suitColor,
+        fontFamily: "Arial",
+        fontSize: "17px",
+        fontStyle: "bold"
+      }).setOrigin(0.5);
 
-    const bottomRank = this.add.text(28, 44, card.rank, {
-      color: suitColor,
-      fontFamily: "Arial",
-      fontSize: "17px",
-      fontStyle: "bold"
-    }).setOrigin(0.5).setRotation(Math.PI);
+      const cornerSuit = this.add.text(-28, -27, this.suitSymbol(card.suit), {
+        color: suitColor,
+        fontFamily: "Arial",
+        fontSize: "16px",
+        fontStyle: "bold"
+      }).setOrigin(0.5);
 
-    const bottomSuit = this.add.text(28, 27, this.suitSymbol(card.suit), {
-      color: suitColor,
-      fontFamily: "Arial",
-      fontSize: "16px",
-      fontStyle: "bold"
-    }).setOrigin(0.5).setRotation(Math.PI);
+      const centerSuit = this.add.text(0, -2, this.suitSymbol(card.suit), {
+        color: suitColor,
+        fontFamily: "Arial",
+        fontSize: "42px",
+        fontStyle: "bold"
+      }).setOrigin(0.5);
 
-    container.add([shadow, face, cornerRank, cornerSuit, centerSuit, bottomRank, bottomSuit]);
+      const bottomRank = this.add.text(28, 44, card.rank, {
+        color: suitColor,
+        fontFamily: "Arial",
+        fontSize: "17px",
+        fontStyle: "bold"
+      }).setOrigin(0.5).setRotation(Math.PI);
+
+      const bottomSuit = this.add.text(28, 27, this.suitSymbol(card.suit), {
+        color: suitColor,
+        fontFamily: "Arial",
+        fontSize: "16px",
+        fontStyle: "bold"
+      }).setOrigin(0.5).setRotation(Math.PI);
+
+      container.add([shadow, face, cornerRank, cornerSuit, centerSuit, bottomRank, bottomSuit]);
+    }
+
     container.setSize(width, height);
 
     if (enabled) {
@@ -1670,9 +1820,18 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
         }
 
         hasPlayed = true;
+        const shouldPlayFaceDown = this.faceDownHandCardIds.has(card.id);
+
+        this.faceDownHandCardIds.delete(card.id);
+
+        if (shouldPlayFaceDown) {
+          this.pendingFaceDownTableCardIds.add(card.id);
+        }
+
         this.socket.emit("card:play", {
           roomId: this.roomId,
-          cardId: card.id
+          cardId: card.id,
+          faceDown: shouldPlayFaceDown
         });
       };
 
@@ -1716,6 +1875,11 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       });
       container.on("pointerup", () => {
         if (!hasDragged && !isAnimatingToTable) {
+          if (this.canToggleFaceDownCard()) {
+            this.toggleFaceDownCard(card.id);
+            return;
+          }
+
           playCard();
         }
       });

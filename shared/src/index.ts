@@ -23,6 +23,7 @@ export type ClientPlayer = PublicPlayer;
 export type TableCard = {
   playerId: string;
   card: Card;
+  faceDown?: boolean;
 };
 
 export type TrucoRequest = {
@@ -54,7 +55,7 @@ export type RoomState = {
 export type ClientToServerEvents = {
   "room:join": (payload: { roomId: string; name: string; token: string }) => void;
   "room:leave": (payload: { roomId: string }) => void;
-  "card:play": (payload: { roomId: string; cardId: string }) => void;
+  "card:play": (payload: { roomId: string; cardId: string; faceDown?: boolean }) => void;
   "truco:raise": (payload: { roomId: string }) => void;
   "truco:respond": (payload: { roomId: string; action: "accept" | "reject" | "raise" }) => void;
   "audio:send": (payload: { roomId: string; audio: ArrayBuffer; mimeType: string }) => void;

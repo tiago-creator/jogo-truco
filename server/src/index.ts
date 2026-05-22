@@ -10,6 +10,7 @@ import {
   type PublicPlayer,
   type RoomState,
   type ServerToClientEvents,
+  type TableCard,
   type TrucoRequest,
   shuffle
 } from "@truco/shared";
@@ -27,7 +28,7 @@ type PlayerState = {
 type Room = {
   id: string;
   players: PlayerState[];
-  table: { playerId: string; card: Card }[];
+  table: TableCard[];
   vira?: Card;
   handValue: RoomState["handValue"];
   turnPlayerId: string | null;
@@ -179,7 +180,7 @@ function finishTrickIfReady(room: Room): void {
   }
 
   const [first, second] = room.table;
-  const winner = compareCards(first.card, second.card) >= 0 ? first.playerId : second.playerId;
+  const winner = getTrickWinner(first, second);
   const winnerPlayer = room.players.find((player) => player.id === winner);
 
   if (winnerPlayer) {
@@ -187,11 +188,45 @@ function finishTrickIfReady(room: Room): void {
   }
 
   room.table = [];
-  room.turnPlayerId = winner;
+  room.turnPlayerId = winner ?? first.playerId;
+  const allCardsPlayed = room.players.every((player) => player.hand.length === 0);
 
-  if (winnerPlayer && (winnerPlayer.roundWins >= 2 || room.players.every((player) => player.hand.length === 0))) {
+  if (winnerPlayer && (winnerPlayer.roundWins >= 2 || allCardsPlayed)) {
     finishHand(room, winnerPlayer);
+    return;
   }
+
+  if (allCardsPlayed) {
+    const [leftPlayer, rightPlayer] = room.players;
+    const handWinner = leftPlayer.roundWins === rightPlayer.roundWins
+      ? null
+      : leftPlayer.roundWins > rightPlayer.roundWins
+        ? leftPlayer
+        : rightPlayer;
+
+    if (handWinner) {
+      finishHand(room, handWinner);
+      return;
+    }
+
+    dealHand(room, first.playerId);
+  }
+}
+
+function getTrickWinner(first: TableCard, second: TableCard): string | null {
+  if (first.faceDown && second.faceDown) {
+    return null;
+  }
+
+  if (first.faceDown) {
+    return second.playerId;
+  }
+
+  if (second.faceDown) {
+    return first.playerId;
+  }
+
+  return compareCards(first.card, second.card) >= 0 ? first.playerId : second.playerId;
 }
 
 function nextHandValue(value: RoomState["handValue"]): RoomState["handValue"] | null {
@@ -285,7 +320,7 @@ socket.on("room:leave", ({ roomId }) => {
 
   broadcastState(room);
 });
-  socket.on("card:play", ({ roomId, cardId }) => {
+  socket.on("card:play", ({ roomId, cardId, faceDown }) => {
     const room = rooms.get(roomId);
     const player = room?.players.find((item) => item.id === socket.id);
 
@@ -311,8 +346,11 @@ socket.on("room:leave", ({ roomId }) => {
       return;
     }
 
+    const canPlayFaceDown = player.hand.length < 3;
+    const shouldPlayFaceDown = Boolean(faceDown && canPlayFaceDown);
+
     const [card] = player.hand.splice(cardIndex, 1);
-    room.table.push({ playerId: player.id, card });
+    room.table.push({ playerId: player.id, card, faceDown: shouldPlayFaceDown });
 
     if (room.table.length === 1) {
       room.turnPlayerId = room.players.find((item) => item.id !== player.id)?.id ?? null;
