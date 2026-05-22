@@ -13,6 +13,18 @@ body,
   touch-action: none;
 }
 
+#game {
+  position: fixed;
+  inset: 0;
+  opacity: 1;
+  transition: opacity 180ms ease;
+}
+
+#game.is-hidden {
+  opacity: 0;
+  pointer-events: none;
+}
+
 body {
   position: fixed;
   inset: 0;
@@ -24,4 +36,194 @@ body {
 
 canvas {
   display: block;
+}
+
+.home-screen,
+.waiting-screen,
+.settings-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 16%, rgba(255, 207, 90, 0.18), transparent 30%),
+    radial-gradient(circle at 82% 78%, rgba(248, 241, 217, 0.12), transparent 28%),
+    linear-gradient(145deg, #0c2b21 0%, #12372a 54%, #071b15 100%);
+  color: #f8f1d9;
+}
+
+.home-screen::before,
+.waiting-screen::before,
+.settings-screen::before {
+  content: "";
+  position: absolute;
+  inset: 18px;
+  border: 2px solid rgba(255, 207, 90, 0.2);
+  pointer-events: none;
+}
+
+.home-screen.is-hidden,
+.waiting-screen.is-hidden,
+.settings-screen.is-hidden {
+  display: none;
+}
+
+.home-content,
+.waiting-content,
+.settings-content {
+  position: relative;
+  width: min(100%, 440px);
+  text-align: center;
+}
+
+.home-badge {
+  display: inline-flex;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 14px;
+  border: 1px solid rgba(255, 207, 90, 0.42);
+  background: rgba(7, 27, 21, 0.5);
+  color: #ffcf5a;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.home-content h1 {
+  margin: 18px 0 10px;
+  color: #ffffff;
+  font-family: Arial Black, Arial, Helvetica, sans-serif;
+  font-size: clamp(56px, 18vw, 92px);
+  line-height: 0.95;
+  letter-spacing: 0;
+  text-shadow: 0 6px 0 rgba(0, 0, 0, 0.2);
+}
+
+.home-content p {
+  margin: 0 auto 28px;
+  max-width: 320px;
+  color: rgba(248, 241, 217, 0.86);
+  font-size: 17px;
+  line-height: 1.42;
+}
+
+.play-button {
+  width: min(100%, 280px);
+  min-height: 58px;
+  border: 3px solid #fff3a3;
+  background: #ffcf5a;
+  color: #553000;
+  cursor: pointer;
+  font-family: Arial Black, Arial, Helvetica, sans-serif;
+  font-size: 18px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  box-shadow: 0 8px 0 #7a3500, 0 18px 32px rgba(0, 0, 0, 0.3);
+}
+
+.play-button:active {
+  transform: translateY(5px);
+  box-shadow: 0 3px 0 #7a3500, 0 12px 22px rgba(0, 0, 0, 0.26);
+}
+
+.menu-button {
+  margin-top: 20px;
+}
+
+.settings-content h2 {
+  margin: 18px 0 18px;
+  color: #ffffff;
+  font-family: Arial Black, Arial, Helvetica, sans-serif;
+  font-size: clamp(30px, 9vw, 48px);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.background-options {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin: 0 auto 24px;
+  width: min(100%, 380px);
+}
+
+.background-option {
+  min-height: 112px;
+  padding: 8px;
+  border: 2px solid rgba(255, 207, 90, 0.28);
+  background: rgba(7, 27, 21, 0.58);
+  color: #f8f1d9;
+  cursor: pointer;
+  font-family: Arial Black, Arial, Helvetica, sans-serif;
+  font-size: 12px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.background-option.is-selected {
+  border-color: #ffcf5a;
+  box-shadow: 0 0 0 3px rgba(255, 207, 90, 0.18);
+}
+
+.background-preview {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  margin-bottom: 8px;
+  background-color: #12372a;
+  background-position: center;
+  background-size: cover;
+}
+
+.waiting-content h2 {
+  margin: 18px 0 10px;
+  color: #ffffff;
+  font-family: Arial Black, Arial, Helvetica, sans-serif;
+  font-size: clamp(30px, 9vw, 48px);
+  line-height: 1;
+  letter-spacing: 0;
+}
+
+.waiting-content p {
+  margin: 0 auto 28px;
+  max-width: 330px;
+  color: rgba(248, 241, 217, 0.86);
+  font-size: 17px;
+  line-height: 1.42;
+}
+
+.loading-ring {
+  width: 76px;
+  height: 76px;
+  margin: 0 auto;
+  border: 6px solid rgba(248, 241, 217, 0.24);
+  border-top-color: #ffcf5a;
+  border-radius: 50%;
+  animation: spin 900ms linear infinite;
+}
+
+.secondary-button {
+  width: min(100%, 220px);
+  min-height: 48px;
+  border: 2px solid rgba(255, 207, 90, 0.72);
+  background: rgba(7, 27, 21, 0.58);
+  color: #f8f1d9;
+  cursor: pointer;
+  font-family: Arial Black, Arial, Helvetica, sans-serif;
+  font-size: 15px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }

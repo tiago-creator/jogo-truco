@@ -10,6 +10,7 @@ import {
   type PublicPlayer,
   type RoomState,
   type ServerToClientEvents,
+  type TrucoRequest,
   shuffle
 } from "@truco/shared";
 
@@ -20,6 +21,7 @@ type PlayerState = {
   roundWins: number;
   points: number;
   games: number;
+  token: string;
 };
 
 type Room = {
@@ -30,6 +32,13 @@ type Room = {
   handValue: RoomState["handValue"];
   turnPlayerId: string | null;
   status: RoomState["status"];
+  trucoRequest?: TrucoRequest;
+  lastTrucoRequesterId?: string;
+  lastTrucoRaise?: {
+    playerId: string;
+    playerName: string;
+    value: RoomState["handValue"];
+  };
 };
 
 const app = express();
@@ -91,8 +100,24 @@ function buildState(room: Room, viewerId: string): RoomState {
     handValue: room.handValue,
     turnPlayerId: room.turnPlayerId,
     status: room.status,
-    message: room.status === "waiting" ? "Esperando outro jogador" : "Sua vez de jogar"
+    message: buildMessage(room, viewerId),
+    trucoRequest: room.trucoRequest,
+    lastTrucoRaise: room.lastTrucoRaise
   };
+}
+
+function buildMessage(room: Room, viewerId: string): string {
+  if (room.status === "waiting") {
+    return "Esperando outro jogador";
+  }
+
+  if (room.trucoRequest) {
+    return room.trucoRequest.responderPlayerId === viewerId
+      ? `${room.trucoRequest.requestedByPlayerName} pediu ${trucoValueName(room.trucoRequest.requestedValue)}`
+      : "Aguardando resposta do oponente";
+  }
+
+  return room.turnPlayerId === viewerId ? "Sua vez de jogar" : "Vez do oponente";
 }
 
 function broadcastState(room: Room): void {
@@ -113,6 +138,9 @@ function dealHand(room: Room, firstPlayerId = room.players[0]?.id): void {
   room.handValue = 1;
   room.turnPlayerId = firstPlayerId;
   room.status = "playing";
+  room.trucoRequest = undefined;
+  room.lastTrucoRequesterId = undefined;
+  room.lastTrucoRaise = undefined;
 }
 
 function startMatch(room: Room): void {
@@ -126,7 +154,11 @@ function startMatch(room: Room): void {
 }
 
 function finishHand(room: Room, winner: PlayerState): void {
-  winner.points += room.handValue;
+  awardHand(room, winner, room.handValue);
+}
+
+function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue"]): void {
+  winner.points += points;
 
   if (winner.points >= 12) {
     winner.games += 1;
@@ -174,13 +206,37 @@ function nextHandValue(value: RoomState["handValue"]): RoomState["handValue"] | 
   return values[value];
 }
 
+function trucoValueName(value: RoomState["handValue"]): string {
+  const names: Record<RoomState["handValue"], string> = {
+    1: "truco",
+    3: "truco",
+    6: "seis",
+    9: "nove",
+    12: "doze"
+  };
+
+  return names[value];
+}
+
+function canAskForTruco(player: PlayerState): boolean {
+  return player.points !== 11;
+}
+
 io.on("connection", (socket) => {
-  socket.on("room:join", ({ roomId, name }) => {
+  socket.on("room:join", ({ roomId, name, token }) => {
     const room = getRoom(roomId.trim() || "mesa-1");
-    const existing = room.players.find((player) => player.id === socket.id);
+    const existing = room.players.find((player) => player.token === token);
 
     if (!existing && room.players.length >= 2) {
       socket.emit("room:error", { message: "Mesa cheia" });
+      return;
+    }
+
+    if (existing) {
+      existing.id = socket.id;
+      socket.join(room.id);
+
+      broadcastState(room);
       return;
     }
 
@@ -188,6 +244,7 @@ io.on("connection", (socket) => {
       room.players.push({
         id: socket.id,
         name: name.trim() || "Jogador",
+        token,
         hand: [],
         roundWins: 0,
         points: 0,
@@ -204,12 +261,41 @@ io.on("connection", (socket) => {
     broadcastState(room);
   });
 
+socket.on("room:leave", ({ roomId }) => {
+  const room = rooms.get(roomId);
+
+  if (!room) {
+    return;
+  }
+
+  const index = room.players.findIndex((player) => player.id === socket.id);
+
+  if (index >= 0) {
+    room.players.splice(index, 1);
+  }
+
+  room.table = [];
+  room.vira = undefined;
+  room.handValue = 1;
+  room.status = "waiting";
+  room.turnPlayerId = null;
+  room.trucoRequest = undefined;
+  room.lastTrucoRequesterId = undefined;
+  room.lastTrucoRaise = undefined;
+
+  broadcastState(room);
+});
   socket.on("card:play", ({ roomId, cardId }) => {
     const room = rooms.get(roomId);
     const player = room?.players.find((item) => item.id === socket.id);
 
     if (!room || !player || room.status !== "playing") {
       socket.emit("room:error", { message: "Partida indisponivel" });
+      return;
+    }
+
+    if (room.trucoRequest) {
+      socket.emit("room:error", { message: "Responda o pedido de truco antes de jogar" });
       return;
     }
 
@@ -256,6 +342,21 @@ io.on("connection", (socket) => {
       return;
     }
 
+    if (room.trucoRequest) {
+      socket.emit("room:error", { message: "Ja existe um pedido de truco pendente" });
+      return;
+    }
+
+    if (!canAskForTruco(player)) {
+      socket.emit("room:error", { message: "Quem esta com 11 pontos nao pode pedir truco" });
+      return;
+    }
+
+    if (room.lastTrucoRequesterId === socket.id) {
+      socket.emit("room:error", { message: "Voce deve esperar o oponente aumentar a aposta" });
+      return;
+    }
+
     const raisedValue = nextHandValue(room.handValue);
 
     if (!raisedValue) {
@@ -263,24 +364,147 @@ io.on("connection", (socket) => {
       return;
     }
 
-    room.handValue = raisedValue;
+    const opponent = room.players.find((item) => item.id !== socket.id);
+
+    if (!opponent) {
+      socket.emit("room:error", { message: "Sem oponente na mesa" });
+      return;
+    }
+
+    room.trucoRequest = {
+      requestedByPlayerId: player.id,
+      requestedByPlayerName: player.name,
+      responderPlayerId: opponent.id,
+      currentValue: room.handValue as TrucoRequest["currentValue"],
+      requestedValue: raisedValue as TrucoRequest["requestedValue"]
+    };
+    room.lastTrucoRaise = {
+      playerId: player.id,
+      playerName: player.name,
+      value: raisedValue
+    };
+    room.lastTrucoRequesterId = player.id;
     broadcastState(room);
   });
 
-  socket.on("disconnect", () => {
-    for (const room of rooms.values()) {
-      const index = room.players.findIndex((player) => player.id === socket.id);
+  socket.on("truco:respond", ({ roomId, action }) => {
+    const room = rooms.get(roomId);
+    const player = room?.players.find((item) => item.id === socket.id);
+    const request = room?.trucoRequest;
 
-      if (index >= 0) {
-        room.players.splice(index, 1);
-        room.table = [];
-        room.vira = undefined;
-        room.handValue = 1;
-        room.status = "waiting";
-        room.turnPlayerId = null;
-        broadcastState(room);
+    if (!room || !player || room.status !== "playing" || !request) {
+      socket.emit("room:error", { message: "Nao existe pedido de truco pendente" });
+      return;
+    }
+
+    if (request.responderPlayerId !== socket.id) {
+      socket.emit("room:error", { message: "A resposta e do oponente" });
+      return;
+    }
+
+    const requester = room.players.find((item) => item.id === request.requestedByPlayerId);
+
+    if (!requester) {
+      room.trucoRequest = undefined;
+      broadcastState(room);
+      return;
+    }
+
+    if (action === "accept") {
+      room.handValue = request.requestedValue;
+      room.trucoRequest = undefined;
+      broadcastState(room);
+      return;
+    }
+
+    if (action === "reject") {
+      const points = request.currentValue;
+
+      room.trucoRequest = undefined;
+      awardHand(room, requester, points);
+      broadcastState(room);
+      return;
+    }
+
+    if (!canAskForTruco(player)) {
+      socket.emit("room:error", { message: "Quem esta com 11 pontos nao pode aumentar" });
+      return;
+    }
+
+    if (request.requestedByPlayerId === socket.id) {
+      socket.emit("room:error", { message: "Voce nao pode aumentar o proprio pedido" });
+      return;
+    }
+
+    const raisedValue = nextHandValue(request.requestedValue);
+
+    if (!raisedValue) {
+      socket.emit("room:error", { message: "A mao ja esta valendo 12" });
+      return;
+    }
+
+    room.trucoRequest = {
+      requestedByPlayerId: player.id,
+      requestedByPlayerName: player.name,
+      responderPlayerId: requester.id,
+      currentValue: request.requestedValue,
+      requestedValue: raisedValue as TrucoRequest["requestedValue"]
+    };
+    room.lastTrucoRaise = {
+      playerId: player.id,
+      playerName: player.name,
+      value: raisedValue
+    };
+    room.lastTrucoRequesterId = player.id;
+    broadcastState(room);
+  });
+
+  socket.on("audio:send", ({ roomId, audio, mimeType }) => {
+    const room = rooms.get(roomId);
+    const player = room?.players.find((item) => item.id === socket.id);
+
+    if (!room || !player || room.status !== "playing") {
+      socket.emit("room:error", { message: "Partida indisponivel" });
+      return;
+    }
+
+    if (audio.byteLength > 800_000) {
+      socket.emit("room:error", { message: "Audio muito longo" });
+      return;
+    }
+
+    for (const opponent of room.players) {
+      if (opponent.id !== socket.id) {
+        io.to(opponent.id).emit("audio:message", {
+          playerId: player.id,
+          playerName: player.name,
+          audio,
+          mimeType
+        });
       }
     }
+  });
+
+  socket.on("disconnect", () => {
+    setTimeout(() => {
+      for (const room of rooms.values()) {
+        const index = room.players.findIndex((player) => player.id === socket.id);
+
+        if (index >= 0) {
+          room.players.splice(index, 1);
+          room.table = [];
+          room.vira = undefined;
+          room.handValue = 1;
+          room.status = "waiting";
+          room.turnPlayerId = null;
+          room.trucoRequest = undefined;
+          room.lastTrucoRequesterId = undefined;
+          room.lastTrucoRaise = undefined;
+
+          broadcastState(room);
+        }
+      }
+    }, 15000);
   });
 });
 

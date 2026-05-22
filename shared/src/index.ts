@@ -25,6 +25,14 @@ export type TableCard = {
   card: Card;
 };
 
+export type TrucoRequest = {
+  requestedByPlayerId: string;
+  requestedByPlayerName: string;
+  responderPlayerId: string;
+  currentValue: 1 | 3 | 6 | 9 | 12;
+  requestedValue: 3 | 6 | 9 | 12;
+};
+
 export type RoomState = {
   roomId: string;
   players: PublicPlayer[];
@@ -35,17 +43,27 @@ export type RoomState = {
   turnPlayerId: string | null;
   status: "waiting" | "playing" | "finished";
   message: string;
+  trucoRequest?: TrucoRequest;
+  lastTrucoRaise?: {
+    playerId: string;
+    playerName: string;
+    value: RoomState["handValue"];
+  };
 };
 
 export type ClientToServerEvents = {
-  "room:join": (payload: { roomId: string; name: string }) => void;
+  "room:join": (payload: { roomId: string; name: string; token: string }) => void;
+  "room:leave": (payload: { roomId: string }) => void;
   "card:play": (payload: { roomId: string; cardId: string }) => void;
   "truco:raise": (payload: { roomId: string }) => void;
+  "truco:respond": (payload: { roomId: string; action: "accept" | "reject" | "raise" }) => void;
+  "audio:send": (payload: { roomId: string; audio: ArrayBuffer; mimeType: string }) => void;
 };
 
 export type ServerToClientEvents = {
   "room:state": (state: RoomState) => void;
   "room:error": (payload: { message: string }) => void;
+  "audio:message": (payload: { playerId: string; playerName: string; audio: ArrayBuffer; mimeType: string }) => void;
 };
 
 export const ranks: Rank[] = ["4", "5", "6", "7", "Q", "J", "K", "A", "2", "3"];
