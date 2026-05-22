@@ -20,8 +20,10 @@ class TableScene extends Phaser.Scene {
   private status!: Phaser.GameObjects.Text;
   private scoreboardGroup!: Phaser.GameObjects.Container;
   private trucoButton!: Phaser.GameObjects.Container;
-  private trucoButtonBg!: Phaser.GameObjects.Rectangle;
+  private trucoButtonBg!: Phaser.GameObjects.Graphics;
   private trucoButtonText!: Phaser.GameObjects.Text;
+  private trucoButtonSmallText!: Phaser.GameObjects.Text;
+  private trucoButtonHitZone!: Phaser.GameObjects.Zone;
   private handGroup!: Phaser.GameObjects.Container;
   private opponentHandGroup!: Phaser.GameObjects.Container;
   private opponentAvatarGroup!: Phaser.GameObjects.Container;
@@ -52,21 +54,33 @@ class TableScene extends Phaser.Scene {
     }).setOrigin(0.5);
 
     this.scoreboardGroup = this.add.container(0, 0);
-    this.trucoButtonBg = this.add.rectangle(0, 0, 104, 42, 0xffcf5a, 1).setStrokeStyle(2, 0x3d2f22);
-    this.trucoButtonText = this.add.text(0, 0, "Truco", {
-      color: "#2b2118",
+
+    //#region Truco Button
+this.trucoButtonHitZone = this.add.zone(0, 0, 150, 160);
+    this.trucoButtonBg = this.add.graphics();
+    this.trucoButtonSmallText = this.add.text(0, 0, "PEDIR", {
+      color: "#5f3900",
       fontFamily: "Arial",
-      fontSize: "17px",
-      fontStyle: "bold"
+      fontSize: "13px",
+      fontStyle: "900"
     }).setOrigin(0.5);
-    this.trucoButton = this.add.container(0, 0, [this.trucoButtonBg, this.trucoButtonText]);
-    this.trucoButton.setSize(104, 42);
-    this.trucoButton.setInteractive({ useHandCursor: true });
-    this.trucoButton.on("pointerup", () => {
+    this.trucoButtonText = this.add.text(0, 0, "TRUCO", {
+      color: "#5f3900",
+      fontFamily: "Arial",
+      fontSize: "23px",
+      fontStyle: "900"
+    }).setOrigin(0.5);
+    this.trucoButton = this.add.container(0, 0, [
+      this.trucoButtonBg,
+      this.trucoButtonSmallText,
+      this.trucoButtonText
+    ]);
+    this.trucoButtonHitZone.on("pointerup", () => {
       if (this.roomState?.status === "playing" && this.roomState.handValue < 12) {
         this.socket.emit("truco:raise", { roomId: this.roomId });
       }
     });
+    //#endregion
 
     this.handGroup = this.add.container(0, 0);
     this.opponentHandGroup = this.add.container(0, 0);
@@ -98,6 +112,127 @@ class TableScene extends Phaser.Scene {
     this.layout();
   }
 
+  private drawMiniCardIcon(
+    g: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    rotate: number,
+    rank: string,
+    suit: string,
+    color: string,
+    scale: number
+  ): void {
+    const miniWidth = 34 * scale;
+    const miniHeight = 48 * scale;
+
+    const card = new Phaser.GameObjects.Container(this, x, y);
+    card.setRotation(rotate);
+
+    const bg = this.add.graphics();
+    bg.fillStyle(0xfffaf0, 1);
+    bg.fillRoundedRect(-miniWidth / 2, -miniHeight / 2, miniWidth, miniHeight, 5 * scale);
+    bg.lineStyle(1.4 * scale, 0x78350f, 0.34);
+    bg.strokeRoundedRect(-miniWidth / 2, -miniHeight / 2, miniWidth, miniHeight, 5 * scale);
+
+    const rankText = this.add.text(-miniWidth / 2 + 5 * scale, -miniHeight / 2 + 4 * scale, rank, {
+      color,
+      fontFamily: "Arial",
+      fontSize: `${13 * scale}px`,
+      fontStyle: "bold"
+    }).setOrigin(0, 0);
+
+    const suitText = this.add.text(0, 8 * scale, suit, {
+      color,
+      fontFamily: "Arial",
+      fontSize: `${18 * scale}px`,
+      fontStyle: "bold"
+    }).setOrigin(0.5);
+
+    card.add([bg, rankText, suitText]);
+    this.trucoButton.add(card);
+  }
+  private drawTrucoRaiseButton(value: string, enabled: boolean): void {
+    const scale = this.uiScale;
+    const g = this.trucoButtonBg;
+
+    g.clear();
+
+    this.trucoButton.each((child) => {
+      if (
+        child !== this.trucoButtonBg &&
+        child !== this.trucoButtonSmallText &&
+        child !== this.trucoButtonText
+      ) {
+        child.destroy();
+      }
+    });
+    this.trucoButton.add(g);
+
+    const buttonWidth = 176 * scale;
+    const buttonHeight = 190 * scale;
+    const centerX = 0;
+    const buttonX = -buttonWidth / 2;
+    const buttonY = -buttonHeight / 2;
+
+    const plateX = buttonX + 18 * scale;
+    const plateY = buttonY + 104 * scale;
+    const plateWidth = buttonWidth - 36 * scale;
+    const plateHeight = 66 * scale;
+
+    const points = [
+      new Phaser.Math.Vector2(centerX, buttonY),
+      new Phaser.Math.Vector2(buttonX + buttonWidth - 12 * scale, buttonY + 46 * scale),
+      new Phaser.Math.Vector2(buttonX + buttonWidth - 12 * scale, buttonY + 138 * scale),
+      new Phaser.Math.Vector2(centerX, buttonY + buttonHeight),
+      new Phaser.Math.Vector2(buttonX + 12 * scale, buttonY + 138 * scale),
+      new Phaser.Math.Vector2(buttonX + 12 * scale, buttonY + 46 * scale),
+    ];
+
+    g.fillStyle(enabled ? 0x083f32 : 0x444444, 1);
+    g.fillPoints(points, true);
+
+    g.lineStyle(5 * scale, 0xfff3a3, 1);
+    g.strokePoints(points, true, true);
+
+    g.lineStyle(2 * scale, 0xd7a94c, 1);
+    g.strokePoints(points, true, true);
+
+    this.drawMiniCardIcon(g, centerX - 28 * scale, buttonY + 58 * scale, -0.2, "7", "♦", "#b3261e", scale);
+    this.drawMiniCardIcon(g, centerX, buttonY + 52 * scale, 0, "A", "♠", "#202124", scale);
+    this.drawMiniCardIcon(g, centerX + 28 * scale, buttonY + 58 * scale, 0.2, "3", "♣", "#202124", scale);
+
+    g.fillStyle(enabled ? 0xf7c948 : 0x999999, 1);
+    g.fillRoundedRect(plateX, plateY, plateWidth, plateHeight, 14 * scale);
+
+    g.lineStyle(2.4 * scale, 0xfff3a3, 1);
+    g.strokeRoundedRect(plateX, plateY, plateWidth, plateHeight, 14 * scale);
+
+    g.lineStyle(1.5 * scale, 0x5d2e08, 0.46);
+    g.strokeRoundedRect(
+      plateX + 4 * scale,
+      plateY + 4 * scale,
+      plateWidth - 8 * scale,
+      plateHeight - 8 * scale,
+      10 * scale
+    );
+
+    this.trucoButtonSmallText.setText("PEDIR");
+    this.trucoButtonSmallText.setFontSize(Math.max(16, 19 * scale));
+    this.trucoButtonSmallText.setPosition(centerX, plateY + 21 * scale);
+    this.trucoButtonSmallText.setColor(enabled ? "#5f3900" : "#555555");
+
+    this.trucoButtonText.setText(value.toUpperCase());
+    this.trucoButtonText.setFontSize(Math.max(19, 23 * scale));
+    this.trucoButtonText.setPosition(centerX, plateY + 45 * scale);
+    this.trucoButtonText.setColor(enabled ? "#5f3900" : "#555555");
+
+    this.trucoButton.add(this.trucoButtonSmallText);
+    this.trucoButton.add(this.trucoButtonText);
+
+    this.trucoButton.setScale(0.60 * scale);
+    this.trucoButton.setSize(buttonWidth, buttonHeight); 
+  }
+
   private uiScale = 1;
 
   private updateUiScale(): void {
@@ -120,7 +255,11 @@ class TableScene extends Phaser.Scene {
 
     this.scoreboardGroup.setPosition(width / 2, safeTop + 46 * this.uiScale);
     this.status.setPosition(width / 2, safeTop + 106 * this.uiScale);
-    this.trucoButton.setPosition(width - 64 * this.uiScale, safeTop + 106 * this.uiScale);
+    this.trucoButton.setPosition(width - 50 * this.uiScale, height - 100 * this.uiScale);
+    this.trucoButtonHitZone.setPosition(
+  this.trucoButton.x,
+  this.trucoButton.y
+);
     this.opponentHandGroup.setPosition(width / 2, safeTop + 148 * this.uiScale);
     this.opponentAvatarGroup.setPosition(width / 2, safeTop + 182 * this.uiScale);
     this.viraGroup.setPosition(width / 2, height / 2 + 10 * this.uiScale);
@@ -312,16 +451,24 @@ class TableScene extends Phaser.Scene {
     }[handValue];
     const enabled = isPlaying && handValue < 12;
 
-    this.trucoButtonText.setText(label);
-    this.trucoButtonBg.setFillStyle(enabled ? 0xffcf5a : 0x7c7768, 1);
-    this.trucoButtonBg.setStrokeStyle(2, enabled ? 0x3d2f22 : 0x4b4b4b);
-    this.trucoButtonText.setColor(enabled ? "#2b2118" : "#d6d1c3");
-    this.trucoButton.disableInteractive();
-
-    if (enabled) {
-      this.trucoButton.setInteractive({ useHandCursor: true });
-    }
+    this.drawTrucoRaiseButton(label, enabled);
+    this.setTrucoButtonInteractive(enabled);
   }
+
+  private setTrucoButtonInteractive(enabled: boolean): void {
+  const width = 100 * this.uiScale;
+  const height = 100 * this.uiScale;
+
+  this.trucoButtonHitZone.setSize(width, height);
+  this.trucoButtonHitZone.setPosition(this.trucoButton.x, this.trucoButton.y);
+  this.trucoButtonHitZone.setActive(enabled);
+
+  if (enabled) {
+    this.trucoButtonHitZone.setInteractive({ useHandCursor: true });
+  } else {
+    this.trucoButtonHitZone.disableInteractive();
+  }
+}
 
   private renderScoreboard(): void {
     this.scoreboardGroup.removeAll(true);
@@ -437,7 +584,7 @@ class TableScene extends Phaser.Scene {
   }
 
   private getHandCardTarget(cards: Card[], index: number): { x: number; y: number; scale: number; rotation: number } {
-    const spacing = Math.min(104 * this.uiScale, this.scale.width / 3.8);
+    const spacing = Math.min(104 * this.uiScale, this.scale.width / 5.6);
     const startX = -((cards.length - 1) * spacing) / 2;
 
     return {
@@ -465,7 +612,7 @@ class TableScene extends Phaser.Scene {
   private renderHand(cards: Card[], enabled: boolean): void {
     this.handGroup.removeAll(true);
 
-    const spacing = Math.min(104 * this.uiScale, this.scale.width / 3.8);
+    const spacing = Math.min(104 * this.uiScale, this.scale.width / 5.6);
     const startX = -((cards.length - 1) * spacing) / 2;
 
     cards.forEach((cardData, index) => {
@@ -515,7 +662,7 @@ class TableScene extends Phaser.Scene {
 
   private createCardBack(): Phaser.GameObjects.Container {
     const container = this.add.container(0, 0);
-    const width = 84;
+    const width = 80;
     const height = 118;
     const shadow = this.add.graphics();
     const back = this.add.image(0, 0, "card-back").setDisplaySize(width, height);
@@ -531,7 +678,7 @@ class TableScene extends Phaser.Scene {
 
   private createCard(card: Card, enabled: boolean): Phaser.GameObjects.Container {
     const container = this.add.container(0, 0);
-    const width = 84;
+    const width = 80;
     const height = 118;
     const radius = 10;
     const suitColor = this.suitColor(card.suit);
@@ -676,7 +823,7 @@ new Phaser.Game({
     height: window.innerHeight
   },
   render: {
-    antialias: false,
+    antialias: true,
     pixelArt: false,
     powerPreference: "high-performance"
   },
