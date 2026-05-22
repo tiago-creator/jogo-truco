@@ -12,12 +12,13 @@ export type PublicPlayer = {
   id: string;
   name: string;
   cardCount: number;
-  score: number;
-};
-
-export type ClientPlayer = PublicPlayer & {
+  roundWins: number;
+  points: number;
+  games: number;
   hand: Card[];
 };
+
+export type ClientPlayer = PublicPlayer;
 
 export type TableCard = {
   playerId: string;
@@ -29,6 +30,8 @@ export type RoomState = {
   players: PublicPlayer[];
   self?: ClientPlayer;
   table: TableCard[];
+  vira?: Card;
+  handValue: 1 | 3 | 6 | 9 | 12;
   turnPlayerId: string | null;
   status: "waiting" | "playing" | "finished";
   message: string;
@@ -37,6 +40,7 @@ export type RoomState = {
 export type ClientToServerEvents = {
   "room:join": (payload: { roomId: string; name: string }) => void;
   "card:play": (payload: { roomId: string; cardId: string }) => void;
+  "truco:raise": (payload: { roomId: string }) => void;
 };
 
 export type ServerToClientEvents = {

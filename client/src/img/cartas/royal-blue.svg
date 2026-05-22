@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="750" height="1050" viewBox="0 0 750 1050">
+  <defs>
+    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1b8"/><stop offset=".45" stop-color="#b89145"/><stop offset="1" stop-color="#5b3b13"/></linearGradient>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#06101e"/><stop offset=".5" stop-color="#123e73"/><stop offset="1" stop-color="#020713"/></linearGradient>
+    <radialGradient id="glow" cx="50%" cy="45%" r="62%"><stop stop-color="#4fa6ff" stop-opacity=".34"/><stop offset=".52" stop-color="#0b2a52" stop-opacity=".24"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></radialGradient>
+    <pattern id="dots" width="38" height="38" patternUnits="userSpaceOnUse"><circle cx="8" cy="9" r="1.4" fill="#fff" opacity=".05"/><circle cx="28" cy="25" r="1.2" fill="#f7d17a" opacity=".08"/></pattern>
+    <g id="corner"><path d="M0 0h140M0 0v140" fill="none" stroke="#d7a94c" stroke-width="6" stroke-linecap="round"/><path d="M26 26h88M26 26v88" fill="none" stroke="#fff1b8" stroke-width="2.5" stroke-linecap="round"/><path d="M90 26c0 28 20 48 48 48" fill="none" stroke="#d7a94c" stroke-width="4" stroke-linecap="round"/><circle cx="26" cy="26" r="7" fill="#fff1b8"/></g>
+  </defs>
+  <rect width="750" height="1050" rx="58" fill="#05070c"/><rect x="18" y="18" width="714" height="1014" rx="52" fill="url(#edge)"/><rect x="32" y="32" width="686" height="986" rx="44" fill="#05070c"/><rect x="50" y="50" width="650" height="950" rx="36" fill="url(#bg)"/><rect x="50" y="50" width="650" height="950" rx="36" fill="url(#dots)"/><rect x="50" y="50" width="650" height="950" rx="36" fill="url(#glow)"/>
+  <rect x="82" y="82" width="586" height="886" rx="27" fill="none" stroke="#d7a94c" stroke-width="7"/><rect x="106" y="106" width="538" height="838" rx="20" fill="none" stroke="#fff1b8" stroke-opacity=".75" stroke-width="2.5"/><rect x="132" y="132" width="486" height="786" rx="17" fill="none" stroke="#d7a94c" stroke-opacity=".35" stroke-width="2" stroke-dasharray="15 14"/>
+  <use href="#corner" x="110" y="110"/><use href="#corner" x="640" y="110" transform="rotate(90 640 110)"/><use href="#corner" x="640" y="940" transform="rotate(180 640 940)"/><use href="#corner" x="110" y="940" transform="rotate(270 110 940)"/>
+  <g transform="translate(375 525)" fill="none"><circle r="190" stroke="#d7a94c" stroke-width="5" opacity=".82"/><circle r="150" stroke="#fff1b8" stroke-width="2.5" opacity=".42"/><path d="M0-180 42-42 180 0 42 42 0 180-42 42-180 0-42-42Z" fill="#071629" stroke="#d7a94c" stroke-width="7"/><path d="M0-92 92 0 0 92-92 0Z" fill="#123e73" stroke="#fff1b8" stroke-width="3"/><path d="M0-42 42 0 0 42-42 0Z" fill="#d7a94c"/></g>
+</svg>
