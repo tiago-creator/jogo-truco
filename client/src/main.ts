@@ -98,19 +98,35 @@ class TableScene extends Phaser.Scene {
     this.layout();
   }
 
-  private layout(): void {
-    const { width, height } = this.scale;
-    const safeTop = 12;
+  private uiScale = 1;
 
-    this.scoreboardGroup.setPosition(width / 2, safeTop + 46);
-    this.status.setPosition(width / 2, safeTop + 106);
-    this.trucoButton.setPosition(width - 64, safeTop + 106);
-    this.opponentHandGroup.setPosition(width / 2, safeTop + 148);
-    this.opponentAvatarGroup.setPosition(width / 2, safeTop + 182);
-    this.viraGroup.setPosition(width / 2, height / 2 +10);
-    this.deckGroup.setPosition(width / 2 + 30, height / 2 + 12);
-    this.tableGroup.setPosition(width / 2, height / 2 - 20);
-    this.handGroup.setPosition(width / 2, height - 82);
+  private updateUiScale(): void {
+    const { width, height } = this.scale;
+
+    const baseWidth = 390;
+    const baseHeight = 844;
+
+    const scaleX = width / baseWidth;
+    const scaleY = height / baseHeight;
+
+    this.uiScale = Phaser.Math.Clamp(Math.min(scaleX, scaleY), 0.82, 1.08);
+  }
+
+  private layout(): void {
+    this.updateUiScale();
+
+    const { width, height } = this.scale;
+    const safeTop = 12 * this.uiScale;
+
+    this.scoreboardGroup.setPosition(width / 2, safeTop + 46 * this.uiScale);
+    this.status.setPosition(width / 2, safeTop + 106 * this.uiScale);
+    this.trucoButton.setPosition(width - 64 * this.uiScale, safeTop + 106 * this.uiScale);
+    this.opponentHandGroup.setPosition(width / 2, safeTop + 148 * this.uiScale);
+    this.opponentAvatarGroup.setPosition(width / 2, safeTop + 182 * this.uiScale);
+    this.viraGroup.setPosition(width / 2, height / 2 + 10 * this.uiScale);
+    this.deckGroup.setPosition(width / 2 + 30 * this.uiScale, height / 2 + 12 * this.uiScale);
+    this.tableGroup.setPosition(width / 2, height / 2 - 20 * this.uiScale);
+    this.handGroup.setPosition(width / 2, height - 82 * this.uiScale);
     this.renderState();
   }
 
@@ -166,14 +182,14 @@ class TableScene extends Phaser.Scene {
 
     this.animatingTableCardIds.add(playedEntry.card.id);
     animatedCard.setPosition(fromX, fromY);
-    animatedCard.setScale(0.72);
+    animatedCard.setScale(0.72 * this.uiScale);
     animatedCard.setDepth(30);
 
     this.tweens.add({
       targets: animatedCard,
       x: toX,
       y: toY,
-      scale: 0.68,
+      scale: 0.68 * this.uiScale,
       duration: 520,
       ease: "Cubic.Out",
       onComplete: () => {
@@ -218,7 +234,7 @@ class TableScene extends Phaser.Scene {
       const animatedCard = this.createCardBack();
 
       animatedCard.setPosition(fromX, fromY);
-      animatedCard.setScale(0.68);
+      animatedCard.setScale(0.68 * this.uiScale);
       animatedCard.setDepth(60 + index);
 
       this.tweens.add({
@@ -360,7 +376,7 @@ class TableScene extends Phaser.Scene {
     }
 
     const card = this.createCard(this.roomState.vira, false);
-    card.setScale(0.68);
+    card.setScale(0.68 * this.uiScale);
 
     this.viraGroup.add(card);
   }
@@ -375,7 +391,7 @@ class TableScene extends Phaser.Scene {
     for (let index = 0; index < 3; index += 1) {
       const card = this.createCardBack();
       card.setPosition(index * 3, -index * 2);
-      card.setScale(0.68);
+      card.setScale(0.68 * this.uiScale);
       card.setRotation(Phaser.Math.DegToRad(3));
       card.setDepth(12 + index);
       this.deckGroup.add(card);
@@ -398,7 +414,7 @@ class TableScene extends Phaser.Scene {
       const position = this.getTableCardPosition(entry.playerId, index, cards.length);
 
       card.setPosition(position.x, position.y);
-      card.setScale(0.68);
+      card.setScale(0.68 * this.uiScale);
       this.tableGroup.add(card);
     });
   }
@@ -407,27 +423,27 @@ class TableScene extends Phaser.Scene {
     const isSelf = playerId === this.roomState?.self?.id;
 
     if (isSelf) {
-      return { x: 0, y: 120 };
+      return { x: 0, y: 120 * this.uiScale };
     }
 
     if (this.roomState?.self) {
-      return { x: 0, y: -60 };
+      return { x: 0, y: -60 * this.uiScale };
     }
 
-    const spacing = 92;
+    const spacing = 92 * this.uiScale;
     const startX = -((tableCardCount - 1) * spacing) / 2;
 
-    return { x: startX + fallbackIndex * spacing, y: 120 };
+    return { x: startX + fallbackIndex * spacing, y: 120 * this.uiScale };
   }
 
   private getHandCardTarget(cards: Card[], index: number): { x: number; y: number; scale: number; rotation: number } {
-    const spacing = Math.min(104, this.scale.width / 3.8);
+    const spacing = Math.min(104 * this.uiScale, this.scale.width / 3.8);
     const startX = -((cards.length - 1) * spacing) / 2;
 
     return {
       x: this.handGroup.x + startX + index * spacing,
       y: this.handGroup.y,
-      scale: 1,
+      scale: 1 * this.uiScale,
       rotation: 0
     };
   }
@@ -441,7 +457,7 @@ class TableScene extends Phaser.Scene {
     return {
       x: this.opponentHandGroup.x + startX + index * spacing,
       y: this.opponentHandGroup.y + Math.abs(spread) * 5,
-      scale: 0.32,
+      scale: 0.32 * this.uiScale,
       rotation: Phaser.Math.DegToRad(spread * 9)
     };
   }
@@ -449,7 +465,7 @@ class TableScene extends Phaser.Scene {
   private renderHand(cards: Card[], enabled: boolean): void {
     this.handGroup.removeAll(true);
 
-    const spacing = Math.min(104, this.scale.width / 3.8);
+    const spacing = Math.min(104 * this.uiScale, this.scale.width / 3.8);
     const startX = -((cards.length - 1) * spacing) / 2;
 
     cards.forEach((cardData, index) => {
@@ -459,6 +475,7 @@ class TableScene extends Phaser.Scene {
 
       const card = this.createCard(cardData, enabled);
       card.setPosition(startX + index * spacing, 0);
+      card.setScale(1 * this.uiScale);
       this.handGroup.add(card);
     });
   }
@@ -480,7 +497,7 @@ class TableScene extends Phaser.Scene {
 
       card.setPosition(startX + index * spacing, Math.abs(spread) * 5);
       card.setRotation(Phaser.Math.DegToRad(spread * 9));
-      card.setScale(0.32);//Tamanho carta dos oponenetes
+      card.setScale(0.32 * this.uiScale);//Tamanho carta dos oponenetes
       this.opponentHandGroup.add(card);
     });
   }
@@ -609,7 +626,7 @@ class TableScene extends Phaser.Scene {
             targets: container,
             x: this.tableGroup.x + targetPosition.x - this.handGroup.x,
             y: this.tableGroup.y + targetPosition.y - this.handGroup.y,
-            scale: 0.68,
+            scale: 0.68 * this.uiScale,
             duration: 520,
             ease: "Cubic.Out",
             onComplete: () => {
