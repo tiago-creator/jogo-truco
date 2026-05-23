@@ -7,7 +7,21 @@
     <title>Truco Online</title>
   </head>
   <body>
-    <main id="home" class="home-screen">
+    <main id="login" class="login-screen">
+      <section class="login-content" aria-labelledby="login-title">
+        <div class="home-badge">Truco Online</div>
+        <h2 id="login-title">Entrar</h2>
+        <form id="login-form" class="profile-form">
+          <label>
+            Email
+            <input id="login-email" name="email" type="email" required autocomplete="email" />
+          </label>
+          <p id="login-message" class="profile-message" aria-live="polite"></p>
+          <button class="play-button" type="submit">Entrar</button>
+        </form>
+      </section>
+    </main>
+    <main id="home" class="home-screen is-hidden">
       <section class="home-content" aria-labelledby="home-title">
         <div class="home-badge">Truco Online</div>
         <h1 id="home-title">Truco</h1>

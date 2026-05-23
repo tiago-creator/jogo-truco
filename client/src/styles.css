@@ -39,6 +39,7 @@ canvas {
 }
 
 .home-screen,
+.login-screen,
 .waiting-screen,
 .settings-screen,
 .profile-screen {
@@ -57,6 +58,7 @@ canvas {
 }
 
 .home-screen::before,
+.login-screen::before,
 .waiting-screen::before,
 .settings-screen::before,
 .profile-screen::before {
@@ -68,6 +70,7 @@ canvas {
 }
 
 .home-screen.is-hidden,
+.login-screen.is-hidden,
 .waiting-screen.is-hidden,
 .settings-screen.is-hidden,
 .profile-screen.is-hidden {
@@ -75,6 +78,7 @@ canvas {
 }
 
 .home-content,
+.login-content,
 .waiting-content,
 .settings-content,
 .profile-content {
@@ -140,6 +144,7 @@ canvas {
 }
 
 .profile-content h2,
+.login-content h2,
 .settings-content h2 {
   margin: 18px 0 18px;
   color: #ffffff;

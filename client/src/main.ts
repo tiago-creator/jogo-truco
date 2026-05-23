@@ -29,6 +29,8 @@ const tableBackgrounds = {
 const defaultTableBackground = "felt-teal";
 const tableBackgroundStorageKey = "truco-table-background";
 const profileStorageKey = "truco-player-profile";
+const sessionProfileStorageKey = "truco-session-profile";
+const playerTokenStorageKey = "truco-player-token";
 
 type TableBackgroundId = keyof typeof tableBackgrounds;
 
@@ -69,10 +71,8 @@ function createPlayerToken(): string {
 }
 
 function getPlayerToken(): string {
-  const storageKey = "truco-player-token";
-
   try {
-    const storedToken = localStorage.getItem(storageKey);
+    const storedToken = localStorage.getItem(playerTokenStorageKey);
 
     if (storedToken) {
       return storedToken;
@@ -80,15 +80,46 @@ function getPlayerToken(): string {
 
     const newToken = createPlayerToken();
 
-    localStorage.setItem(storageKey, newToken);
+    localStorage.setItem(playerTokenStorageKey, newToken);
     return newToken;
   } catch {
     return createPlayerToken();
   }
 }
 
-const playerToken = getPlayerToken();
-let currentPlayerProfile: PlayerProfile | null = loadStoredProfile();
+function savePlayerToken(token: string): void {
+  playerToken = token;
+
+  try {
+    localStorage.setItem(playerTokenStorageKey, token);
+  } catch {
+    // The current page session still keeps the token in memory.
+  }
+}
+
+let playerToken = getPlayerToken();
+let pendingProfileEmail = "";
+let currentPlayerProfile: PlayerProfile | null = loadSessionProfile();
+
+function loadSessionProfile(): PlayerProfile | null {
+  try {
+    const rawProfile = sessionStorage.getItem(sessionProfileStorageKey);
+
+    if (!rawProfile) {
+      return null;
+    }
+
+    const profile = JSON.parse(rawProfile) as PlayerProfile;
+
+    if (profile.token) {
+      savePlayerToken(profile.token);
+    }
+
+    return profile;
+  } catch {
+    return null;
+  }
+}
 
 function loadStoredProfile(): PlayerProfile | null {
   try {
@@ -108,9 +139,11 @@ function loadStoredProfile(): PlayerProfile | null {
 
 function saveStoredProfile(profile: PlayerProfile): void {
   currentPlayerProfile = profile;
+  savePlayerToken(profile.token);
 
   try {
     localStorage.setItem(profileStorageKey, JSON.stringify(profile));
+    sessionStorage.setItem(sessionProfileStorageKey, JSON.stringify(profile));
   } catch {
     // The server profile remains the source of truth.
   }
@@ -2199,6 +2232,7 @@ function applyGameCanvasSize(currentGame: Phaser.Game): void {
 }
 
 function showHomeMenu(): void {
+  document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.remove("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
@@ -2206,7 +2240,17 @@ function showHomeMenu(): void {
   document.getElementById("game")?.classList.add("is-hidden");
 }
 
+function showLoginMenu(): void {
+  document.getElementById("login")?.classList.remove("is-hidden");
+  document.getElementById("home")?.classList.add("is-hidden");
+  document.getElementById("profile")?.classList.add("is-hidden");
+  document.getElementById("settings")?.classList.add("is-hidden");
+  document.getElementById("waiting-room")?.classList.add("is-hidden");
+  document.getElementById("game")?.classList.add("is-hidden");
+}
+
 function showSettingsMenu(): void {
+  document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.add("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.remove("is-hidden");
@@ -2216,6 +2260,7 @@ function showSettingsMenu(): void {
 }
 
 function showProfileMenu(): void {
+  document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.add("is-hidden");
   document.getElementById("profile")?.classList.remove("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
@@ -2225,6 +2270,7 @@ function showProfileMenu(): void {
 }
 
 function showWaitingRoom(message = "Procurando outro jogador para iniciar a partida."): void {
+  document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.add("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
@@ -2238,6 +2284,7 @@ function showWaitingRoom(message = "Procurando outro jogador para iniciar a part
 }
 
 function showGameTable(): void {
+  document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.add("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
@@ -2275,7 +2322,7 @@ function renderProfileForm(): void {
   }
 
   if (emailInput) {
-    emailInput.value = currentPlayerProfile?.email ?? "";
+    emailInput.value = currentPlayerProfile?.email ?? pendingProfileEmail;
   }
 
   if (preview) {
@@ -2292,6 +2339,59 @@ function setProfileMessage(message: string): void {
 
   if (element) {
     element.textContent = message;
+  }
+}
+
+function setLoginMessage(message: string): void {
+  const element = document.getElementById("login-message");
+
+  if (element) {
+    element.textContent = message;
+  }
+}
+
+async function loginWithEmail(event: Event): Promise<void> {
+  event.preventDefault();
+
+  const emailInput = document.getElementById("login-email") as HTMLInputElement | null;
+  const email = emailInput?.value.trim().toLowerCase() ?? "";
+
+  if (!email) {
+    setLoginMessage("Digite seu email.");
+    return;
+  }
+
+  setLoginMessage("Entrando...");
+
+  try {
+    const response = await fetch(`${serverUrl}/login`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({ email })
+    });
+    const payload = await response.json() as { profile?: PlayerProfile; message?: string };
+
+    if (response.status === 404) {
+      currentPlayerProfile = null;
+      pendingProfileEmail = email;
+      setLoginMessage("");
+      showProfileMenu();
+      setProfileMessage("Email nao encontrado. Cadastre seu perfil.");
+      return;
+    }
+
+    if (!response.ok || !payload.profile) {
+      setLoginMessage(payload.message ?? "Nao foi possivel entrar.");
+      return;
+    }
+
+    pendingProfileEmail = "";
+    saveStoredProfile(payload.profile);
+    showHomeMenu();
+  } catch {
+    setLoginMessage("Erro ao conectar com o servidor.");
   }
 }
 
@@ -2355,6 +2455,11 @@ async function saveProfile(event: Event): Promise<void> {
     return;
   }
 
+  if (!avatarUrl) {
+    setProfileMessage("Escolha uma foto.");
+    return;
+  }
+
   setProfileMessage("Salvando...");
 
   try {
@@ -2378,8 +2483,10 @@ async function saveProfile(event: Event): Promise<void> {
     }
 
     saveStoredProfile(payload.profile);
+    pendingProfileEmail = "";
     renderProfileForm();
     setProfileMessage("Perfil salvo.");
+    showHomeMenu();
   } catch {
     setProfileMessage("Erro ao conectar com o servidor.");
   }
@@ -2462,6 +2569,9 @@ async function startOnlineGame(): Promise<void> {
 document.getElementById("play-online")?.addEventListener("click", () => {
   void startOnlineGame();
 });
+document.getElementById("login-form")?.addEventListener("submit", (event) => {
+  void loginWithEmail(event);
+});
 document.getElementById("open-profile")?.addEventListener("click", () => {
   void fetchPlayerProfile().finally(showProfileMenu);
 });
@@ -2490,6 +2600,11 @@ document.querySelectorAll<HTMLButtonElement>(".background-option").forEach((butt
   });
 });
 renderBackgroundOptions();
+if (currentPlayerProfile) {
+  showHomeMenu();
+} else {
+  showLoginMenu();
+}
 document.addEventListener("pointerdown", () => {
   if (!audioPlaybackUnlocked) {
     void unlockAudioPlayback().catch(() => undefined);

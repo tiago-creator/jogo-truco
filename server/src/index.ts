@@ -18,6 +18,7 @@ import {
   createMatch,
   finishMatch,
   getPlayerProfile,
+  getPlayerProfileByEmail,
   isDatabaseEnabled,
   recordHandResult,
   savePlayerProfile,
@@ -73,7 +74,7 @@ function cleanProfilePayload(body: unknown): { token: string; name: string; emai
     return null;
   }
 
-  if (avatarUrl && (!avatarUrl.startsWith("data:image/") || avatarUrl.length > 1_500_000)) {
+  if (!avatarUrl || !avatarUrl.startsWith("data:image/") || avatarUrl.length > 1_500_000) {
     return null;
   }
 
@@ -121,6 +122,30 @@ app.post("/profile", async (request, response) => {
 
     throw error;
   }
+});
+
+app.post("/login", async (request, response) => {
+  if (!isDatabaseEnabled()) {
+    response.status(503).json({ message: "Banco de dados nao configurado" });
+    return;
+  }
+
+  const payload = request.body as { email?: unknown };
+  const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
+
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    response.status(400).json({ message: "Digite um email valido" });
+    return;
+  }
+
+  const profile = await getPlayerProfileByEmail(email);
+
+  if (!profile) {
+    response.status(404).json({ message: "Perfil nao encontrado" });
+    return;
+  }
+
+  response.json({ profile });
 });
 
 const httpServer = createServer(app);

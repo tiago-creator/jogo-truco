@@ -96,6 +96,39 @@ export async function getPlayerProfile(token: string): Promise<PlayerProfile | n
   };
 }
 
+export async function getPlayerProfileByEmail(email: string): Promise<PlayerProfile | null> {
+  if (!pool) {
+    return null;
+  }
+
+  const result = await pool.query<{
+    token: string;
+    name: string;
+    email: string;
+    avatar_url: string | null;
+  }>(
+    `
+      select token, name, email, avatar_url
+      from players
+      where lower(email) = lower($1)
+      limit 1
+    `,
+    [email]
+  );
+  const row = result.rows[0];
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    token: row.token,
+    name: row.name,
+    email: row.email,
+    avatarUrl: row.avatar_url
+  };
+}
+
 export async function savePlayerProfile(profile: PlayerProfile): Promise<PlayerProfile> {
   if (!pool) {
     return profile;
