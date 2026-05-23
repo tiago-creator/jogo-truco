@@ -362,6 +362,7 @@ class TableScene extends Phaser.Scene {
   private trucoResponseGroup!: Phaser.GameObjects.Container;
   private trucoResponseTitle!: Phaser.GameObjects.Text;
   private trucoResponseRaiseText!: Phaser.GameObjects.Text;
+  private elevenHandGroup!: Phaser.GameObjects.Container;
   private handGroup!: Phaser.GameObjects.Container;
   private handHintGroup!: Phaser.GameObjects.Container;
   private opponentHandGroup!: Phaser.GameObjects.Container;
@@ -469,6 +470,7 @@ class TableScene extends Phaser.Scene {
     //#endregion
 
     this.trucoResponseGroup = this.createTrucoResponseGroup();
+    this.elevenHandGroup = this.createElevenHandGroup();
 
     //#region Exit Button
 this.exitButtonBg = this.add.graphics();
@@ -763,6 +765,76 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     group.setVisible(false);
 
     return group;
+  }
+
+  private createElevenHandGroup(): Phaser.GameObjects.Container {
+    const bg = this.add.graphics();
+
+    bg.fillStyle(0x06130f, 0.94);
+    bg.fillRoundedRect(-210, -106, 420, 212, 22);
+    bg.lineStyle(3, 0xffcf5a, 1);
+    bg.strokeRoundedRect(-210, -106, 420, 212, 22);
+
+    const title = this.add.text(0, -62, "Mao de 11", {
+      color: "#fff3a3",
+      fontFamily: "Arial Black",
+      fontSize: "32px",
+      fontStyle: "900"
+    }).setOrigin(0.5);
+
+    const play = this.createElevenHandButton(-92, 32, "JOGAR", 0x1f7a2e, "play");
+    const run = this.createElevenHandButton(92, 32, "CORRER", 0x8b4a12, "run");
+    const group = this.add.container(0, 0, [bg, title, play, run]);
+
+    group.setDepth(15001);
+    group.setVisible(false);
+
+    return group;
+  }
+
+  private createElevenHandButton(
+    x: number,
+    y: number,
+    label: string,
+    color: number,
+    action: "play" | "run"
+  ): Phaser.GameObjects.Container {
+    const bg = this.add.graphics();
+
+    bg.fillStyle(0x000000, 0.38);
+    bg.fillRoundedRect(-72, -38, 150, 80, 12);
+    bg.fillGradientStyle(
+      action === "play" ? 0x66d05f : 0xf2a334,
+      color,
+      action === "play" ? 0x0d3914 : 0x4a1e07,
+      action === "play" ? 0x061907 : 0x160804,
+      1
+    );
+    bg.fillRoundedRect(-76, -42, 150, 80, 12);
+    bg.lineStyle(3, 0xffffff, 0.22);
+    bg.strokeRoundedRect(-76, -42, 150, 80, 12);
+
+    const text = this.add.text(0, 0, label, {
+      color: "#ffffff",
+      fontFamily: "Arial Black",
+      fontSize: "22px",
+      fontStyle: "900",
+      stroke: "#000000",
+      strokeThickness: 3
+    }).setOrigin(0.5);
+    const hitZone = this.add.zone(0, 0, 158, 88);
+    const button = this.add.container(x, y, [bg, text, hitZone]);
+
+    button.setSize(150, 80);
+    hitZone.setInteractive({ useHandCursor: true });
+    hitZone.on("pointerup", () => {
+      this.socket.emit("eleven-hand:respond", {
+        roomId: this.roomId,
+        action
+      });
+    });
+
+    return button;
   }
 
   private createTrucoResponseButton(
@@ -1178,6 +1250,8 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     );
     this.trucoResponseGroup.setPosition(width / 2, height / 2 + 112 * this.uiScale);
     this.trucoResponseGroup.setScale(Math.min(this.uiScale, (width - 24) / 572));
+    this.elevenHandGroup.setPosition(width / 2, height / 2 + 112 * this.uiScale);
+    this.elevenHandGroup.setScale(Math.min(this.uiScale, (width - 24) / 420));
     this.audioButton.setScale(this.actionButtonScale * 2.18);
     this.audioButton.setPosition(130 * this.actionButtonScale, height - this.actionBottom);
     this.exitButton.setPosition(
@@ -1209,6 +1283,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.status.setText(this.roomState.message);
     this.audioButton.setVisible(this.roomState.status === "playing");
     this.renderTrucoResponse();
+    this.renderElevenHandDecision();
 
     this.renderScoreboard();
     this.renderTrucoButton();
@@ -1217,7 +1292,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.renderTable();
     this.renderOpponentHand(opponent?.hand ?? []);
     this.updateHandGroupPosition();
-    this.renderHand(self?.hand ?? [], isMyTurn && !this.roomState.trucoRequest);
+    this.renderHand(self?.hand ?? [], isMyTurn && !this.roomState.trucoRequest && !this.roomState.elevenHandDecision);
     this.sharpenExistingTexts();
   }
 
@@ -1261,7 +1336,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
   }
 
   private canToggleFaceDownCard(): boolean {
-    return (this.roomState?.self?.hand.length ?? 0) < 3;
+    return !this.roomState?.isIronHand && (this.roomState?.self?.hand.length ?? 0) < 3;
   }
 
   private toggleFaceDownCard(cardId: string): void {
@@ -1654,6 +1729,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     const handValue = this.roomState?.handValue ?? 1;
     const isPlaying = this.roomState?.status === "playing";
     const selfPoints = this.roomState?.self?.points ?? 0;
+    const hasElevenHand = Boolean(this.roomState?.isIronHand || this.roomState?.elevenHandDecision || this.roomState?.players.some((player) => player.points === 11));
     const lastRaiseWasMine = this.roomState?.lastTrucoRaise?.playerId === this.roomState?.self?.id;
     const label = {
       1: "Truco",
@@ -1662,7 +1738,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       9: "Doze",
       12: "Doze"
     }[handValue];
-    const enabled = isPlaying && !this.roomState?.trucoRequest && !lastRaiseWasMine && selfPoints !== 11 && handValue < 12;
+    const enabled = isPlaying && !hasElevenHand && !this.roomState?.trucoRequest && !lastRaiseWasMine && selfPoints !== 11 && handValue < 12;
 
     this.drawTrucoRaiseButton(label, enabled);
     this.setTrucoButtonInteractive(enabled);
@@ -1696,6 +1772,13 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     }
 
     this.trucoResponseGroup.setVisible(shouldRespond);
+  }
+
+  private renderElevenHandDecision(): void {
+    const decision = this.roomState?.elevenHandDecision;
+    const shouldShow = Boolean(decision && decision.playerId === this.roomState?.self?.id);
+
+    this.elevenHandGroup.setVisible(shouldShow);
   }
 
   private setTrucoResponseRaiseEnabled(enabled: boolean): void {
@@ -1933,7 +2016,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
         return;
       }
 
-      const faceDown = this.faceDownHandCardIds.has(cardData.id);
+      const faceDown = Boolean(this.roomState?.isIronHand || this.faceDownHandCardIds.has(cardData.id));
       const signature = this.getHandCardSignature(enabled, faceDown);
       const cached = this.handCardObjects.get(cardData.id);
       const shouldAnimatePosition = Boolean(cached && cached.signature === signature);

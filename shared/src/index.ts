@@ -35,6 +35,12 @@ export type TrucoRequest = {
   requestedValue: 3 | 6 | 9 | 12;
 };
 
+export type ElevenHandDecision = {
+  playerId: string;
+  playerName: string;
+  isIronHand: boolean;
+};
+
 export type RoomState = {
   roomId: string;
   players: PublicPlayer[];
@@ -45,6 +51,8 @@ export type RoomState = {
   turnPlayerId: string | null;
   status: "waiting" | "playing" | "finished";
   message: string;
+  isIronHand?: boolean;
+  elevenHandDecision?: ElevenHandDecision;
   trucoRequest?: TrucoRequest;
   lastTrucoRaise?: {
     playerId: string;
@@ -59,6 +67,7 @@ export type ClientToServerEvents = {
   "card:play": (payload: { roomId: string; cardId: string; faceDown?: boolean }) => void;
   "truco:raise": (payload: { roomId: string }) => void;
   "truco:respond": (payload: { roomId: string; action: "accept" | "reject" | "raise" }) => void;
+  "eleven-hand:respond": (payload: { roomId: string; action: "play" | "run" }) => void;
   "audio:send": (payload: { roomId: string; audio: ArrayBuffer; mimeType: string }) => void;
 };
 
@@ -70,6 +79,7 @@ export type ServerToClientEvents = {
 
 export const ranks: Rank[] = ["4", "5", "6", "7", "Q", "J", "K", "A", "2", "3"];
 export const suits: Suit[] = ["clubs", "hearts", "spades", "diamonds"];
+export const manilhaSuits: Suit[] = ["diamonds", "spades", "hearts", "clubs"];
 
 export function createDeck(): Card[] {
   return suits.flatMap((suit) => ranks.map((rank) => ({ id: `${rank}-${suit}`, suit, rank })));
@@ -88,4 +98,28 @@ export function shuffle<T>(items: T[], random = Math.random): T[] {
 
 export function compareCards(left: Card, right: Card): number {
   return ranks.indexOf(left.rank) - ranks.indexOf(right.rank);
+}
+
+export function getManilhaRank(vira: Card): Rank {
+  return ranks[(ranks.indexOf(vira.rank) + 1) % ranks.length];
+}
+
+export function compareCardsWithVira(left: Card, right: Card, vira: Card): number {
+  const manilhaRank = getManilhaRank(vira);
+  const leftIsManilha = left.rank === manilhaRank;
+  const rightIsManilha = right.rank === manilhaRank;
+
+  if (leftIsManilha && rightIsManilha) {
+    return manilhaSuits.indexOf(left.suit) - manilhaSuits.indexOf(right.suit);
+  }
+
+  if (leftIsManilha) {
+    return 1;
+  }
+
+  if (rightIsManilha) {
+    return -1;
+  }
+
+  return compareCards(left, right);
 }
