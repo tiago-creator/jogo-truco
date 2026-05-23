@@ -4,6 +4,9 @@ import type { Card, ClientToServerEvents, RoomState, ServerToClientEvents } from
 import "./styles.css";
 import opponentAvatarUrl from "./img/avatar/user-secret.svg";
 import cardBackUrl from "./img/cartas/ivory-emerald.svg";
+import arrowUpActionIconUrl from "./img/icons/arrow-up-action.svg";
+import checkActionIconUrl from "./img/icons/check-action.svg";
+import runningPlayerIconUrl from "./img/icons/running-player.svg";
 import feltBurgundyUrl from "./img/table-backgrounds/felt-burgundy.png";
 import feltCharcoalUrl from "./img/table-backgrounds/felt-charcoal.png";
 import feltEmeraldUrl from "./img/table-backgrounds/felt-emerald.png";
@@ -18,8 +21,8 @@ type PlayerProfile = {
   avatarUrl?: string | null;
 };
 
-const opponentAvatarPhotoSize = 96;
-const opponentAvatarMaskRadius = 44;
+const opponentAvatarPhotoSize = 106;
+const opponentAvatarMaskRadius = 49;
 
 const serverUrl = import.meta.env.VITE_SERVER_URL ?? "https://truco-1wfk.onrender.com";
 const tableBackgrounds = {
@@ -395,6 +398,9 @@ class TableScene extends Phaser.Scene {
 
     this.load.image("card-back", cardBackUrl);
     this.load.image("opponent-avatar", opponentAvatarUrl);
+    this.load.image("arrow-up-action-icon", arrowUpActionIconUrl);
+    this.load.image("check-action-icon", checkActionIconUrl);
+    this.load.image("running-player-icon", runningPlayerIconUrl);
 
   }
 
@@ -740,10 +746,10 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       fontStyle: "900"
     }).setOrigin(0.5);
 
-    const accept = this.createTrucoResponseButton(-182, 44, "ACEITAR", 0x0b7a4b, "accept");
-    const reject = this.createTrucoResponseButton(0, 44, "CORRER", 0x8b1e1e, "reject");
-    const raise = this.createTrucoResponseButton(182, 44, "SEIS", 0x7a4b00, "raise");
-    const group = this.add.container(0, 0, [bg, title, accept.container, reject.container, raise.container]);
+    const reject = this.createTrucoResponseButton(-182, 44, "CORRER", 0x8b4a12, "reject");
+    const accept = this.createTrucoResponseButton(0, 44, "ACEITAR", 0x1f7a2e, "accept");
+    const raise = this.createTrucoResponseButton(182, 44, "AUMENTAR", 0x1976a8, "raise");
+    const group = this.add.container(0, 0, [bg, title, reject.container, accept.container, raise.container]);
 
     this.trucoResponseRaiseText = raise.text;
     group.setDepth(15000);
@@ -761,21 +767,57 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
   ): { container: Phaser.GameObjects.Container; text: Phaser.GameObjects.Text } {
     const bg = this.add.graphics();
 
-    bg.fillStyle(color, 1);
-    bg.fillRoundedRect(-80, -42, 160, 84, 14);
-    bg.lineStyle(2, 0xfff3a3, 1);
-    bg.strokeRoundedRect(-80, -42, 160, 84, 14);
+    bg.fillStyle(0x000000, 0.38);
+    bg.fillRoundedRect(-76, -38, 160, 84, 12);
 
-    const text = this.add.text(0, 0, label, {
+    bg.fillStyle(color, 1);
+    bg.fillRoundedRect(-80, -42, 160, 84, 12);
+
+    bg.fillStyle(0xffffff, 0.16);
+    bg.fillRoundedRect(-72, -36, 144, 28, 10);
+
+    bg.fillStyle(0x000000, 0.24);
+    bg.fillRoundedRect(-76, 10, 152, 28, 9);
+
+    bg.lineStyle(3, 0xffffff, 0.22);
+    bg.strokeRoundedRect(-80, -42, 160, 84, 12);
+
+    bg.lineStyle(2, 0xffcf5a, action === "reject" ? 0.85 : 0.28);
+    bg.strokeRoundedRect(-78, -40, 156, 80, 10);
+
+    this.drawTrucoResponseIcon(bg, action);
+    const runIcon = action === "reject"
+      ? this.add.image(0, -16, "running-player-icon").setDisplaySize(42, 42)
+      : null;
+    const acceptIcon = action === "accept"
+      ? this.add.image(0, -16, "check-action-icon").setDisplaySize(44, 44)
+      : null;
+    const raiseIcon = action === "raise"
+      ? this.add.image(0, -17, "arrow-up-action-icon").setDisplaySize(42, 42)
+      : null;
+
+    const text = this.add.text(0, 15, label, {
       color: "#ffffff",
       fontFamily: "Arial Black",
-      fontSize: "22px",
-      fontStyle: "900"
+      fontSize: "19px",
+      fontStyle: "900",
+      stroke: "#000000",
+      strokeThickness: 3
     }).setOrigin(0.5);
+    const subtitle = action === "raise"
+      ? this.add.text(0, 32, "+3 PONTOS", {
+        color: "#d8f2ff",
+        fontFamily: "Arial",
+        fontSize: "10px",
+        fontStyle: "bold"
+      }).setOrigin(0.5)
+      : null;
 
     const hitZone = this.add.zone(0, 0, 172, 94);
-    const button = this.add.container(x, y, [bg, text, hitZone]);
+    const children = [bg, runIcon, acceptIcon, raiseIcon, text, subtitle, hitZone].filter(Boolean) as Phaser.GameObjects.GameObject[];
+    const button = this.add.container(x, y, children);
 
+    button.setName(`truco-response-${action}`);
     button.setSize(160, 84);
     hitZone.setInteractive({ useHandCursor: true });
     hitZone.on("pointerup", () => {
@@ -786,6 +828,15 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     });
 
     return { container: button, text };
+  }
+
+  private drawTrucoResponseIcon(
+    graphics: Phaser.GameObjects.Graphics,
+    action: "accept" | "reject" | "raise"
+  ): void {
+    graphics.lineStyle(7, 0xffffff, 0.92);
+    graphics.fillStyle(0xffffff, 0.92);
+
   }
 
   private async startAudioRecording(): Promise<void> {
@@ -1621,9 +1672,30 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       }[request.requestedValue];
 
       this.trucoResponseRaiseText.setText(raiseLabel);
+      this.setTrucoResponseRaiseEnabled(request.requestedValue < 12);
     }
 
     this.trucoResponseGroup.setVisible(shouldRespond);
+  }
+
+  private setTrucoResponseRaiseEnabled(enabled: boolean): void {
+    const raiseButton = this.trucoResponseGroup.list.find((child) => child.name === "truco-response-raise");
+
+    if (!(raiseButton instanceof Phaser.GameObjects.Container)) {
+      return;
+    }
+
+    raiseButton.setAlpha(enabled ? 1 : 0.42);
+
+    for (const child of raiseButton.list) {
+      if (child instanceof Phaser.GameObjects.Zone) {
+        if (enabled) {
+          child.setInteractive({ useHandCursor: true });
+        } else {
+          child.disableInteractive();
+        }
+      }
+    }
   }
 
   private setTrucoButtonInteractive(enabled: boolean): void {

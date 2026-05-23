@@ -746,6 +746,7 @@ socket.on("room:leave", ({ roomId }) => {
       return;
     }
 
+    room.handValue = request.requestedValue;
     room.trucoRequest = {
       requestedByPlayerId: player.id,
       requestedByPlayerName: player.name,
