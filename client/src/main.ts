@@ -276,6 +276,9 @@ class TableScene extends Phaser.Scene {
   private tableGroup!: Phaser.GameObjects.Container;
   private tableBackground!: Phaser.GameObjects.Image;
   private lastAnimatedTrucoValue: number | null = null;
+  private delayedTrucoResponseKey: string | null = null;
+  private visibleTrucoResponseKey: string | null = null;
+  private trucoResponseDelayTimer: Phaser.Time.TimerEvent | null = null;
   private exitButton!: Phaser.GameObjects.Container;
   private exitButtonBg!: Phaser.GameObjects.Graphics;
   private exitButtonText!: Phaser.GameObjects.Text;
@@ -468,6 +471,15 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
         this.lastAnimatedTrucoValue = null;
       }
 
+      const trucoResponseKey = this.getTrucoResponseKey(state);
+
+      if (!trucoResponseKey) {
+        this.delayedTrucoResponseKey = null;
+        this.visibleTrucoResponseKey = null;
+        this.trucoResponseDelayTimer?.remove(false);
+        this.trucoResponseDelayTimer = null;
+      }
+
       // animação do truco do oponente
       if (
         state.lastTrucoRaise &&
@@ -495,6 +507,10 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     12: "DOZE!"
   }[state.lastTrucoRaise.value] ?? "TRUCO!"
 );
+
+        if (trucoResponseKey) {
+          this.delayTrucoResponseOptions(trucoResponseKey);
+        }
       }
 
       this.animateDealIfNeeded();
@@ -841,6 +857,33 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     card.add([bg, rankText, suitText]);
     this.trucoButton.add(card);
   }
+
+  private getTrucoResponseKey(state: RoomState): string | null {
+    const request = state.trucoRequest;
+
+    if (!request || request.responderPlayerId !== state.self?.id) {
+      return null;
+    }
+
+    return `${request.requestedByPlayerId}:${request.responderPlayerId}:${request.requestedValue}`;
+  }
+
+  private delayTrucoResponseOptions(key: string): void {
+    this.delayedTrucoResponseKey = key;
+    this.visibleTrucoResponseKey = null;
+    this.trucoResponseDelayTimer?.remove(false);
+    this.trucoResponseDelayTimer = this.time.delayedCall(1800, () => {
+      if (!this.roomState || this.delayedTrucoResponseKey !== key || this.getTrucoResponseKey(this.roomState) !== key) {
+        return;
+      }
+
+      this.visibleTrucoResponseKey = key;
+      this.delayedTrucoResponseKey = null;
+      this.trucoResponseDelayTimer = null;
+      this.renderTrucoResponse();
+    });
+  }
+
   private drawTrucoRaiseButton(value: string, enabled: boolean): void {
     const scale = this.actionButtonScale;
     const g = this.trucoButtonBg;
@@ -1472,8 +1515,11 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
 
   private renderTrucoResponse(): void {
     const request = this.roomState?.trucoRequest;
-    const selfId = this.roomState?.self?.id;
-    const shouldRespond = Boolean(request && request.responderPlayerId === selfId);
+    const responseKey = this.roomState ? this.getTrucoResponseKey(this.roomState) : null;
+    const shouldRespond = Boolean(
+      responseKey &&
+      (this.visibleTrucoResponseKey === responseKey || this.delayedTrucoResponseKey !== responseKey)
+    );
 
     if (request) {
       const raiseLabel = {
