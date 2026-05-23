@@ -299,10 +299,13 @@ class TableScene extends Phaser.Scene {
 
     this.load.image("card-back", cardBackUrl);
     this.load.image("opponent-avatar", opponentAvatarUrl);
+
   }
 
   create(): void {
     this.cameras.main.setBackgroundColor("#12372a");
+    this.cameras.main.roundPixels = true;
+    this.game.canvas.style.imageRendering = "auto";
     this.tableBackground = this.add.image(0, 0, currentTableBackground)
       .setOrigin(0.5)
       .setDepth(-100);
@@ -364,10 +367,10 @@ class TableScene extends Phaser.Scene {
     //#region Exit Button
 this.exitButtonBg = this.add.graphics();
 
-this.exitButtonText = this.add.text(0, 0, "SAIR", {
+this.exitButtonText = this.add.text(0, 0, "X", {
   color: "#ffffff",
   fontFamily: "Arial Black",
-  fontSize: "16px",
+  fontSize: "20px",
   fontStyle: "900"
 }).setOrigin(0.5);
 
@@ -378,10 +381,10 @@ this.exitButton = this.add.container(0, 0, [
 
 this.drawExitButton();
 
-const exitButtonHitZone = this.add.zone(0, 0, 98, 50);
+const exitButtonHitZone = this.add.zone(0, 0, 48, 48);
 
 this.exitButton.add(exitButtonHitZone);
-this.exitButton.setSize(98, 50);
+this.exitButton.setSize(48, 48);
 
 exitButtonHitZone.setInteractive({ useHandCursor: true });
 exitButtonHitZone.on("pointerup", () => this.leaveTable());
@@ -429,6 +432,15 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.deckGroup = this.add.container(0, 0);
     this.viraGroup = this.add.container(0, 0);
     this.tableGroup = this.add.container(0, 0);
+    this.opponentHandGroup.setDepth(8);
+    this.deckGroup.setDepth(10);
+    this.viraGroup.setDepth(12);
+    this.tableGroup.setDepth(20);
+    this.handGroup.setDepth(40);
+    this.trucoButton.setDepth(100);
+    this.trucoButtonHitZone.setDepth(101);
+    this.audioButton.setDepth(100);
+    this.exitButton.setDepth(100);
 
     this.socket.on("connect", () => {
      this.socket.emit("room:join", {
@@ -506,7 +518,42 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     });
 
     this.scale.on("resize", () => this.layout());
+    this.sharpenExistingTexts();
     this.layout();
+  }
+
+  private getTextResolution(): number {
+    return Phaser.Math.Clamp((window.devicePixelRatio || 1) * 1.75, 2, 4);
+  }
+
+  private sharpenText<T extends Phaser.GameObjects.Text>(text: T): T {
+    const resolution = this.getTextResolution();
+
+    if (text.getData("sharpResolution") !== resolution) {
+      text.setResolution(resolution);
+      text.setData("sharpResolution", resolution);
+    }
+
+    return text;
+  }
+
+  private sharpenExistingTexts(): void {
+    this.children.each((child) => {
+      this.sharpenTextsInGameObject(child);
+    });
+  }
+
+  private sharpenTextsInGameObject(gameObject: Phaser.GameObjects.GameObject): void {
+    if (gameObject instanceof Phaser.GameObjects.Text) {
+      this.sharpenText(gameObject);
+      return;
+    }
+
+    if (gameObject instanceof Phaser.GameObjects.Container) {
+      for (const child of gameObject.list) {
+        this.sharpenTextsInGameObject(child as Phaser.GameObjects.GameObject);
+      }
+    }
   }
 
   private drawExitButton(): void {
@@ -515,16 +562,16 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     g.clear();
 
     g.fillStyle(0x000000, 0.35);
-    g.fillRoundedRect(-42, -16, 84, 34, 12);
+    g.fillCircle(3, 4, 21);
 
     g.fillStyle(0x8b1e1e, 1);
-    g.fillRoundedRect(-46, -20, 84, 34, 12);
+    g.fillCircle(0, 0, 21);
 
     g.lineStyle(3, 0xffcf5a, 1);
-    g.strokeRoundedRect(-46, -20, 84, 34, 12);
+    g.strokeCircle(0, 0, 21);
 
     g.fillStyle(0xffffff, 0.12);
-    g.fillRoundedRect(-40, -16, 72, 10, 8);
+    g.fillCircle(-6, -7, 7);
   }
 
   leaveTable(): void {
@@ -795,7 +842,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.trucoButton.add(card);
   }
   private drawTrucoRaiseButton(value: string, enabled: boolean): void {
-    const scale = this.uiScale;
+    const scale = this.actionButtonScale;
     const g = this.trucoButtonBg;
 
     g.clear();
@@ -872,14 +919,25 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.trucoButton.add(this.trucoButtonSmallText);
     this.trucoButton.add(this.trucoButtonText);
 
-    this.trucoButton.setScale(0.60 * scale);
+    this.trucoButton.setScale(0.6);
     this.trucoButton.setSize(buttonWidth, buttonHeight);
   }
 
   private uiScale = 1;
+  private actionButtonScale = 1;
+  private actionBottom = 74;
+
+  private getViewWidth(): number {
+    return this.scale.width;
+  }
+
+  private getViewHeight(): number {
+    return this.scale.height;
+  }
 
   private updateUiScale(): void {
-    const { width, height } = this.scale;
+    const width = this.getViewWidth();
+    const height = this.getViewHeight();
 
     const baseWidth = 390;
     const baseHeight = 844;
@@ -888,32 +946,39 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     const scaleY = height / baseHeight;
 
     this.uiScale = Phaser.Math.Clamp(Math.min(scaleX, scaleY), 0.82, 1.08);
+    this.actionButtonScale = Phaser.Math.Clamp(this.uiScale * 0.82, 0.64, 0.74);
   }
 
   private layout(): void {
     this.updateUiScale();
 
-    const { width, height } = this.scale;
+    const width = this.getViewWidth();
+    const height = this.getViewHeight();
     const safeTop = 12 * this.uiScale;
     const backgroundScale = Math.max(
       width / this.tableBackground.width,
       height / this.tableBackground.height
     );
 
+    this.cameras.main.setViewport(0, 0, width, height);
+    this.cameras.main.setZoom(1);
     this.tableBackground.setPosition(width / 2, height / 2);
     this.tableBackground.setScale(backgroundScale);
-    this.scoreboardGroup.setPosition(width / 2, safeTop + 46 * this.uiScale);
+    this.scoreboardGroup.setPosition(width / 2, safeTop + 36 * this.uiScale);
     this.status.setPosition(width / 2, safeTop + 106 * this.uiScale);
-    this.trucoButton.setPosition(width - 50 * this.uiScale, height - 100 * this.uiScale);
+    this.actionBottom = Math.max(58, 78 * this.actionButtonScale);
+
+    this.trucoButton.setPosition(width - 68 * this.actionButtonScale, height - this.actionBottom);
     this.trucoButtonHitZone.setPosition(
       this.trucoButton.x,
       this.trucoButton.y
     );
     this.trucoResponseGroup.setPosition(width / 2, height / 2 + 112 * this.uiScale);
     this.trucoResponseGroup.setScale(this.uiScale);
-    this.audioButton.setPosition(58 * this.uiScale, height - 100 * this.uiScale);
+    this.audioButton.setScale(this.actionButtonScale);
+    this.audioButton.setPosition(70 * this.actionButtonScale, height - this.actionBottom);
     this.exitButton.setPosition(
-  width - 58 * this.uiScale,
+  width - 28 * this.uiScale,
   34 * this.uiScale
 );
     this.opponentHandGroup.setPosition(width / 2, safeTop + 148 * this.uiScale);
@@ -921,7 +986,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.viraGroup.setPosition(width / 2, height / 2 + 10 * this.uiScale);
     this.deckGroup.setPosition(width / 2 + 30 * this.uiScale, height / 2 + 12 * this.uiScale);
     this.tableGroup.setPosition(width / 2, height / 2 - 20 * this.uiScale);
-    this.handGroup.setPosition(width / 2, height - 82 * this.uiScale);
+    this.updateHandGroupPosition();
     this.renderState();
   }
 
@@ -950,7 +1015,23 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.renderDeck();
     this.renderTable();
     this.renderOpponentHand(opponent?.hand ?? []);
+    this.updateHandGroupPosition();
     this.renderHand(self?.hand ?? [], isMyTurn && !this.roomState.trucoRequest);
+    this.sharpenExistingTexts();
+  }
+
+  private updateHandGroupPosition(): void {
+    const handCount = this.roomState?.self?.hand.length ?? 3;
+    const handScale = this.getHandCardScale(handCount);
+    const width = this.getViewWidth();
+    const height = this.getViewHeight();
+    const defaultY = height - 66 * this.uiScale;
+    const actionTopY = height - this.actionBottom - 60 * this.actionButtonScale;
+    const handHalfHeight = 59 * handScale;
+    const gap = 6 * this.uiScale;
+    const safeY = actionTopY - handHalfHeight - gap;
+
+    this.handGroup.setPosition(width / 2, Math.min(defaultY, safeY));
   }
 
   private syncFaceDownHandCards(): void {
@@ -1219,7 +1300,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     const previousOpponent = this.previousRoomState.players.find((player) => player.id === playedEntry.playerId);
     const previousCardIndex = previousOpponent?.hand.findIndex((card) => card.id === playedEntry.card.id) ?? -1;
     const opponentCardCount = previousOpponent?.hand.length ?? 1;
-    const opponentSpacing = Math.min(82, this.scale.width / 4.8);
+    const opponentSpacing = Math.min(82, this.getViewWidth() / 4.8);
     const opponentStartX = -((opponentCardCount - 1) * opponentSpacing) / 2;
     const fromX = this.opponentHandGroup.x + opponentStartX + Math.max(previousCardIndex, 0) * opponentSpacing;
     const fromY = this.opponentHandGroup.y;
@@ -1405,8 +1486,8 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
   }
 
   private setTrucoButtonInteractive(enabled: boolean): void {
-    const width = 100 * this.uiScale;
-    const height = 100 * this.uiScale;
+    const width = 92 * this.actionButtonScale;
+    const height = 98 * this.actionButtonScale;
 
     this.trucoButtonHitZone.setSize(width, height);
     this.trucoButtonHitZone.setPosition(this.trucoButton.x, this.trucoButton.y);
@@ -1422,18 +1503,18 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
   private renderScoreboard(): void {
     this.scoreboardGroup.removeAll(true);
 
-    const width = Math.min(this.scale.width - 24, 430);
-    const bg = this.add.rectangle(0, 0, width, 92, 0x0b261c, 0.82).setStrokeStyle(2, 0xf8f1d9, 0.35);
+    const width = Math.min(this.getViewWidth() - 24, 430 * this.uiScale);
+    const bg = this.add.rectangle(0, 0, width, 70* this.uiScale, 0x0b261c, 0.82).setStrokeStyle(2, 0xf8f1d9, 0.35);
     const headers = ["Rodada", "Pontos", "Valendo", "Jogos"];
     const players = this.roomState?.players ?? [];
     const left = -width / 2 + 12;
-    const columnStart = left + Math.min(142, width * 0.34);
+    const columnStart = left + Math.min(142 * this.uiScale, width * 0.34);
     const columnGap = (width - (columnStart - left) - 12) / headers.length;
 
     this.scoreboardGroup.add(bg);
 
     headers.forEach((header, index) => {
-      this.scoreboardGroup.add(this.add.text(columnStart + index * columnGap, -34, header, {
+      this.scoreboardGroup.add(this.add.text(columnStart + index * columnGap, -22*this.uiScale, header, {
         color: "#f8f1d9",
         fontFamily: "Arial",
         fontSize: "12px",
@@ -1442,7 +1523,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     });
 
     players.forEach((player, rowIndex) => {
-      const y = -8 + rowIndex * 28;
+      const y = -2 + rowIndex * 20 *this.uiScale;
       const isSelf = player.id === this.roomState?.self?.id;
       const name = `${isSelf ? "Voce" : player.name}`.slice(0, 14);
       const values = [player.roundWins, player.points, this.roomState?.handValue ?? 1, player.games];
@@ -1450,7 +1531,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       this.scoreboardGroup.add(this.add.text(left, y, name, {
         color: isSelf ? "#ffcf5a" : "#f8f1d9",
         fontFamily: "Arial",
-        fontSize: "13px",
+        fontSize: `${14 * this.uiScale}px`,
         fontStyle: isSelf ? "bold" : "normal"
       }).setOrigin(0, 0.5));
 
@@ -1458,7 +1539,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
         this.scoreboardGroup.add(this.add.text(columnStart + index * columnGap, y, String(value), {
           color: "#f8f1d9",
           fontFamily: "Arial",
-          fontSize: "14px"
+          fontSize: `${14 * this.uiScale}px`
         }).setOrigin(0.5));
       });
     });
@@ -1578,19 +1659,20 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
   }
 
   private getHandCardTarget(cards: Card[], index: number): { x: number; y: number; scale: number; rotation: number } {
-    const spacing = Math.min(104 * this.uiScale, this.scale.width / 5.6);
+    const scale = this.getHandCardScale(cards.length);
+    const spacing = this.getHandCardSpacing(cards.length, scale);
     const startX = -((cards.length - 1) * spacing) / 2;
 
     return {
       x: this.handGroup.x + startX + index * spacing,
       y: this.handGroup.y,
-      scale: 1 * this.uiScale,
+      scale,
       rotation: 0
     };
   }
 
   private getOpponentHandCardTarget(cards: Card[], index: number): { x: number; y: number; scale: number; rotation: number } {
-    const spacing = Math.min(20, this.scale.width / 12);
+    const spacing = Math.min(20, this.getViewWidth() / 12);
     const startX = -((cards.length - 1) * spacing) / 2;
     const middleIndex = (cards.length - 1) / 2;
     const spread = index - middleIndex;
@@ -1604,7 +1686,8 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
   }
 
   private renderHand(cards: Card[], enabled: boolean): void {
-    const spacing = Math.min(104 * this.uiScale, this.scale.width / 5.6);
+    const scale = this.getHandCardScale(cards.length);
+    const spacing = this.getHandCardSpacing(cards.length, scale);
     const startX = -((cards.length - 1) * spacing) / 2;
     const activeCardIds = new Set<string>();
 
@@ -1624,7 +1707,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
         : this.replaceCachedHandCard(cardData.id, this.createCard(cardData, enabled, faceDown), signature);
 
       card.setPosition(startX + index * spacing, 0);
-      card.setScale(1 * this.uiScale);
+      card.setScale(scale);
     });
 
     for (const cardId of Array.from(this.handCardObjects.keys())) {
@@ -1632,6 +1715,36 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
         this.destroyCachedHandCard(cardId);
       }
     }
+  }
+
+  private getHandCardScale(cardCount: number): number {
+    const maxScale = 1.06 * this.uiScale;
+    const horizontalPadding = 28;
+    const cardWidth = 80;
+
+    if (cardCount <= 1) {
+      return maxScale;
+    }
+
+    const maxWidth = Math.max(220, this.getViewWidth() - horizontalPadding * 2);
+    const naturalWidth = cardWidth * maxScale + (cardCount - 1) * 86 * this.uiScale;
+
+    return Math.min(maxScale, maxWidth / naturalWidth * maxScale);
+  }
+
+  private getHandCardSpacing(cardCount: number, cardScale: number): number {
+    if (cardCount <= 1) {
+      return 0;
+    }
+
+    const horizontalPadding = 28;
+    const cardWidth = 80 * cardScale;
+    const minGap = 10 * this.uiScale;
+    const maxSpacing = 92 * this.uiScale;
+    const availableWidth = Math.max(cardWidth, this.getViewWidth() - horizontalPadding * 2);
+    const fitSpacing = (availableWidth - cardWidth) / (cardCount - 1);
+
+    return Phaser.Math.Clamp(fitSpacing, cardWidth + minGap, maxSpacing);
   }
 
   private getHandCardSignature(enabled: boolean, faceDown: boolean): string {
@@ -1673,7 +1786,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
   private renderOpponentHand(cards: Card[]): void {
     this.opponentHandGroup.removeAll(true);
 
-    const spacing = Math.min(20, this.scale.width / 12);
+    const spacing = Math.min(20, this.getViewWidth() / 12);
     const startX = -((cards.length - 1) * spacing) / 2;
     const middleIndex = (cards.length - 1) / 2;
 
@@ -1905,6 +2018,32 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
 
 let game: Phaser.Game | null = null;
 let currentTableBackground = getSelectedTableBackground();
+let resizeGameCanvas: (() => void) | null = null;
+
+function getGameResolution(): number {
+  return Phaser.Math.Clamp(window.devicePixelRatio || 1, 1, 2.5);
+}
+
+function getViewportWidth(): number {
+  return Math.ceil(document.documentElement.clientWidth || window.innerWidth);
+}
+
+function getViewportHeight(): number {
+  return Math.ceil(document.documentElement.clientHeight || window.innerHeight);
+}
+
+function getGamePixelWidth(): number {
+  return Math.ceil(getViewportWidth() * getGameResolution());
+}
+
+function getGamePixelHeight(): number {
+  return Math.ceil(getViewportHeight() * getGameResolution());
+}
+
+function applyGameCanvasSize(currentGame: Phaser.Game): void {
+  currentGame.scale.setZoom(1 / getGameResolution());
+  currentGame.scale.resize(getGamePixelWidth(), getGamePixelHeight());
+}
 
 function showHomeMenu(): void {
   document.getElementById("home")?.classList.remove("is-hidden");
@@ -1963,6 +2102,11 @@ function returnToMainMenu(): void {
   const currentGame = game;
 
   game = null;
+  if (resizeGameCanvas) {
+    window.removeEventListener("resize", resizeGameCanvas);
+    window.removeEventListener("orientationchange", resizeGameCanvas);
+    resizeGameCanvas = null;
+  }
   showHomeMenu();
   currentGame?.destroy(true);
 }
@@ -1987,26 +2131,39 @@ function startOnlineGame(): void {
   void unlockAudioPlayback().catch(() => undefined);
   showWaitingRoom();
 
-  game = new Phaser.Game({
+  const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
     parent: "game",
     backgroundColor: "#12372a",
     scale: {
-      mode: Phaser.Scale.RESIZE,
+      mode: Phaser.Scale.NONE,
       autoCenter: Phaser.Scale.CENTER_BOTH,
-      width: window.innerWidth,
-      height: window.innerHeight
+      zoom: 1 / getGameResolution(),
+      width: getGamePixelWidth(),
+      height: getGamePixelHeight()
     },
     render: {
       antialias: true,
+      antialiasGL: true,
       pixelArt: false,
+      roundPixels: true,
       powerPreference: "high-performance"
     },
     input: {
       activePointers: 3
     },
     scene: [TableScene]
-  });
+  };
+
+  game = new Phaser.Game(config);
+  resizeGameCanvas = () => {
+    if (game) {
+      applyGameCanvasSize(game);
+    }
+  };
+  window.addEventListener("resize", resizeGameCanvas);
+  window.addEventListener("orientationchange", resizeGameCanvas);
+  applyGameCanvasSize(game);
   } catch (error) {
     returnToMainMenu();
     alert("Ocorreu um erro ao iniciar o jogo. Por favor, tente novamente.");
