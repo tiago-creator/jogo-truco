@@ -18,6 +18,9 @@ type PlayerProfile = {
   avatarUrl?: string | null;
 };
 
+const opponentAvatarPhotoSize = 96;
+const opponentAvatarMaskRadius = 44;
+
 const serverUrl = import.meta.env.VITE_SERVER_URL ?? "https://truco-1wfk.onrender.com";
 const tableBackgrounds = {
   "felt-teal": { label: "Teal", url: feltTealUrl },
@@ -358,6 +361,7 @@ class TableScene extends Phaser.Scene {
   private opponentHandGroup!: Phaser.GameObjects.Container;
   private opponentAvatarGroup!: Phaser.GameObjects.Container;
   private opponentAvatarImage!: Phaser.GameObjects.Image;
+  private opponentAvatarMaskShape!: Phaser.GameObjects.Graphics;
   private opponentNameText!: Phaser.GameObjects.Text;
   private currentOpponentAvatarUrl: string | null = null;
   private deckGroup!: Phaser.GameObjects.Container;
@@ -1118,6 +1122,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
 );
     this.opponentHandGroup.setPosition(width / 2, safeTop + 198 * this.uiScale);
     this.opponentAvatarGroup.setPosition(width / 2, safeTop + 240 * this.uiScale);
+    this.updateOpponentAvatarMaskPosition();
     this.viraGroup.setPosition(width / 2, height / 2 + 10 * this.uiScale);
     this.deckGroup.setPosition(width / 2 + 30 * this.uiScale, height / 2 + 12 * this.uiScale);
     this.tableGroup.setPosition(width / 2, height / 2 - 20 * this.uiScale);
@@ -1948,7 +1953,13 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       .setStrokeStyle(2, 0xffcf5a, 0.9);
 
     const avatar = this.add.image(0, 0, "opponent-avatar")
-      .setDisplaySize(80, 80);
+      .setDisplaySize(opponentAvatarPhotoSize, opponentAvatarPhotoSize);
+    const avatarMask = this.make.graphics({}, false);
+
+    avatarMask.fillStyle(0xffffff, 1);
+    avatarMask.fillCircle(0, 0, opponentAvatarMaskRadius);
+    avatar.setMask(avatarMask.createGeometryMask());
+    this.opponentAvatarMaskShape = avatarMask;
     this.opponentAvatarImage = avatar;
 
     // caixa do nome
@@ -1980,13 +1991,21 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     return container;
   }
 
+  private updateOpponentAvatarMaskPosition(): void {
+    if (!this.opponentAvatarMaskShape || !this.opponentAvatarGroup) {
+      return;
+    }
+
+    this.opponentAvatarMaskShape.setPosition(this.opponentAvatarGroup.x, this.opponentAvatarGroup.y);
+  }
+
   private updateOpponentAvatar(opponent: RoomState["players"][number] | undefined): void {
     const avatarUrl = opponent?.avatarUrl ?? null;
 
     if (!avatarUrl) {
       this.currentOpponentAvatarUrl = null;
       this.opponentAvatarImage.setTexture("opponent-avatar");
-      this.opponentAvatarImage.setDisplaySize(80, 80);
+      this.opponentAvatarImage.setDisplaySize(opponentAvatarPhotoSize, opponentAvatarPhotoSize);
       return;
     }
 
@@ -1999,7 +2018,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
 
     if (this.textures.exists(textureKey)) {
       this.opponentAvatarImage.setTexture(textureKey);
-      this.opponentAvatarImage.setDisplaySize(80, 80);
+      this.opponentAvatarImage.setDisplaySize(opponentAvatarPhotoSize, opponentAvatarPhotoSize);
       return;
     }
 
@@ -2012,7 +2031,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
 
       if (this.currentOpponentAvatarUrl === avatarUrl) {
         this.opponentAvatarImage.setTexture(textureKey);
-        this.opponentAvatarImage.setDisplaySize(80, 80);
+        this.opponentAvatarImage.setDisplaySize(opponentAvatarPhotoSize, opponentAvatarPhotoSize);
       }
     };
     image.src = avatarUrl;
