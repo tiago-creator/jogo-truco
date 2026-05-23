@@ -140,6 +140,38 @@ function getJoinRoom(roomId: string | undefined, token: string): Room {
   return findRoomByPlayerToken(token) ?? findWaitingRoom() ?? createAutoRoom();
 }
 
+function replacePlayerId(room: Room, previousId: string, nextId: string): void {
+  if (previousId === nextId) {
+    return;
+  }
+
+  if (room.turnPlayerId === previousId) {
+    room.turnPlayerId = nextId;
+  }
+
+  for (const tableCard of room.table) {
+    if (tableCard.playerId === previousId) {
+      tableCard.playerId = nextId;
+    }
+  }
+
+  if (room.trucoRequest?.requestedByPlayerId === previousId) {
+    room.trucoRequest.requestedByPlayerId = nextId;
+  }
+
+  if (room.trucoRequest?.responderPlayerId === previousId) {
+    room.trucoRequest.responderPlayerId = nextId;
+  }
+
+  if (room.lastTrucoRequesterId === previousId) {
+    room.lastTrucoRequesterId = nextId;
+  }
+
+  if (room.lastTrucoRaise?.playerId === previousId) {
+    room.lastTrucoRaise.playerId = nextId;
+  }
+}
+
 function buildState(room: Room, viewerId: string): RoomState {
   const self = room.players.find((player) => player.id === viewerId);
 
@@ -373,8 +405,11 @@ io.on("connection", (socket) => {
     }
 
     if (existing) {
+      const previousId = existing.id;
+
       existing.id = socket.id;
       existing.name = name.trim() || existing.name;
+      replacePlayerId(room, previousId, socket.id);
       socket.join(room.id);
       runDatabaseTask(async () => {
         await upsertPlayer({

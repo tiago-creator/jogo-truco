@@ -12,8 +12,8 @@ import feltTealUrl from "./img/table-backgrounds/felt-teal.png";
 
 type TrucoSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
-//const serverUrl = 'https://truco-1wfk.onrender.com';
-const serverUrl = import.meta.env.VITE_SERVER_URL ?? `${window.location.protocol}//${window.location.hostname}:3000`;
+const serverUrl = 'https://truco-1wfk.onrender.com';
+//const serverUrl = import.meta.env.VITE_SERVER_URL ?? `${window.location.protocol}//${window.location.hostname}:3000`;
 const tableBackgrounds = {
   "felt-teal": { label: "Teal", url: feltTealUrl },
   "felt-emerald": { label: "Emerald", url: feltEmeraldUrl },
