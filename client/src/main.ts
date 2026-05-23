@@ -919,13 +919,15 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.trucoButton.add(this.trucoButtonSmallText);
     this.trucoButton.add(this.trucoButtonText);
 
-    this.trucoButton.setScale(0.6);
+    this.trucoButton.setScale(1.0);
     this.trucoButton.setSize(buttonWidth, buttonHeight);
   }
 
   private uiScale = 1;
   private actionButtonScale = 1;
   private actionBottom = 74;
+  private readonly tableCardScale = 1.1;
+  private readonly deckCardScale = 1.1;
 
   private getViewWidth(): number {
     return this.scale.width;
@@ -968,21 +970,21 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.status.setPosition(width / 2, safeTop + 106 * this.uiScale);
     this.actionBottom = Math.max(58, 78 * this.actionButtonScale);
 
-    this.trucoButton.setPosition(width - 68 * this.actionButtonScale, height - this.actionBottom);
+    this.trucoButton.setPosition(width - 98 * this.actionButtonScale, height - this.actionBottom-30);
     this.trucoButtonHitZone.setPosition(
       this.trucoButton.x,
       this.trucoButton.y
     );
     this.trucoResponseGroup.setPosition(width / 2, height / 2 + 112 * this.uiScale);
     this.trucoResponseGroup.setScale(this.uiScale);
-    this.audioButton.setScale(this.actionButtonScale);
-    this.audioButton.setPosition(70 * this.actionButtonScale, height - this.actionBottom);
+    this.audioButton.setScale(this.actionButtonScale * 2.18);
+    this.audioButton.setPosition(130 * this.actionButtonScale, height - this.actionBottom);
     this.exitButton.setPosition(
   width - 28 * this.uiScale,
   34 * this.uiScale
 );
-    this.opponentHandGroup.setPosition(width / 2, safeTop + 148 * this.uiScale);
-    this.opponentAvatarGroup.setPosition(width / 2, safeTop + 182 * this.uiScale);
+    this.opponentHandGroup.setPosition(width / 2, safeTop + 198 * this.uiScale);
+    this.opponentAvatarGroup.setPosition(width / 2, safeTop + 240 * this.uiScale);
     this.viraGroup.setPosition(width / 2, height / 2 + 10 * this.uiScale);
     this.deckGroup.setPosition(width / 2 + 30 * this.uiScale, height / 2 + 12 * this.uiScale);
     this.tableGroup.setPosition(width / 2, height / 2 - 20 * this.uiScale);
@@ -1318,7 +1320,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       targets: animatedCard,
       x: toX,
       y: toY,
-      scale: 0.68 * this.uiScale,
+      scale: this.tableCardScale * this.uiScale,
       duration: 520,
       ease: "Cubic.Out",
       onComplete: () => {
@@ -1553,7 +1555,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     }
 
     const card = this.createCard(this.roomState.vira, false);
-    card.setScale(0.68 * this.uiScale);
+    card.setScale(this.deckCardScale * this.uiScale);
 
     this.viraGroup.add(card);
   }
@@ -1568,7 +1570,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     for (let index = 0; index < 3; index += 1) {
       const card = this.createCardBack();
       card.setPosition(index * 3, -index * 2);
-      card.setScale(0.68 * this.uiScale);
+      card.setScale(this.deckCardScale * this.uiScale);
       card.setRotation(Phaser.Math.DegToRad(3));
       card.setDepth(12 + index);
       this.deckGroup.add(card);
@@ -1597,7 +1599,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       const position = this.getTableCardPosition(entry.playerId, index, cards.length);
 
       card.setPosition(position.x, position.y);
-      card.setScale(0.68 * this.uiScale);
+      card.setScale(this.tableCardScale * this.uiScale);
     });
 
     for (const cardId of Array.from(this.tableCardObjects.keys())) {
@@ -1611,11 +1613,11 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     const isSelf = playerId === this.roomState?.self?.id;
 
     if (isSelf) {
-      return { x: 0, y: 120 * this.uiScale };
+      return { x: 0, y: 190 * this.uiScale };
     }
 
     if (this.roomState?.self) {
-      return { x: 0, y: -60 * this.uiScale };
+      return { x: 0, y: -130 * this.uiScale };
     }
 
     const spacing = 92 * this.uiScale;
@@ -1718,7 +1720,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
   }
 
   private getHandCardScale(cardCount: number): number {
-    const maxScale = 1.06 * this.uiScale;
+    const maxScale = 1.74 * this.uiScale;
     const horizontalPadding = 28;
     const cardWidth = 80;
 
@@ -1800,7 +1802,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
 
       card.setPosition(startX + index * spacing, Math.abs(spread) * 5);
       card.setRotation(Phaser.Math.DegToRad(spread * 9));
-      card.setScale(0.32 * this.uiScale);//Tamanho carta dos oponenetes
+      card.setScale(0.62 * this.uiScale);//Tamanho carta dos oponenetes
       this.opponentHandGroup.add(card);
     });
   }
@@ -1808,11 +1810,11 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
   private createOpponentAvatar(): Phaser.GameObjects.Container {
     const container = this.add.container(0, 0);
 
-    const bg = this.add.circle(0, 0, 29, 0xffffff, 1)
+    const bg = this.add.circle(0, 0, 50, 0xffffff, 1)
       .setStrokeStyle(2, 0xffcf5a, 0.9);
 
     const avatar = this.add.image(0, 0, "opponent-avatar")
-      .setDisplaySize(30, 30);
+      .setDisplaySize(80, 80);
 
     // caixa do nome
     const nameBox = this.add.graphics();
@@ -1972,7 +1974,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
             targets: container,
             x: this.tableGroup.x + targetPosition.x - this.handGroup.x,
             y: this.tableGroup.y + targetPosition.y - this.handGroup.y,
-            scale: 0.68 * this.uiScale,
+            scale: this.tableCardScale * this.uiScale,
             duration: 520,
             ease: "Cubic.Out",
             onComplete: () => {
