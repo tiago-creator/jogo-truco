@@ -59,6 +59,8 @@ type Room = {
     playerName: string;
     value: RoomState["handValue"];
   };
+  lastGameWinnerId?: string;
+  lastGameWinnerName?: string;
   dbMatchId?: string;
   cpuActionTimer?: ReturnType<typeof setTimeout>;
 };
@@ -293,7 +295,9 @@ function buildState(room: Room, viewerId: string): RoomState {
     isIronHand: room.isIronHand,
     elevenHandDecision: room.elevenHandDecision,
     trucoRequest: room.trucoRequest,
-    lastTrucoRaise: room.lastTrucoRaise
+    lastTrucoRaise: room.lastTrucoRaise,
+    lastGameWinnerId: room.lastGameWinnerId,
+    lastGameWinnerName: room.lastGameWinnerName
   };
 }
 
@@ -389,6 +393,8 @@ function dealHand(room: Room, firstPlayerId = room.players[0]?.id): void {
   room.trucoRequest = undefined;
   room.lastTrucoRequesterId = undefined;
   room.lastTrucoRaise = undefined;
+  room.lastGameWinnerId = undefined;
+  room.lastGameWinnerName = undefined;
   room.dbMatchId = undefined;
 }
 
@@ -437,6 +443,8 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
   });
 
   if (finishedGame) {
+    room.lastGameWinnerId = winner.id;
+    room.lastGameWinnerName = winner.name;
     winner.games += 1;
     winner.points = 0;
     for (const player of room.players) {
@@ -628,6 +636,8 @@ function handlePlayerExit(socketId: string, explicitRoomId?: string): void {
     room.trucoRequest = undefined;
     room.lastTrucoRequesterId = undefined;
     room.lastTrucoRaise = undefined;
+    room.lastGameWinnerId = undefined;
+    room.lastGameWinnerName = undefined;
     room.elevenHandDecision = undefined;
     room.isIronHand = false;
     room.trickResults = [];

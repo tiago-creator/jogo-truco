@@ -379,6 +379,7 @@ class TableScene extends Phaser.Scene {
   private delayedTrucoResponseKey: string | null = null;
   private visibleTrucoResponseKey: string | null = null;
   private trucoResponseDelayTimer: Phaser.Time.TimerEvent | null = null;
+  private lastCelebratedGameWinnerKey: string | null = null;
   private exitButton!: Phaser.GameObjects.Container;
   private exitButtonBg!: Phaser.GameObjects.Graphics;
   private exitButtonText!: Phaser.GameObjects.Text;
@@ -576,6 +577,18 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
 
       if (!state.lastTrucoRaise) {
         this.lastAnimatedTrucoValue = null;
+      }
+
+      const gameWinnerKey = state.lastGameWinnerId ? `${state.lastGameWinnerId}:${state.lastGameWinnerName ?? ""}` : null;
+
+      if (!gameWinnerKey) {
+        this.lastCelebratedGameWinnerKey = null;
+      } else if (
+        state.lastGameWinnerId === state.self?.id &&
+        this.lastCelebratedGameWinnerKey !== gameWinnerKey
+      ) {
+        this.lastCelebratedGameWinnerKey = gameWinnerKey;
+        this.playGameWinAnimation();
       }
 
       const trucoResponseKey = this.getTrucoResponseKey(state);
@@ -1554,6 +1567,158 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     });
 
     this.cameras.main.shake(180, 0.006);
+  }
+
+  private playGameWinAnimation(): void {
+    const width = this.getViewWidth();
+    const height = this.getViewHeight();
+    const container = this.add.container(width / 2, height / 2);
+
+    container.setDepth(50000);
+    container.setAlpha(0);
+    container.setScale(0.78);
+
+    const glow = this.add.graphics();
+
+    glow.fillStyle(0xffcf5a, 0.18);
+    glow.fillCircle(0, 0, 210);
+    glow.fillStyle(0xffffff, 0.11);
+    glow.fillCircle(0, 0, 150);
+
+    const burst = this.add.graphics();
+
+    for (let index = 0; index < 28; index += 1) {
+      const angle = Phaser.Math.DegToRad(index * (360 / 28));
+      const inner = index % 2 === 0 ? 82 : 54;
+      const outer = index % 2 === 0 ? 220 : 176;
+
+      burst.lineStyle(index % 2 === 0 ? 5 : 3, index % 3 === 0 ? 0xffffff : 0xffcf5a, 0.58);
+      burst.lineBetween(
+        Math.cos(angle) * inner,
+        Math.sin(angle) * inner,
+        Math.cos(angle) * outer,
+        Math.sin(angle) * outer
+      );
+    }
+
+    const plate = this.add.graphics();
+
+    plate.fillGradientStyle(0x135c3f, 0x0a3428, 0x061c16, 0x020a08, 1);
+    plate.fillRoundedRect(-250, -92, 500, 184, 24);
+    plate.lineStyle(5, 0xffcf5a, 1);
+    plate.strokeRoundedRect(-250, -92, 500, 184, 24);
+    plate.lineStyle(2, 0xffffff, 0.6);
+    plate.strokeRoundedRect(-236, -78, 472, 156, 18);
+
+    const crown = this.add.text(0, -64, "♛", {
+      color: "#ffcf5a",
+      fontFamily: "Arial Black",
+      fontSize: "58px",
+      fontStyle: "900",
+      stroke: "#000000",
+      strokeThickness: 5
+    }).setOrigin(0.5);
+
+    const titleGlow = this.add.text(0, -5, "VOCE GANHOU", {
+      color: "#ffcf5a",
+      fontFamily: "Arial Black",
+      fontSize: "46px",
+      fontStyle: "900",
+      stroke: "#000000",
+      strokeThickness: 12
+    }).setOrigin(0.5);
+
+    titleGlow.setAlpha(0.45);
+
+    const title = this.add.text(0, -5, "VOCE GANHOU", {
+      color: "#ffffff",
+      fontFamily: "Arial Black",
+      fontSize: "42px",
+      fontStyle: "900",
+      stroke: "#7a3500",
+      strokeThickness: 6
+    }).setOrigin(0.5);
+
+    const subtitle = this.add.text(0, 50, "O JOGO", {
+      color: "#fff3a3",
+      fontFamily: "Arial Black",
+      fontSize: "30px",
+      fontStyle: "900",
+      stroke: "#000000",
+      strokeThickness: 4
+    }).setOrigin(0.5);
+
+    container.add([glow, burst, plate, crown, titleGlow, title, subtitle]);
+
+    const confettiColors = [0xffcf5a, 0xffffff, 0x35d399, 0x38bdf8, 0xf97316];
+
+    for (let index = 0; index < 42; index += 1) {
+      const piece = this.add.rectangle(
+        Phaser.Math.Between(-260, 260),
+        Phaser.Math.Between(-230, -120),
+        Phaser.Math.Between(6, 14),
+        Phaser.Math.Between(10, 18),
+        confettiColors[index % confettiColors.length],
+        0.95
+      );
+
+      piece.setRotation(Phaser.Math.FloatBetween(-1.2, 1.2));
+      piece.setDepth(50001);
+      container.add(piece);
+
+      this.tweens.add({
+        targets: piece,
+        y: Phaser.Math.Between(160, 260),
+        x: piece.x + Phaser.Math.Between(-70, 70),
+        rotation: piece.rotation + Phaser.Math.FloatBetween(3, 7),
+        alpha: 0,
+        duration: Phaser.Math.Between(1500, 2500),
+        delay: Phaser.Math.Between(100, 550),
+        ease: "Cubic.In"
+      });
+    }
+
+    this.tweens.add({
+      targets: container,
+      alpha: 1,
+      scale: 1,
+      duration: 420,
+      ease: "Back.Out",
+      onComplete: () => {
+        this.tweens.add({
+          targets: [glow, burst],
+          scale: 1.08,
+          alpha: 0.75,
+          yoyo: true,
+          repeat: 5,
+          duration: 260,
+          ease: "Sine.InOut"
+        });
+
+        this.tweens.add({
+          targets: crown,
+          y: crown.y - 10,
+          yoyo: true,
+          repeat: 5,
+          duration: 260,
+          ease: "Sine.InOut"
+        });
+
+        this.time.delayedCall(2800, () => {
+          this.tweens.add({
+            targets: container,
+            alpha: 0,
+            scale: 1.12,
+            duration: 420,
+            ease: "Cubic.In",
+            onComplete: () => container.destroy()
+          });
+        });
+      }
+    });
+
+    this.cameras.main.flash(260, 255, 207, 90, true);
+    this.cameras.main.shake(240, 0.004);
   }
 
   private animateOpponentPlayIfNeeded(): void {

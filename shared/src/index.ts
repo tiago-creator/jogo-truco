@@ -59,6 +59,8 @@ export type RoomState = {
     playerName: string;
     value: RoomState["handValue"];
   };
+  lastGameWinnerId?: string;
+  lastGameWinnerName?: string;
 };
 
 export type ClientToServerEvents = {
