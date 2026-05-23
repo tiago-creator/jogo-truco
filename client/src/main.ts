@@ -380,6 +380,7 @@ class TableScene extends Phaser.Scene {
   private visibleTrucoResponseKey: string | null = null;
   private trucoResponseDelayTimer: Phaser.Time.TimerEvent | null = null;
   private lastCelebratedGameWinnerKey: string | null = null;
+  private lastShownTrucoResponseKey: string | null = null;
   private exitButton!: Phaser.GameObjects.Container;
   private exitButtonBg!: Phaser.GameObjects.Graphics;
   private exitButtonText!: Phaser.GameObjects.Text;
@@ -579,6 +580,21 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
         this.lastAnimatedTrucoValue = null;
       }
 
+      const trucoResponse = state.lastTrucoResponse;
+      const trucoResponseKey = trucoResponse
+        ? `${trucoResponse.playerId}:${trucoResponse.action}:${trucoResponse.requestedValue}`
+        : null;
+
+      if (!trucoResponse || !trucoResponseKey) {
+        this.lastShownTrucoResponseKey = null;
+      } else if (
+        trucoResponse.playerId !== state.self?.id &&
+        this.lastShownTrucoResponseKey !== trucoResponseKey
+      ) {
+        this.lastShownTrucoResponseKey = trucoResponseKey;
+        this.showOpponentSpeechBubble(this.getTrucoResponseMessage(trucoResponse.action));
+      }
+
       const gameWinnerKey = state.lastGameWinnerId ? `${state.lastGameWinnerId}:${state.lastGameWinnerName ?? ""}` : null;
 
       if (!gameWinnerKey) {
@@ -591,9 +607,9 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
         this.playGameWinAnimation();
       }
 
-      const trucoResponseKey = this.getTrucoResponseKey(state);
+      const pendingTrucoResponseKey = this.getTrucoResponseKey(state);
 
-      if (!trucoResponseKey) {
+      if (!pendingTrucoResponseKey) {
         this.delayedTrucoResponseKey = null;
         this.visibleTrucoResponseKey = null;
         this.trucoResponseDelayTimer?.remove(false);
@@ -628,8 +644,8 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
   }[state.lastTrucoRaise.value] ?? "TRUCO!"
 );
 
-        if (trucoResponseKey) {
-          this.delayTrucoResponseOptions(trucoResponseKey);
+        if (pendingTrucoResponseKey) {
+          this.delayTrucoResponseOptions(pendingTrucoResponseKey);
         }
       }
 
@@ -1108,6 +1124,14 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     }
 
     return `${request.requestedByPlayerId}:${request.responderPlayerId}:${request.requestedValue}`;
+  }
+
+  private getTrucoResponseMessage(action: "accept" | "reject" | "raise"): string {
+    return {
+      accept: "ACEITOU!",
+      reject: "CORREU!",
+      raise: "AUMENTOU!"
+    }[action];
   }
 
   private delayTrucoResponseOptions(key: string): void {

@@ -61,6 +61,7 @@ type Room = {
   };
   lastGameWinnerId?: string;
   lastGameWinnerName?: string;
+  lastTrucoResponse?: RoomState["lastTrucoResponse"];
   dbMatchId?: string;
   cpuActionTimer?: ReturnType<typeof setTimeout>;
 };
@@ -297,7 +298,8 @@ function buildState(room: Room, viewerId: string): RoomState {
     trucoRequest: room.trucoRequest,
     lastTrucoRaise: room.lastTrucoRaise,
     lastGameWinnerId: room.lastGameWinnerId,
-    lastGameWinnerName: room.lastGameWinnerName
+    lastGameWinnerName: room.lastGameWinnerName,
+    lastTrucoResponse: room.lastTrucoResponse
   };
 }
 
@@ -393,6 +395,7 @@ function dealHand(room: Room, firstPlayerId = room.players[0]?.id): void {
   room.trucoRequest = undefined;
   room.lastTrucoRequesterId = undefined;
   room.lastTrucoRaise = undefined;
+  room.lastTrucoResponse = undefined;
   room.lastGameWinnerId = undefined;
   room.lastGameWinnerName = undefined;
   room.dbMatchId = undefined;
@@ -636,6 +639,7 @@ function handlePlayerExit(socketId: string, explicitRoomId?: string): void {
     room.trucoRequest = undefined;
     room.lastTrucoRequesterId = undefined;
     room.lastTrucoRaise = undefined;
+    room.lastTrucoResponse = undefined;
     room.lastGameWinnerId = undefined;
     room.lastGameWinnerName = undefined;
     room.elevenHandDecision = undefined;
@@ -701,6 +705,12 @@ function respondTrucoAsCpu(room: Room): void {
     return;
   }
 
+  room.lastTrucoResponse = {
+    playerId: cpu.id,
+    playerName: cpu.name,
+    action: "accept",
+    requestedValue: request.requestedValue
+  };
   room.handValue = request.requestedValue;
   room.trucoRequest = undefined;
   broadcastState(room);
@@ -953,6 +963,12 @@ socket.on("room:leave", ({ roomId }) => {
     }
 
     if (action === "accept") {
+      room.lastTrucoResponse = {
+        playerId: player.id,
+        playerName: player.name,
+        action,
+        requestedValue: request.requestedValue
+      };
       room.handValue = request.requestedValue;
       room.trucoRequest = undefined;
       broadcastState(room);
@@ -962,6 +978,12 @@ socket.on("room:leave", ({ roomId }) => {
     if (action === "reject") {
       const points = request.currentValue;
 
+      room.lastTrucoResponse = {
+        playerId: player.id,
+        playerName: player.name,
+        action,
+        requestedValue: request.requestedValue
+      };
       room.trucoRequest = undefined;
       awardHand(room, requester, points);
       broadcastState(room);
@@ -986,6 +1008,12 @@ socket.on("room:leave", ({ roomId }) => {
     }
 
     room.handValue = request.requestedValue;
+    room.lastTrucoResponse = {
+      playerId: player.id,
+      playerName: player.name,
+      action,
+      requestedValue: raisedValue as TrucoRequest["requestedValue"]
+    };
     room.trucoRequest = {
       requestedByPlayerId: player.id,
       requestedByPlayerName: player.name,

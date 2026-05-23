@@ -41,6 +41,13 @@ export type ElevenHandDecision = {
   isIronHand: boolean;
 };
 
+export type TrucoResponseNotice = {
+  playerId: string;
+  playerName: string;
+  action: "accept" | "reject" | "raise";
+  requestedValue: 3 | 6 | 9 | 12;
+};
+
 export type RoomState = {
   roomId: string;
   players: PublicPlayer[];
@@ -61,6 +68,7 @@ export type RoomState = {
   };
   lastGameWinnerId?: string;
   lastGameWinnerName?: string;
+  lastTrucoResponse?: TrucoResponseNotice;
 };
 
 export type ClientToServerEvents = {
