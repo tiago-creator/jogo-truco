@@ -21,6 +21,15 @@ type PlayerProfile = {
   email: string;
   avatarUrl?: string | null;
 };
+type RankingPlayer = {
+  position: number;
+  name: string;
+  avatarUrl?: string | null;
+  rankPoints: number;
+  gamesPlayed: number;
+  gamesWon: number;
+  handsWon: number;
+};
 
 const opponentAvatarPhotoSize = 106;
 const opponentAvatarMaskRadius = 49;
@@ -2693,6 +2702,7 @@ function showHomeMenu(): void {
   document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.remove("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
+  document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
@@ -2702,6 +2712,7 @@ function showLoginMenu(): void {
   document.getElementById("login")?.classList.remove("is-hidden");
   document.getElementById("home")?.classList.add("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
+  document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
@@ -2711,6 +2722,7 @@ function showSettingsMenu(): void {
   document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.add("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
+  document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.remove("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
@@ -2721,16 +2733,29 @@ function showProfileMenu(): void {
   document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.add("is-hidden");
   document.getElementById("profile")?.classList.remove("is-hidden");
+  document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
   renderProfileForm();
 }
 
+function showRankMenu(): void {
+  document.getElementById("login")?.classList.add("is-hidden");
+  document.getElementById("home")?.classList.add("is-hidden");
+  document.getElementById("profile")?.classList.add("is-hidden");
+  document.getElementById("rank")?.classList.remove("is-hidden");
+  document.getElementById("settings")?.classList.add("is-hidden");
+  document.getElementById("waiting-room")?.classList.add("is-hidden");
+  document.getElementById("game")?.classList.add("is-hidden");
+  void renderRanking();
+}
+
 function showWaitingRoom(message = "Procurando outro jogador para iniciar a partida."): void {
   document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.add("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
+  document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.remove("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
@@ -2745,6 +2770,7 @@ function showGameTable(): void {
   document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.add("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
+  document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.remove("is-hidden");
@@ -2767,6 +2793,61 @@ function renderBackgroundOptions(): void {
 
     button.classList.toggle("is-selected", backgroundId === currentTableBackground);
   });
+}
+
+async function renderRanking(): Promise<void> {
+  const list = document.getElementById("rank-list");
+
+  if (!list) {
+    return;
+  }
+
+  list.innerHTML = '<p class="rank-empty">Carregando rank...</p>';
+
+  try {
+    const response = await fetch(`${serverUrl}/rank`);
+    const payload = await response.json() as { ranking: RankingPlayer[] };
+    const ranking = payload.ranking ?? [];
+
+    if (ranking.length === 0) {
+      list.innerHTML = '<p class="rank-empty">Ainda nao ha jogadores no rank.</p>';
+      return;
+    }
+
+    list.replaceChildren(...ranking.map(createRankingRow));
+  } catch {
+    list.innerHTML = '<p class="rank-empty">Nao foi possivel carregar o rank.</p>';
+  }
+}
+
+function createRankingRow(player: RankingPlayer): HTMLElement {
+  const row = document.createElement("article");
+  const avatar = document.createElement("img");
+  const playerInfo = document.createElement("div");
+  const name = document.createElement("div");
+  const stats = document.createElement("div");
+  const position = document.createElement("div");
+  const points = document.createElement("div");
+
+  row.className = "rank-row";
+  position.className = "rank-position";
+  avatar.className = "rank-avatar";
+  playerInfo.className = "rank-player";
+  name.className = "rank-name";
+  stats.className = "rank-stats";
+  points.className = "rank-points";
+
+  position.textContent = `#${player.position}`;
+  avatar.alt = "";
+  avatar.src = player.avatarUrl || opponentAvatarUrl;
+  name.textContent = player.name;
+  stats.textContent = `${player.gamesWon} vitorias • ${player.gamesPlayed} jogos • ${player.handsWon} maos`;
+  points.textContent = `${player.rankPoints} pts`;
+
+  playerInfo.append(name, stats);
+  row.append(position, avatar, playerInfo, points);
+
+  return row;
 }
 
 function renderProfileForm(): void {
@@ -3033,9 +3114,11 @@ document.getElementById("login-form")?.addEventListener("submit", (event) => {
 document.getElementById("open-profile")?.addEventListener("click", () => {
   void fetchPlayerProfile().finally(showProfileMenu);
 });
+document.getElementById("open-rank")?.addEventListener("click", showRankMenu);
 document.getElementById("open-settings")?.addEventListener("click", showSettingsMenu);
 document.getElementById("back-home")?.addEventListener("click", showHomeMenu);
 document.getElementById("back-home-profile")?.addEventListener("click", showHomeMenu);
+document.getElementById("back-home-rank")?.addEventListener("click", showHomeMenu);
 document.getElementById("cancel-waiting")?.addEventListener("click", leaveOnlineGame);
 document.getElementById("profile-form")?.addEventListener("submit", (event) => {
   void saveProfile(event);

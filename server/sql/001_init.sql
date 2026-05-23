@@ -6,12 +6,20 @@ create table if not exists players (
   name text not null,
   email text unique,
   avatar_url text,
+  rank_points integer not null default 0,
+  games_played integer not null default 0,
+  games_won integer not null default 0,
+  hands_won integer not null default 0,
   created_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now()
 );
 
 alter table players add column if not exists email text;
 alter table players add column if not exists avatar_url text;
+alter table players add column if not exists rank_points integer not null default 0;
+alter table players add column if not exists games_played integer not null default 0;
+alter table players add column if not exists games_won integer not null default 0;
+alter table players add column if not exists hands_won integer not null default 0;
 
 create unique index if not exists idx_players_email_unique on players (lower(email)) where email is not null;
 
@@ -48,3 +56,4 @@ create table if not exists hands (
 create index if not exists idx_matches_room_started_at on matches(room_id, started_at desc);
 create index if not exists idx_hands_match_created_at on hands(match_id, created_at);
 create index if not exists idx_players_last_seen_at on players(last_seen_at desc);
+create index if not exists idx_players_rank_points on players(rank_points desc, games_won desc);

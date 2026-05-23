@@ -42,6 +42,7 @@ canvas {
 .login-screen,
 .waiting-screen,
 .settings-screen,
+.rank-screen,
 .profile-screen {
   position: fixed;
   inset: 0;
@@ -61,6 +62,7 @@ canvas {
 .login-screen::before,
 .waiting-screen::before,
 .settings-screen::before,
+.rank-screen::before,
 .profile-screen::before {
   content: "";
   position: absolute;
@@ -73,6 +75,7 @@ canvas {
 .login-screen.is-hidden,
 .waiting-screen.is-hidden,
 .settings-screen.is-hidden,
+.rank-screen.is-hidden,
 .profile-screen.is-hidden {
   display: none;
 }
@@ -81,6 +84,7 @@ canvas {
 .login-content,
 .waiting-content,
 .settings-content,
+.rank-content,
 .profile-content {
   position: relative;
   width: min(100%, 440px);
@@ -145,6 +149,7 @@ canvas {
 
 .profile-content h2,
 .login-content h2,
+.rank-content h2,
 .settings-content h2 {
   margin: 18px 0 18px;
   color: #ffffff;
@@ -152,6 +157,81 @@ canvas {
   font-size: clamp(30px, 9vw, 48px);
   line-height: 1;
   letter-spacing: 0;
+}
+
+.rank-content {
+  width: min(100%, 560px);
+}
+
+.rank-list {
+  display: grid;
+  gap: 10px;
+  max-height: min(58vh, 520px);
+  margin: 0 auto 20px;
+  overflow: auto;
+  padding: 4px;
+}
+
+.rank-empty {
+  margin: 0 auto 20px;
+  color: rgba(248, 241, 217, 0.86);
+  font-size: 16px;
+}
+
+.rank-row {
+  display: grid;
+  grid-template-columns: 42px 48px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 70px;
+  padding: 10px;
+  border: 2px solid rgba(255, 207, 90, 0.28);
+  background: rgba(7, 27, 21, 0.68);
+  color: #f8f1d9;
+  text-align: left;
+}
+
+.rank-position {
+  color: #ffcf5a;
+  font-family: Arial Black, Arial, Helvetica, sans-serif;
+  font-size: 18px;
+  text-align: center;
+}
+
+.rank-avatar {
+  width: 48px;
+  height: 48px;
+  border: 2px solid rgba(255, 207, 90, 0.78);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.12);
+  object-fit: cover;
+}
+
+.rank-player {
+  min-width: 0;
+}
+
+.rank-name {
+  overflow: hidden;
+  color: #ffffff;
+  font-family: Arial Black, Arial, Helvetica, sans-serif;
+  font-size: 15px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rank-stats {
+  margin-top: 4px;
+  color: rgba(248, 241, 217, 0.75);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.rank-points {
+  color: #ffcf5a;
+  font-family: Arial Black, Arial, Helvetica, sans-serif;
+  font-size: 16px;
+  text-align: right;
 }
 
 .profile-form {

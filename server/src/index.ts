@@ -20,8 +20,10 @@ import {
   finishMatch,
   getPlayerProfile,
   getPlayerProfileByEmail,
+  getRanking,
   isDatabaseEnabled,
   recordHandResult,
+  recordRankingGameResult,
   savePlayerProfile,
   upsertPlayer
 } from "./db.js";
@@ -72,6 +74,14 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "2mb" }));
 app.get("/health", (_request, response) => response.json({ ok: true }));
+app.get("/rank", async (_request, response) => {
+  if (!isDatabaseEnabled()) {
+    response.json({ ranking: [] });
+    return;
+  }
+
+  response.json({ ranking: await getRanking() });
+});
 
 function cleanProfilePayload(body: unknown): { token: string; name: string; email: string; avatarUrl?: string } | null {
   if (!body || typeof body !== "object") {
@@ -427,6 +437,8 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
   const finishedGame = winner.points >= 12;
   const winnerPointsAfter = winner.points;
   const loserPointsAfter = loser?.points ?? 0;
+  const winnerHandsWon = winner.roundWins;
+  const loserHandsWon = loser?.roundWins ?? 0;
 
   runDatabaseTask(async () => {
     await recordHandResult({
@@ -464,6 +476,28 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
     room.lastGameWinnerId = winner.id;
     room.lastGameWinnerName = winner.name;
     room.lastGameWinnerSequence = (room.lastGameWinnerSequence ?? 0) + 1;
+    if (!winner.isCpu) {
+      runDatabaseTask(async () => {
+        await recordRankingGameResult({
+          winner: {
+            token: winner.token,
+            name: winner.name,
+            avatarUrl: winner.avatarUrl
+          },
+          loser: loser && !loser.isCpu
+            ? {
+              token: loser.token,
+              name: loser.name,
+              avatarUrl: loser.avatarUrl
+            }
+            : undefined,
+          winnerHandsWon,
+          loserHandsWon,
+          winnerFinalPoints: winnerPointsAfter,
+          loserFinalPoints: loserPointsAfter
+        });
+      });
+    }
     startPersistentMatch(room);
   }
 }

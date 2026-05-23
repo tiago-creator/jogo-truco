@@ -26,6 +26,25 @@ export type HandResultSnapshot = {
   finishedGame: boolean;
 };
 
+export type RankingGameResult = {
+  winner: PlayerSnapshot;
+  loser?: PlayerSnapshot;
+  winnerHandsWon: number;
+  loserHandsWon: number;
+  winnerFinalPoints: number;
+  loserFinalPoints: number;
+};
+
+export type RankingPlayer = {
+  position: number;
+  name: string;
+  avatarUrl?: string | null;
+  rankPoints: number;
+  gamesPlayed: number;
+  gamesWon: number;
+  handsWon: number;
+};
+
 const connectionString = process.env.DATABASE_URL;
 const shouldUseSsl = process.env.DATABASE_SSL === "true";
 
@@ -252,6 +271,104 @@ export async function recordHandResult(result: HandResultSnapshot): Promise<void
       result.finishedGame
     ]
   );
+}
+
+function getRankingPoints(payload: {
+  wonGame: boolean;
+  handsWon: number;
+  finalPoints: number;
+  opponentFinalPoints: number;
+}): number {
+  const participationPoints = 30;
+  const winPoints = payload.wonGame ? 120 : 0;
+  const handPoints = payload.handsWon * 8;
+  const marginBonus = payload.wonGame ? Math.max(0, payload.finalPoints - payload.opponentFinalPoints) * 2 : 0;
+
+  return participationPoints + winPoints + handPoints + marginBonus;
+}
+
+export async function recordRankingGameResult(result: RankingGameResult): Promise<void> {
+  if (!pool) {
+    return;
+  }
+
+  const winnerPlayerId = await upsertPlayer(result.winner);
+  const loserPlayerId = result.loser ? await upsertPlayer(result.loser) : null;
+  const winnerRankingPoints = getRankingPoints({
+    wonGame: true,
+    handsWon: result.winnerHandsWon,
+    finalPoints: result.winnerFinalPoints,
+    opponentFinalPoints: result.loserFinalPoints
+  });
+  const loserRankingPoints = getRankingPoints({
+    wonGame: false,
+    handsWon: result.loserHandsWon,
+    finalPoints: result.loserFinalPoints,
+    opponentFinalPoints: result.winnerFinalPoints
+  });
+
+  if (winnerPlayerId) {
+    await pool.query(
+      `
+        update players
+        set rank_points = rank_points + $2,
+          games_played = games_played + 1,
+          games_won = games_won + 1,
+          hands_won = hands_won + $3,
+          last_seen_at = now()
+        where id = $1
+      `,
+      [winnerPlayerId, winnerRankingPoints, result.winnerHandsWon]
+    );
+  }
+
+  if (loserPlayerId) {
+    await pool.query(
+      `
+        update players
+        set rank_points = rank_points + $2,
+          games_played = games_played + 1,
+          hands_won = hands_won + $3,
+          last_seen_at = now()
+        where id = $1
+      `,
+      [loserPlayerId, loserRankingPoints, result.loserHandsWon]
+    );
+  }
+}
+
+export async function getRanking(limit = 50): Promise<RankingPlayer[]> {
+  if (!pool) {
+    return [];
+  }
+
+  const result = await pool.query<{
+    name: string;
+    avatar_url: string | null;
+    rank_points: number;
+    games_played: number;
+    games_won: number;
+    hands_won: number;
+  }>(
+    `
+      select name, avatar_url, rank_points, games_played, games_won, hands_won
+      from players
+      where games_played > 0 or rank_points > 0
+      order by rank_points desc, games_won desc, hands_won desc, last_seen_at desc
+      limit $1
+    `,
+    [limit]
+  );
+
+  return result.rows.map((row, index) => ({
+    position: index + 1,
+    name: row.name,
+    avatarUrl: row.avatar_url,
+    rankPoints: row.rank_points,
+    gamesPlayed: row.games_played,
+    gamesWon: row.games_won,
+    handsWon: row.hands_won
+  }));
 }
 
 export async function finishMatch(
