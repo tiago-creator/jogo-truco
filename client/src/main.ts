@@ -11,9 +11,14 @@ import feltNavyUrl from "./img/table-backgrounds/felt-navy.png";
 import feltTealUrl from "./img/table-backgrounds/felt-teal.png";
 
 type TrucoSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
+type PlayerProfile = {
+  token: string;
+  name: string;
+  email: string;
+  avatarUrl?: string | null;
+};
 
-const serverUrl = 'https://truco-1wfk.onrender.com';
-//const serverUrl = import.meta.env.VITE_SERVER_URL ?? `${window.location.protocol}//${window.location.hostname}:3000`;
+const serverUrl = import.meta.env.VITE_SERVER_URL ?? "https://truco-1wfk.onrender.com";
 const tableBackgrounds = {
   "felt-teal": { label: "Teal", url: feltTealUrl },
   "felt-emerald": { label: "Emerald", url: feltEmeraldUrl },
@@ -23,6 +28,7 @@ const tableBackgrounds = {
 } as const;
 const defaultTableBackground = "felt-teal";
 const tableBackgroundStorageKey = "truco-table-background";
+const profileStorageKey = "truco-player-profile";
 
 type TableBackgroundId = keyof typeof tableBackgrounds;
 
@@ -82,6 +88,53 @@ function getPlayerToken(): string {
 }
 
 const playerToken = getPlayerToken();
+let currentPlayerProfile: PlayerProfile | null = loadStoredProfile();
+
+function loadStoredProfile(): PlayerProfile | null {
+  try {
+    const rawProfile = localStorage.getItem(profileStorageKey);
+
+    if (!rawProfile) {
+      return null;
+    }
+
+    const profile = JSON.parse(rawProfile) as PlayerProfile;
+
+    return profile.token === playerToken ? profile : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveStoredProfile(profile: PlayerProfile): void {
+  currentPlayerProfile = profile;
+
+  try {
+    localStorage.setItem(profileStorageKey, JSON.stringify(profile));
+  } catch {
+    // The server profile remains the source of truth.
+  }
+}
+
+function getCurrentPlayerName(): string {
+  return currentPlayerProfile?.name ?? `Jogador ${Math.floor(Math.random() * 900 + 100)}`;
+}
+
+async function fetchPlayerProfile(): Promise<PlayerProfile | null> {
+  const response = await fetch(`${serverUrl}/profile/${encodeURIComponent(playerToken)}`);
+
+  if (!response.ok) {
+    return currentPlayerProfile;
+  }
+
+  const payload = await response.json() as { profile: PlayerProfile | null };
+
+  if (payload.profile) {
+    saveStoredProfile(payload.profile);
+  }
+
+  return payload.profile ?? currentPlayerProfile;
+}
 
 let sharedAudioContext: AudioContext | null = null;
 let audioPlaybackUnlocked = false;
@@ -258,7 +311,7 @@ class TableScene extends Phaser.Scene {
   private handCardObjects = new Map<string, { container: Phaser.GameObjects.Container; signature: string }>();
   private tableCardObjects = new Map<string, { container: Phaser.GameObjects.Container; signature: string }>();
   private roomId = "";
-  private playerName = `Jogador ${Math.floor(Math.random() * 900 + 100)}`;
+  private playerName = getCurrentPlayerName();
   private status!: Phaser.GameObjects.Text;
   private scoreboardGroup!: Phaser.GameObjects.Container;
   private trucoButton!: Phaser.GameObjects.Container;
@@ -271,6 +324,9 @@ class TableScene extends Phaser.Scene {
   private handGroup!: Phaser.GameObjects.Container;
   private opponentHandGroup!: Phaser.GameObjects.Container;
   private opponentAvatarGroup!: Phaser.GameObjects.Container;
+  private opponentAvatarImage!: Phaser.GameObjects.Image;
+  private opponentNameText!: Phaser.GameObjects.Text;
+  private currentOpponentAvatarUrl: string | null = null;
   private deckGroup!: Phaser.GameObjects.Container;
   private viraGroup!: Phaser.GameObjects.Container;
   private tableGroup!: Phaser.GameObjects.Container;
@@ -1045,11 +1101,8 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     const opponent = this.roomState.players.find((player) => player.id !== self?.id);
     const isMyTurn = this.roomState.turnPlayerId === self?.id;
 
-    const opponentName = this.opponentAvatarGroup.list[3] as Phaser.GameObjects.Text;
-
-    if (opponentName) {
-      opponentName.setText(opponent?.name ?? "Oponente");
-    }
+    this.opponentNameText.setText(opponent?.name ?? "Oponente");
+    this.updateOpponentAvatar(opponent);
 
     this.status.setText(this.roomState.message);
     this.audioButton.setVisible(this.roomState.status === "playing");
@@ -1863,6 +1916,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
 
     const avatar = this.add.image(0, 0, "opponent-avatar")
       .setDisplaySize(80, 80);
+    this.opponentAvatarImage = avatar;
 
     // caixa do nome
     const nameBox = this.add.graphics();
@@ -1879,6 +1933,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       fontSize: "14px",
       fontStyle: "bold"
     }).setOrigin(0.5);
+    this.opponentNameText = name;
 
     container.add([
       bg,
@@ -1890,6 +1945,54 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     container.setDepth(8);
 
     return container;
+  }
+
+  private updateOpponentAvatar(opponent: RoomState["players"][number] | undefined): void {
+    const avatarUrl = opponent?.avatarUrl ?? null;
+
+    if (!avatarUrl) {
+      this.currentOpponentAvatarUrl = null;
+      this.opponentAvatarImage.setTexture("opponent-avatar");
+      this.opponentAvatarImage.setDisplaySize(80, 80);
+      return;
+    }
+
+    if (this.currentOpponentAvatarUrl === avatarUrl) {
+      return;
+    }
+
+    this.currentOpponentAvatarUrl = avatarUrl;
+    const textureKey = `player-avatar-${this.hashText(avatarUrl)}`;
+
+    if (this.textures.exists(textureKey)) {
+      this.opponentAvatarImage.setTexture(textureKey);
+      this.opponentAvatarImage.setDisplaySize(80, 80);
+      return;
+    }
+
+    const image = new Image();
+
+    image.onload = () => {
+      if (!this.textures.exists(textureKey)) {
+        this.textures.addImage(textureKey, image);
+      }
+
+      if (this.currentOpponentAvatarUrl === avatarUrl) {
+        this.opponentAvatarImage.setTexture(textureKey);
+        this.opponentAvatarImage.setDisplaySize(80, 80);
+      }
+    };
+    image.src = avatarUrl;
+  }
+
+  private hashText(value: string): string {
+    let hash = 0;
+
+    for (let index = 0; index < value.length; index += 1) {
+      hash = Math.imul(31, hash) + value.charCodeAt(index) | 0;
+    }
+
+    return Math.abs(hash).toString(36);
   }
 
   private createCardBack(): Phaser.GameObjects.Container {
@@ -2097,6 +2200,7 @@ function applyGameCanvasSize(currentGame: Phaser.Game): void {
 
 function showHomeMenu(): void {
   document.getElementById("home")?.classList.remove("is-hidden");
+  document.getElementById("profile")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
@@ -2104,14 +2208,25 @@ function showHomeMenu(): void {
 
 function showSettingsMenu(): void {
   document.getElementById("home")?.classList.add("is-hidden");
+  document.getElementById("profile")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.remove("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
   renderBackgroundOptions();
 }
 
+function showProfileMenu(): void {
+  document.getElementById("home")?.classList.add("is-hidden");
+  document.getElementById("profile")?.classList.remove("is-hidden");
+  document.getElementById("settings")?.classList.add("is-hidden");
+  document.getElementById("waiting-room")?.classList.add("is-hidden");
+  document.getElementById("game")?.classList.add("is-hidden");
+  renderProfileForm();
+}
+
 function showWaitingRoom(message = "Procurando outro jogador para iniciar a partida."): void {
   document.getElementById("home")?.classList.add("is-hidden");
+  document.getElementById("profile")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.remove("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
@@ -2124,6 +2239,7 @@ function showWaitingRoom(message = "Procurando outro jogador para iniciar a part
 
 function showGameTable(): void {
   document.getElementById("home")?.classList.add("is-hidden");
+  document.getElementById("profile")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.remove("is-hidden");
@@ -2146,6 +2262,127 @@ function renderBackgroundOptions(): void {
 
     button.classList.toggle("is-selected", backgroundId === currentTableBackground);
   });
+}
+
+function renderProfileForm(): void {
+  const nameInput = document.getElementById("profile-name") as HTMLInputElement | null;
+  const emailInput = document.getElementById("profile-email") as HTMLInputElement | null;
+  const preview = document.getElementById("profile-preview") as HTMLImageElement | null;
+  const message = document.getElementById("profile-message");
+
+  if (nameInput) {
+    nameInput.value = currentPlayerProfile?.name ?? "";
+  }
+
+  if (emailInput) {
+    emailInput.value = currentPlayerProfile?.email ?? "";
+  }
+
+  if (preview) {
+    preview.src = currentPlayerProfile?.avatarUrl ?? "";
+  }
+
+  if (message) {
+    message.textContent = "";
+  }
+}
+
+function setProfileMessage(message: string): void {
+  const element = document.getElementById("profile-message");
+
+  if (element) {
+    element.textContent = message;
+  }
+}
+
+function readPhotoFile(file: File): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("Nao foi possivel ler a foto"));
+    reader.readAsDataURL(file);
+  });
+}
+
+async function handleProfilePhotoChange(event: Event): Promise<void> {
+  const input = event.currentTarget as HTMLInputElement;
+  const file = input.files?.[0];
+
+  if (!file) {
+    return;
+  }
+
+  if (!file.type.startsWith("image/")) {
+    setProfileMessage("Escolha um arquivo de imagem.");
+    input.value = "";
+    return;
+  }
+
+  const avatarUrl = await readPhotoFile(file);
+
+  if (avatarUrl.length > 1_500_000) {
+    setProfileMessage("Escolha uma foto menor.");
+    input.value = "";
+    return;
+  }
+
+  currentPlayerProfile = {
+    token: playerToken,
+    name: currentPlayerProfile?.name ?? "",
+    email: currentPlayerProfile?.email ?? "",
+    avatarUrl
+  };
+
+  const preview = document.getElementById("profile-preview") as HTMLImageElement | null;
+
+  if (preview) {
+    preview.src = avatarUrl;
+  }
+}
+
+async function saveProfile(event: Event): Promise<void> {
+  event.preventDefault();
+
+  const nameInput = document.getElementById("profile-name") as HTMLInputElement | null;
+  const emailInput = document.getElementById("profile-email") as HTMLInputElement | null;
+  const name = nameInput?.value.trim() ?? "";
+  const email = emailInput?.value.trim().toLowerCase() ?? "";
+  const avatarUrl = currentPlayerProfile?.avatarUrl ?? "";
+
+  if (!name || !email) {
+    setProfileMessage("Preencha nome e email.");
+    return;
+  }
+
+  setProfileMessage("Salvando...");
+
+  try {
+    const response = await fetch(`${serverUrl}/profile`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        token: playerToken,
+        name,
+        email,
+        avatarUrl
+      })
+    });
+    const payload = await response.json() as { profile?: PlayerProfile; message?: string };
+
+    if (!response.ok || !payload.profile) {
+      setProfileMessage(payload.message ?? "Nao foi possivel salvar o perfil.");
+      return;
+    }
+
+    saveStoredProfile(payload.profile);
+    renderProfileForm();
+    setProfileMessage("Perfil salvo.");
+  } catch {
+    setProfileMessage("Erro ao conectar com o servidor.");
+  }
 }
 
 function returnToMainMenu(): void {
@@ -2172,12 +2409,13 @@ function leaveOnlineGame(): void {
   returnToMainMenu();
 }
 
-function startOnlineGame(): void {
+async function startOnlineGame(): Promise<void> {
   try {
     if (game) {
     return;
   }
 
+  await fetchPlayerProfile().catch(() => currentPlayerProfile);
   void unlockAudioPlayback().catch(() => undefined);
   showWaitingRoom();
 
@@ -2221,10 +2459,22 @@ function startOnlineGame(): void {
   
 }
 
-document.getElementById("play-online")?.addEventListener("click", startOnlineGame);
+document.getElementById("play-online")?.addEventListener("click", () => {
+  void startOnlineGame();
+});
+document.getElementById("open-profile")?.addEventListener("click", () => {
+  void fetchPlayerProfile().finally(showProfileMenu);
+});
 document.getElementById("open-settings")?.addEventListener("click", showSettingsMenu);
 document.getElementById("back-home")?.addEventListener("click", showHomeMenu);
+document.getElementById("back-home-profile")?.addEventListener("click", showHomeMenu);
 document.getElementById("cancel-waiting")?.addEventListener("click", leaveOnlineGame);
+document.getElementById("profile-form")?.addEventListener("submit", (event) => {
+  void saveProfile(event);
+});
+document.getElementById("profile-photo")?.addEventListener("change", (event) => {
+  void handleProfilePhotoChange(event);
+});
 document.querySelectorAll<HTMLButtonElement>(".background-option").forEach((button) => {
   button.addEventListener("click", () => {
     const rawBackgroundId = button.dataset.background ?? null;

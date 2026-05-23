@@ -15,8 +15,37 @@
         <button id="play-online" class="play-button" type="button">
           Jogar online
         </button>
+        <button id="open-profile" class="secondary-button menu-button" type="button">
+          Perfil
+        </button>
         <button id="open-settings" class="secondary-button menu-button" type="button">
           Configuração
+        </button>
+      </section>
+    </main>
+    <main id="profile" class="profile-screen is-hidden">
+      <section class="profile-content" aria-labelledby="profile-title">
+        <div class="home-badge">Perfil</div>
+        <h2 id="profile-title">Seu jogador</h2>
+        <form id="profile-form" class="profile-form">
+          <label>
+            Nome
+            <input id="profile-name" name="name" type="text" maxlength="24" required autocomplete="name" />
+          </label>
+          <label>
+            Email
+            <input id="profile-email" name="email" type="email" required autocomplete="email" />
+          </label>
+          <label class="photo-field">
+            Foto
+            <input id="profile-photo" name="photo" type="file" accept="image/*" />
+          </label>
+          <img id="profile-preview" class="profile-preview" alt="Foto do perfil" />
+          <p id="profile-message" class="profile-message" aria-live="polite"></p>
+          <button class="play-button" type="submit">Salvar perfil</button>
+        </form>
+        <button id="back-home-profile" class="secondary-button" type="button">
+          Voltar
         </button>
       </section>
     </main>

@@ -4,9 +4,16 @@ create table if not exists players (
   id uuid primary key default gen_random_uuid(),
   token text not null unique,
   name text not null,
+  email text unique,
+  avatar_url text,
   created_at timestamptz not null default now(),
   last_seen_at timestamptz not null default now()
 );
+
+alter table players add column if not exists email text;
+alter table players add column if not exists avatar_url text;
+
+create unique index if not exists idx_players_email_unique on players (lower(email)) where email is not null;
 
 create table if not exists matches (
   id uuid primary key default gen_random_uuid(),

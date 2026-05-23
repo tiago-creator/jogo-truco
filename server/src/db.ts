@@ -4,6 +4,15 @@ import { Pool } from "pg";
 export type PlayerSnapshot = {
   token: string;
   name: string;
+  email?: string | null;
+  avatarUrl?: string | null;
+};
+
+export type PlayerProfile = {
+  token: string;
+  name: string;
+  email: string;
+  avatarUrl?: string | null;
 };
 
 export type HandResultSnapshot = {
@@ -38,16 +47,87 @@ export async function upsertPlayer(player: PlayerSnapshot): Promise<string | nul
 
   const result = await pool.query<{ id: string }>(
     `
-      insert into players (token, name)
-      values ($1, $2)
+      insert into players (token, name, email, avatar_url)
+      values ($1, $2, $3, $4)
       on conflict (token)
-      do update set name = excluded.name, last_seen_at = now()
+      do update set
+        name = excluded.name,
+        email = coalesce(excluded.email, players.email),
+        avatar_url = coalesce(excluded.avatar_url, players.avatar_url),
+        last_seen_at = now()
       returning id
     `,
-    [player.token, player.name]
+    [player.token, player.name, player.email ?? null, player.avatarUrl ?? null]
   );
 
   return result.rows[0]?.id ?? null;
+}
+
+export async function getPlayerProfile(token: string): Promise<PlayerProfile | null> {
+  if (!pool) {
+    return null;
+  }
+
+  const result = await pool.query<{
+    token: string;
+    name: string;
+    email: string | null;
+    avatar_url: string | null;
+  }>(
+    `
+      select token, name, email, avatar_url
+      from players
+      where token = $1
+      limit 1
+    `,
+    [token]
+  );
+  const row = result.rows[0];
+
+  if (!row || !row.email) {
+    return null;
+  }
+
+  return {
+    token: row.token,
+    name: row.name,
+    email: row.email,
+    avatarUrl: row.avatar_url
+  };
+}
+
+export async function savePlayerProfile(profile: PlayerProfile): Promise<PlayerProfile> {
+  if (!pool) {
+    return profile;
+  }
+
+  const result = await pool.query<{
+    token: string;
+    name: string;
+    email: string;
+    avatar_url: string | null;
+  }>(
+    `
+      insert into players (token, name, email, avatar_url)
+      values ($1, $2, $3, $4)
+      on conflict (token)
+      do update set
+        name = excluded.name,
+        email = excluded.email,
+        avatar_url = excluded.avatar_url,
+        last_seen_at = now()
+      returning token, name, email, avatar_url
+    `,
+    [profile.token, profile.name, profile.email, profile.avatarUrl ?? null]
+  );
+  const row = result.rows[0];
+
+  return {
+    token: row.token,
+    name: row.name,
+    email: row.email,
+    avatarUrl: row.avatar_url
+  };
 }
 
 export async function createMatch(roomId: string, players: PlayerSnapshot[]): Promise<string | null> {
@@ -68,13 +148,17 @@ export async function createMatch(roomId: string, players: PlayerSnapshot[]): Pr
     for (const [index, player] of players.entries()) {
       const playerResult = await client.query<{ id: string }>(
         `
-          insert into players (token, name)
-          values ($1, $2)
+          insert into players (token, name, email, avatar_url)
+          values ($1, $2, $3, $4)
           on conflict (token)
-          do update set name = excluded.name, last_seen_at = now()
+          do update set
+            name = excluded.name,
+            email = coalesce(excluded.email, players.email),
+            avatar_url = coalesce(excluded.avatar_url, players.avatar_url),
+            last_seen_at = now()
           returning id
         `,
-        [player.token, player.name]
+        [player.token, player.name, player.email ?? null, player.avatarUrl ?? null]
       );
       const playerId = playerResult.rows[0]?.id;
 

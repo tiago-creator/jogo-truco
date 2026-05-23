@@ -11,6 +11,7 @@ export type Card = {
 export type PublicPlayer = {
   id: string;
   name: string;
+  avatarUrl?: string;
   cardCount: number;
   roundWins: number;
   points: number;

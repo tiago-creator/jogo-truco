@@ -17,14 +17,17 @@ import {
 import {
   createMatch,
   finishMatch,
+  getPlayerProfile,
   isDatabaseEnabled,
   recordHandResult,
+  savePlayerProfile,
   upsertPlayer
 } from "./db.js";
 
 type PlayerState = {
   id: string;
   name: string;
+  avatarUrl?: string;
   hand: Card[];
   roundWins: number;
   points: number;
@@ -52,7 +55,73 @@ type Room = {
 
 const app = express();
 app.use(cors());
+app.use(express.json({ limit: "2mb" }));
 app.get("/health", (_request, response) => response.json({ ok: true }));
+
+function cleanProfilePayload(body: unknown): { token: string; name: string; email: string; avatarUrl?: string } | null {
+  if (!body || typeof body !== "object") {
+    return null;
+  }
+
+  const payload = body as Partial<Record<"token" | "name" | "email" | "avatarUrl", unknown>>;
+  const token = typeof payload.token === "string" ? payload.token.trim() : "";
+  const name = typeof payload.name === "string" ? payload.name.trim() : "";
+  const email = typeof payload.email === "string" ? payload.email.trim().toLowerCase() : "";
+  const avatarUrl = typeof payload.avatarUrl === "string" ? payload.avatarUrl.trim() : "";
+
+  if (!token || !name || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    return null;
+  }
+
+  if (avatarUrl && (!avatarUrl.startsWith("data:image/") || avatarUrl.length > 1_500_000)) {
+    return null;
+  }
+
+  return {
+    token,
+    name: name.slice(0, 24),
+    email,
+    avatarUrl: avatarUrl || undefined
+  };
+}
+
+app.get("/profile/:token", async (request, response) => {
+  if (!isDatabaseEnabled()) {
+    response.status(503).json({ message: "Banco de dados nao configurado" });
+    return;
+  }
+
+  const profile = await getPlayerProfile(request.params.token);
+
+  response.json({ profile });
+});
+
+app.post("/profile", async (request, response) => {
+  if (!isDatabaseEnabled()) {
+    response.status(503).json({ message: "Banco de dados nao configurado" });
+    return;
+  }
+
+  const profile = cleanProfilePayload(request.body);
+
+  if (!profile) {
+    response.status(400).json({ message: "Preencha nome, email valido e uma foto em formato de imagem" });
+    return;
+  }
+
+  try {
+    const savedProfile = await savePlayerProfile(profile);
+
+    response.json({ profile: savedProfile });
+  } catch (error) {
+    if ((error as { code?: string }).code === "23505") {
+      response.status(409).json({ message: "Este email ja esta cadastrado em outro perfil" });
+      return;
+    }
+
+    throw error;
+  }
+});
 
 const httpServer = createServer(app);
 const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
@@ -69,6 +138,7 @@ function toPublicPlayer(player: PlayerState): PublicPlayer {
   return {
     id: player.id,
     name: player.name,
+    avatarUrl: player.avatarUrl,
     cardCount: player.hand.length,
     roundWins: player.roundWins,
     points: player.points,
@@ -220,13 +290,23 @@ function runDatabaseTask(task: () => Promise<void>): void {
   });
 }
 
+async function getProfileForJoin(token: string): Promise<Awaited<ReturnType<typeof getPlayerProfile>>> {
+  try {
+    return await getPlayerProfile(token);
+  } catch (error) {
+    console.error("Could not load player profile", error);
+    return null;
+  }
+}
+
 function startPersistentMatch(room: Room): void {
   runDatabaseTask(async () => {
     room.dbMatchId = await createMatch(
       room.id,
       room.players.map((player) => ({
         token: player.token,
-        name: player.name
+        name: player.name,
+        avatarUrl: player.avatarUrl
       }))
     ) ?? undefined;
   });
@@ -395,7 +475,10 @@ function canAskForTruco(player: PlayerState): boolean {
 }
 
 io.on("connection", (socket) => {
-  socket.on("room:join", ({ roomId, name, token }) => {
+  socket.on("room:join", async ({ roomId, name, token }) => {
+    const profile = await getProfileForJoin(token);
+    const playerName = (profile?.name ?? name.trim()) || "Jogador";
+    const avatarUrl = profile?.avatarUrl ?? undefined;
     const room = getJoinRoom(roomId, token);
     const existing = room.players.find((player) => player.token === token);
 
@@ -408,13 +491,15 @@ io.on("connection", (socket) => {
       const previousId = existing.id;
 
       existing.id = socket.id;
-      existing.name = name.trim() || existing.name;
+      existing.name = playerName || existing.name;
+      existing.avatarUrl = avatarUrl;
       replacePlayerId(room, previousId, socket.id);
       socket.join(room.id);
       runDatabaseTask(async () => {
         await upsertPlayer({
           token: existing.token,
-          name: existing.name
+          name: existing.name,
+          avatarUrl: existing.avatarUrl
         });
       });
 
@@ -425,7 +510,8 @@ io.on("connection", (socket) => {
     if (!existing) {
       room.players.push({
         id: socket.id,
-        name: name.trim() || "Jogador",
+        name: playerName,
+        avatarUrl,
         token,
         hand: [],
         roundWins: 0,
@@ -437,7 +523,8 @@ io.on("connection", (socket) => {
       runDatabaseTask(async () => {
         await upsertPlayer({
           token,
-          name: name.trim() || "Jogador"
+          name: playerName,
+          avatarUrl
         });
       });
     }

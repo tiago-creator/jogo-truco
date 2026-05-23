@@ -40,7 +40,8 @@ canvas {
 
 .home-screen,
 .waiting-screen,
-.settings-screen {
+.settings-screen,
+.profile-screen {
   position: fixed;
   inset: 0;
   z-index: 10;
@@ -57,7 +58,8 @@ canvas {
 
 .home-screen::before,
 .waiting-screen::before,
-.settings-screen::before {
+.settings-screen::before,
+.profile-screen::before {
   content: "";
   position: absolute;
   inset: 18px;
@@ -67,13 +69,15 @@ canvas {
 
 .home-screen.is-hidden,
 .waiting-screen.is-hidden,
-.settings-screen.is-hidden {
+.settings-screen.is-hidden,
+.profile-screen.is-hidden {
   display: none;
 }
 
 .home-content,
 .waiting-content,
-.settings-content {
+.settings-content,
+.profile-content {
   position: relative;
   width: min(100%, 440px);
   text-align: center;
@@ -135,6 +139,7 @@ canvas {
   margin-top: 20px;
 }
 
+.profile-content h2,
 .settings-content h2 {
   margin: 18px 0 18px;
   color: #ffffff;
@@ -142,6 +147,67 @@ canvas {
   font-size: clamp(30px, 9vw, 48px);
   line-height: 1;
   letter-spacing: 0;
+}
+
+.profile-form {
+  display: grid;
+  gap: 12px;
+  margin: 0 auto 18px;
+  width: min(100%, 360px);
+}
+
+.profile-form label {
+  display: grid;
+  gap: 6px;
+  color: #fff3a3;
+  font-size: 13px;
+  font-weight: 900;
+  letter-spacing: 0;
+  text-align: left;
+  text-transform: uppercase;
+}
+
+.profile-form input {
+  min-height: 48px;
+  width: 100%;
+  border: 2px solid rgba(255, 207, 90, 0.42);
+  background: rgba(7, 27, 21, 0.74);
+  color: #ffffff;
+  font: 700 16px Arial, Helvetica, sans-serif;
+  outline: none;
+  padding: 0 12px;
+}
+
+.profile-form input:focus {
+  border-color: #ffcf5a;
+}
+
+.photo-field input {
+  padding: 11px 12px;
+}
+
+.profile-preview {
+  display: block;
+  width: 104px;
+  height: 104px;
+  margin: 2px auto;
+  border: 3px solid #ffcf5a;
+  border-radius: 50%;
+  background: rgba(7, 27, 21, 0.74);
+  object-fit: cover;
+}
+
+.profile-preview:not([src]),
+.profile-preview[src=""] {
+  display: none;
+}
+
+.profile-message {
+  min-height: 22px;
+  margin: 0;
+  color: #fff3a3;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .background-options {
