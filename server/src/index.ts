@@ -12,6 +12,7 @@ import {
   type ServerToClientEvents,
   type TableCard,
   type TrucoRequest,
+  ranks,
   shuffle
 } from "@truco/shared";
 import {
@@ -61,6 +62,7 @@ type Room = {
   };
   lastGameWinnerId?: string;
   lastGameWinnerName?: string;
+  lastGameWinnerSequence?: number;
   lastTrucoResponse?: RoomState["lastTrucoResponse"];
   dbMatchId?: string;
   cpuActionTimer?: ReturnType<typeof setTimeout>;
@@ -299,6 +301,7 @@ function buildState(room: Room, viewerId: string): RoomState {
     lastTrucoRaise: room.lastTrucoRaise,
     lastGameWinnerId: room.lastGameWinnerId,
     lastGameWinnerName: room.lastGameWinnerName,
+    lastGameWinnerSequence: room.lastGameWinnerSequence,
     lastTrucoResponse: room.lastTrucoResponse
   };
 }
@@ -446,8 +449,6 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
   });
 
   if (finishedGame) {
-    room.lastGameWinnerId = winner.id;
-    room.lastGameWinnerName = winner.name;
     winner.games += 1;
     winner.points = 0;
     for (const player of room.players) {
@@ -460,6 +461,9 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
   dealHand(room, winner.id);
 
   if (finishedGame) {
+    room.lastGameWinnerId = winner.id;
+    room.lastGameWinnerName = winner.name;
+    room.lastGameWinnerSequence = (room.lastGameWinnerSequence ?? 0) + 1;
     startPersistentMatch(room);
   }
 }
@@ -705,6 +709,39 @@ function respondTrucoAsCpu(room: Room): void {
     return;
   }
 
+  const raisedValue = nextHandValue(request.requestedValue);
+
+  if (
+    raisedValue &&
+    canRoomAskForTruco(room) &&
+    canAskForTruco(cpu) &&
+    request.requestedByPlayerId !== cpu.id &&
+    shouldCpuRaiseTruco(room, cpu, request.requestedValue)
+  ) {
+    room.handValue = request.requestedValue;
+    room.lastTrucoResponse = {
+      playerId: cpu.id,
+      playerName: cpu.name,
+      action: "raise",
+      requestedValue: raisedValue as TrucoRequest["requestedValue"]
+    };
+    room.trucoRequest = {
+      requestedByPlayerId: cpu.id,
+      requestedByPlayerName: cpu.name,
+      responderPlayerId: requester.id,
+      currentValue: request.requestedValue,
+      requestedValue: raisedValue as TrucoRequest["requestedValue"]
+    };
+    room.lastTrucoRaise = {
+      playerId: cpu.id,
+      playerName: cpu.name,
+      value: raisedValue
+    };
+    room.lastTrucoRequesterId = cpu.id;
+    broadcastState(room);
+    return;
+  }
+
   room.lastTrucoResponse = {
     playerId: cpu.id,
     playerName: cpu.name,
@@ -714,6 +751,41 @@ function respondTrucoAsCpu(room: Room): void {
   room.handValue = request.requestedValue;
   room.trucoRequest = undefined;
   broadcastState(room);
+}
+
+function shouldCpuRaiseTruco(room: Room, cpu: PlayerState, requestedValue: TrucoRequest["requestedValue"]): boolean {
+  if (!room.vira || requestedValue >= 12 || cpu.hand.length === 0) {
+    return false;
+  }
+
+  const handStrength = cpu.hand.reduce((total, card) => total + getCardStrength(room, card), 0);
+  const manilhaRankIndex = (ranks.indexOf(room.vira.rank) + 1) % ranks.length;
+  const hasManilha = cpu.hand.some((card) => ranks.indexOf(card.rank) === manilhaRankIndex);
+  const hasHighCard = cpu.hand.some((card) => ["3", "2", "A"].includes(card.rank));
+
+  if (requestedValue === 3) {
+    return hasManilha || handStrength >= 22;
+  }
+
+  if (requestedValue === 6) {
+    return hasManilha && hasHighCard;
+  }
+
+  return hasManilha && cpu.hand.length >= 2;
+}
+
+function getCardStrength(room: Room, card: Card): number {
+  if (!room.vira) {
+    return ranks.indexOf(card.rank);
+  }
+
+  const manilhaRank = ranks[(ranks.indexOf(room.vira.rank) + 1) % ranks.length];
+
+  if (card.rank === manilhaRank) {
+    return 20;
+  }
+
+  return ranks.indexOf(card.rank);
 }
 
 function playCardAsCpu(room: Room): void {

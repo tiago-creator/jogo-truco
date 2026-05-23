@@ -595,7 +595,9 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
         this.showOpponentSpeechBubble(this.getTrucoResponseMessage(trucoResponse.action));
       }
 
-      const gameWinnerKey = state.lastGameWinnerId ? `${state.lastGameWinnerId}:${state.lastGameWinnerName ?? ""}` : null;
+      const gameWinnerKey = state.lastGameWinnerId
+        ? `${state.lastGameWinnerId}:${state.lastGameWinnerSequence ?? 0}:${state.lastGameWinnerName ?? ""}`
+        : null;
 
       if (!gameWinnerKey) {
         this.lastCelebratedGameWinnerKey = null;

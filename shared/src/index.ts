@@ -68,6 +68,7 @@ export type RoomState = {
   };
   lastGameWinnerId?: string;
   lastGameWinnerName?: string;
+  lastGameWinnerSequence?: number;
   lastTrucoResponse?: TrucoResponseNotice;
 };
 
