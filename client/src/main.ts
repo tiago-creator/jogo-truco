@@ -370,7 +370,7 @@ this.exitButtonBg = this.add.graphics();
 this.exitButtonText = this.add.text(0, 0, "X", {
   color: "#ffffff",
   fontFamily: "Arial Black",
-  fontSize: "20px",
+  fontSize: "38px",
   fontStyle: "900"
 }).setOrigin(0.5);
 
@@ -381,10 +381,10 @@ this.exitButton = this.add.container(0, 0, [
 
 this.drawExitButton();
 
-const exitButtonHitZone = this.add.zone(0, 0, 48, 48);
+const exitButtonHitZone = this.add.zone(0, 0, 84, 84);
 
 this.exitButton.add(exitButtonHitZone);
-this.exitButton.setSize(48, 48);
+this.exitButton.setSize(84, 84);
 
 exitButtonHitZone.setInteractive({ useHandCursor: true });
 exitButtonHitZone.on("pointerup", () => this.leaveTable());
@@ -562,16 +562,16 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     g.clear();
 
     g.fillStyle(0x000000, 0.35);
-    g.fillCircle(3, 4, 21);
+    g.fillCircle(5, 7, 39);
 
     g.fillStyle(0x8b1e1e, 1);
-    g.fillCircle(0, 0, 21);
+    g.fillCircle(0, 0, 39);
 
     g.lineStyle(3, 0xffcf5a, 1);
-    g.strokeCircle(0, 0, 21);
+    g.strokeCircle(0, 0, 39);
 
     g.fillStyle(0xffffff, 0.12);
-    g.fillCircle(-6, -7, 7);
+    g.fillCircle(-11, -14, 12);
   }
 
   leaveTable(): void {
@@ -620,20 +620,20 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     const bg = this.add.graphics();
 
     bg.fillStyle(0x06130f, 0.92);
-    bg.fillRoundedRect(-166, -72, 332, 144, 18);
+    bg.fillRoundedRect(-286, -122, 572, 244, 24);
     bg.lineStyle(3, 0xffcf5a, 1);
-    bg.strokeRoundedRect(-166, -72, 332, 144, 18);
+    bg.strokeRoundedRect(-286, -122, 572, 244, 24);
 
-    const title = this.add.text(0, -46, "Pedido de truco", {
+    const title = this.add.text(0, -78, "Pedido de truco", {
       color: "#fff3a3",
       fontFamily: "Arial Black",
-      fontSize: "20px",
+      fontSize: "34px",
       fontStyle: "900"
     }).setOrigin(0.5);
 
-    const accept = this.createTrucoResponseButton(-104, 28, "ACEITAR", 0x0b7a4b, "accept");
-    const reject = this.createTrucoResponseButton(0, 28, "CORRER", 0x8b1e1e, "reject");
-    const raise = this.createTrucoResponseButton(104, 28, "SEIS", 0x7a4b00, "raise");
+    const accept = this.createTrucoResponseButton(-182, 44, "ACEITAR", 0x0b7a4b, "accept");
+    const reject = this.createTrucoResponseButton(0, 44, "CORRER", 0x8b1e1e, "reject");
+    const raise = this.createTrucoResponseButton(182, 44, "SEIS", 0x7a4b00, "raise");
     const group = this.add.container(0, 0, [bg, title, accept.container, reject.container, raise.container]);
 
     this.trucoResponseRaiseText = raise.text;
@@ -653,21 +653,21 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     const bg = this.add.graphics();
 
     bg.fillStyle(color, 1);
-    bg.fillRoundedRect(-46, -24, 92, 48, 10);
+    bg.fillRoundedRect(-80, -42, 160, 84, 14);
     bg.lineStyle(2, 0xfff3a3, 1);
-    bg.strokeRoundedRect(-46, -24, 92, 48, 10);
+    bg.strokeRoundedRect(-80, -42, 160, 84, 14);
 
     const text = this.add.text(0, 0, label, {
       color: "#ffffff",
       fontFamily: "Arial Black",
-      fontSize: "13px",
+      fontSize: "22px",
       fontStyle: "900"
     }).setOrigin(0.5);
 
-    const hitZone = this.add.zone(0, 0, 96, 54);
+    const hitZone = this.add.zone(0, 0, 172, 94);
     const button = this.add.container(x, y, [bg, text, hitZone]);
 
-    button.setSize(92, 48);
+    button.setSize(160, 84);
     hitZone.setInteractive({ useHandCursor: true });
     hitZone.on("pointerup", () => {
       this.socket.emit("truco:respond", {
@@ -966,7 +966,8 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.cameras.main.setZoom(1);
     this.tableBackground.setPosition(width / 2, height / 2);
     this.tableBackground.setScale(backgroundScale);
-    this.scoreboardGroup.setPosition(width / 2, safeTop + 36 * this.uiScale);
+    const scoreboardWidth = Math.min(width - 24, 500 * this.uiScale);
+    this.scoreboardGroup.setPosition(12 + scoreboardWidth / 2, safeTop + 45 * this.uiScale);
     this.status.setPosition(width / 2, safeTop + 106 * this.uiScale);
     this.actionBottom = Math.max(58, 78 * this.actionButtonScale);
 
@@ -976,12 +977,12 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       this.trucoButton.y
     );
     this.trucoResponseGroup.setPosition(width / 2, height / 2 + 112 * this.uiScale);
-    this.trucoResponseGroup.setScale(this.uiScale);
+    this.trucoResponseGroup.setScale(Math.min(this.uiScale, (width - 24) / 572));
     this.audioButton.setScale(this.actionButtonScale * 2.18);
     this.audioButton.setPosition(130 * this.actionButtonScale, height - this.actionBottom);
     this.exitButton.setPosition(
-  width - 28 * this.uiScale,
-  34 * this.uiScale
+  width - 54 * this.uiScale,
+  60 * this.uiScale
 );
     this.opponentHandGroup.setPosition(width / 2, safeTop + 198 * this.uiScale);
     this.opponentAvatarGroup.setPosition(width / 2, safeTop + 240 * this.uiScale);
@@ -1128,11 +1129,12 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
   private playTrucoRaiseAnimation(playerName: string, value: string): void {
     const { width, height } = this.scale;
     const valueUpper = value.toUpperCase();
+    const animationScale = 2;
 
     const container = this.add.container(width / 2, height / 2);
     container.setDepth(20000);
     container.setAlpha(0);
-    container.setScale(0.35);
+    container.setScale(0.35 * animationScale);
 
     const bg = this.add.graphics();
 
@@ -1244,13 +1246,13 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.tweens.add({
       targets: container,
       alpha: 1,
-      scale: 1.12,
+      scale: 1.12 * animationScale,
       duration: 280,
       ease: "Back.Out",
       onComplete: () => {
         this.tweens.add({
           targets: container,
-          scale: 1,
+          scale: animationScale,
           duration: 130,
           ease: "Sine.Out"
         });
@@ -1269,7 +1271,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
             targets: container,
             alpha: 0,
             y: container.y - 70,
-            scale: 0.82,
+            scale: 0.82 * animationScale,
             duration: 340,
             ease: "Cubic.In",
             onComplete: () => container.destroy()
@@ -1505,27 +1507,27 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
   private renderScoreboard(): void {
     this.scoreboardGroup.removeAll(true);
 
-    const width = Math.min(this.getViewWidth() - 24, 430 * this.uiScale);
-    const bg = this.add.rectangle(0, 0, width, 70* this.uiScale, 0x0b261c, 0.82).setStrokeStyle(2, 0xf8f1d9, 0.35);
+    const width = Math.min(this.getViewWidth() - 24, 500 * this.uiScale);
+    const bg = this.add.rectangle(0, 0, width, 86 * this.uiScale, 0x0b261c, 0.82).setStrokeStyle(2, 0xf8f1d9, 0.35);
     const headers = ["Rodada", "Pontos", "Valendo", "Jogos"];
     const players = this.roomState?.players ?? [];
     const left = -width / 2 + 12;
-    const columnStart = left + Math.min(142 * this.uiScale, width * 0.34);
+    const columnStart = left + Math.min(200 * this.uiScale, width * 0.4);
     const columnGap = (width - (columnStart - left) - 12) / headers.length;
 
     this.scoreboardGroup.add(bg);
 
     headers.forEach((header, index) => {
-      this.scoreboardGroup.add(this.add.text(columnStart + index * columnGap, -22*this.uiScale, header, {
+      this.scoreboardGroup.add(this.add.text(columnStart + index * columnGap, -28 * this.uiScale, header, {
         color: "#f8f1d9",
         fontFamily: "Arial",
-        fontSize: "12px",
+        fontSize: `${18 * this.uiScale}px`,
         fontStyle: "bold"
       }).setOrigin(0.5));
     });
 
     players.forEach((player, rowIndex) => {
-      const y = -2 + rowIndex * 20 *this.uiScale;
+      const y = -4 + rowIndex * 24 * this.uiScale;
       const isSelf = player.id === this.roomState?.self?.id;
       const name = `${isSelf ? "Voce" : player.name}`.slice(0, 14);
       const values = [player.roundWins, player.points, this.roomState?.handValue ?? 1, player.games];
@@ -1533,7 +1535,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       this.scoreboardGroup.add(this.add.text(left, y, name, {
         color: isSelf ? "#ffcf5a" : "#f8f1d9",
         fontFamily: "Arial",
-        fontSize: `${14 * this.uiScale}px`,
+        fontSize: `${22 * this.uiScale}px`,
         fontStyle: isSelf ? "bold" : "normal"
       }).setOrigin(0, 0.5));
 
@@ -1541,7 +1543,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
         this.scoreboardGroup.add(this.add.text(columnStart + index * columnGap, y, String(value), {
           color: "#f8f1d9",
           fontFamily: "Arial",
-          fontSize: `${14 * this.uiScale}px`
+          fontSize: `${22 * this.uiScale}px`
         }).setOrigin(0.5));
       });
     });
@@ -1820,12 +1822,12 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     const nameBox = this.add.graphics();
 
     nameBox.fillStyle(0x000000, 0.82);
-    nameBox.fillRoundedRect(-56, 34, 112, 28, 8);
+    nameBox.fillRoundedRect(-56, 64, 112, 28, 8);
 
     nameBox.lineStyle(2, 0xffcf5a, 1);
-    nameBox.strokeRoundedRect(-56, 34, 112, 28, 8);
+    nameBox.strokeRoundedRect(-56, 64, 112, 28, 8);
 
-    const name = this.add.text(0, 48, "Oponente", {
+    const name = this.add.text(0, 78, "Oponente", {
       color: "#ffffff",
       fontFamily: "Arial",
       fontSize: "14px",
