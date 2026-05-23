@@ -29,6 +29,7 @@ type PlayerState = {
   id: string;
   name: string;
   avatarUrl?: string;
+  isCpu?: boolean;
   hand: Card[];
   roundWins: number;
   points: number;
@@ -52,6 +53,7 @@ type Room = {
     value: RoomState["handValue"];
   };
   dbMatchId?: string;
+  cpuActionTimer?: ReturnType<typeof setTimeout>;
 };
 
 const app = express();
@@ -301,8 +303,14 @@ function buildMessage(room: Room, viewerId: string): string {
 
 function broadcastState(room: Room): void {
   for (const player of room.players) {
+    if (player.isCpu) {
+      continue;
+    }
+
     io.to(player.id).emit("room:state", buildState(room, player.id));
   }
+
+  scheduleCpuAction(room);
 }
 
 function runDatabaseTask(task: () => Promise<void>): void {
@@ -499,6 +507,135 @@ function canAskForTruco(player: PlayerState): boolean {
   return player.points !== 11;
 }
 
+function makePlayerCpu(room: Room, player: PlayerState): void {
+  player.isCpu = true;
+  player.name = `${player.name} CPU`;
+  player.avatarUrl = undefined;
+}
+
+function handlePlayerExit(socketId: string, explicitRoomId?: string): void {
+  const targetRooms = explicitRoomId ? [rooms.get(explicitRoomId)].filter(Boolean) as Room[] : Array.from(rooms.values());
+
+  for (const room of targetRooms) {
+    const player = room.players.find((item) => item.id === socketId);
+
+    if (!player) {
+      continue;
+    }
+
+    const hasHumanOpponent = room.players.some((item) => item.id !== socketId && !item.isCpu);
+
+    if (room.status === "playing" && room.players.length === 2 && hasHumanOpponent) {
+      makePlayerCpu(room, player);
+      broadcastState(room);
+      return;
+    }
+
+    room.players = room.players.filter((item) => item.id !== socketId);
+    room.table = [];
+    room.vira = undefined;
+    room.handValue = 1;
+    room.status = "waiting";
+    room.turnPlayerId = null;
+    room.trucoRequest = undefined;
+    room.lastTrucoRequesterId = undefined;
+    room.lastTrucoRaise = undefined;
+    room.dbMatchId = undefined;
+    clearTimeout(room.cpuActionTimer);
+    room.cpuActionTimer = undefined;
+
+    broadcastState(room);
+    return;
+  }
+}
+
+function scheduleCpuAction(room: Room): void {
+  if (room.cpuActionTimer || room.status !== "playing") {
+    return;
+  }
+
+  const cpuResponder = room.trucoRequest
+    ? room.players.find((player) => player.isCpu && player.id === room.trucoRequest?.responderPlayerId)
+    : undefined;
+  const cpuTurnPlayer = !room.trucoRequest
+    ? room.players.find((player) => player.isCpu && player.id === room.turnPlayerId)
+    : undefined;
+
+  if (!cpuResponder && !cpuTurnPlayer) {
+    return;
+  }
+
+  room.cpuActionTimer = setTimeout(() => {
+    room.cpuActionTimer = undefined;
+
+    if (room.status !== "playing") {
+      return;
+    }
+
+    if (room.trucoRequest) {
+      respondTrucoAsCpu(room);
+      return;
+    }
+
+    playCardAsCpu(room);
+  }, 1200);
+}
+
+function respondTrucoAsCpu(room: Room): void {
+  const request = room.trucoRequest;
+  const cpu = request ? room.players.find((player) => player.isCpu && player.id === request.responderPlayerId) : undefined;
+  const requester = request ? room.players.find((player) => player.id === request.requestedByPlayerId) : undefined;
+
+  if (!request || !cpu || !requester) {
+    return;
+  }
+
+  room.handValue = request.requestedValue;
+  room.trucoRequest = undefined;
+  broadcastState(room);
+}
+
+function playCardAsCpu(room: Room): void {
+  const cpu = room.players.find((player) => player.isCpu && player.id === room.turnPlayerId);
+
+  if (!cpu || cpu.hand.length === 0 || room.trucoRequest) {
+    return;
+  }
+
+  const sortedCards = cpu.hand
+    .map((card, index) => ({ card, index }))
+    .sort((left, right) => compareCards(left.card, right.card));
+  const selected = sortedCards[0];
+
+  if (!selected) {
+    return;
+  }
+
+  const [card] = cpu.hand.splice(selected.index, 1);
+
+  room.table.push({ playerId: cpu.id, card });
+
+  if (room.table.length === 1) {
+    room.turnPlayerId = room.players.find((player) => player.id !== cpu.id)?.id ?? null;
+    broadcastState(room);
+    return;
+  }
+
+  if (room.table.length === 2) {
+    room.turnPlayerId = null;
+    broadcastState(room);
+
+    setTimeout(() => {
+      finishTrickIfReady(room);
+      broadcastState(room);
+    }, trickRevealDelayMs);
+    return;
+  }
+
+  finishTrickIfReady(room);
+  broadcastState(room);
+}
+
 io.on("connection", (socket) => {
   socket.on("room:join", async ({ roomId, name, token }) => {
     const profile = await getProfileForJoin(token);
@@ -518,6 +655,7 @@ io.on("connection", (socket) => {
       existing.id = socket.id;
       existing.name = playerName || existing.name;
       existing.avatarUrl = avatarUrl;
+      existing.isCpu = false;
       replacePlayerId(room, previousId, socket.id);
       socket.join(room.id);
       runDatabaseTask(async () => {
@@ -537,6 +675,7 @@ io.on("connection", (socket) => {
         id: socket.id,
         name: playerName,
         avatarUrl,
+        isCpu: false,
         token,
         hand: [],
         roundWins: 0,
@@ -562,28 +701,7 @@ io.on("connection", (socket) => {
   });
 
 socket.on("room:leave", ({ roomId }) => {
-  const room = rooms.get(roomId);
-
-  if (!room) {
-    return;
-  }
-
-  const index = room.players.findIndex((player) => player.id === socket.id);
-
-  if (index >= 0) {
-    room.players.splice(index, 1);
-  }
-
-  room.table = [];
-  room.vira = undefined;
-  room.handValue = 1;
-  room.status = "waiting";
-  room.turnPlayerId = null;
-  room.trucoRequest = undefined;
-  room.lastTrucoRequesterId = undefined;
-  room.lastTrucoRaise = undefined;
-
-  broadcastState(room);
+  handlePlayerExit(socket.id, roomId);
 });
   socket.on("card:play", ({ roomId, cardId, faceDown }) => {
     const room = rooms.get(roomId);
@@ -791,24 +909,7 @@ socket.on("room:leave", ({ roomId }) => {
 
   socket.on("disconnect", () => {
     setTimeout(() => {
-      for (const room of rooms.values()) {
-        const index = room.players.findIndex((player) => player.id === socket.id);
-
-        if (index >= 0) {
-          room.players.splice(index, 1);
-          room.table = [];
-          room.vira = undefined;
-          room.handValue = 1;
-          room.status = "waiting";
-          room.turnPlayerId = null;
-          room.trucoRequest = undefined;
-          room.lastTrucoRequesterId = undefined;
-          room.lastTrucoRaise = undefined;
-          room.dbMatchId = undefined;
-
-          broadcastState(room);
-        }
-      }
+      handlePlayerExit(socket.id);
     }, 15000);
   });
 });

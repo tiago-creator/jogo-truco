@@ -6,6 +6,7 @@ import opponentAvatarUrl from "./img/avatar/user-secret.svg";
 import cardBackUrl from "./img/cartas/ivory-emerald.svg";
 import arrowUpActionIconUrl from "./img/icons/arrow-up-action.svg";
 import checkActionIconUrl from "./img/icons/check-action.svg";
+import chevronUpHintIconUrl from "./img/icons/chevron-up-hint.svg";
 import runningPlayerIconUrl from "./img/icons/running-player.svg";
 import feltBurgundyUrl from "./img/table-backgrounds/felt-burgundy.png";
 import feltCharcoalUrl from "./img/table-backgrounds/felt-charcoal.png";
@@ -359,8 +360,10 @@ class TableScene extends Phaser.Scene {
   private trucoButtonSmallText!: Phaser.GameObjects.Text;
   private trucoButtonHitZone!: Phaser.GameObjects.Zone;
   private trucoResponseGroup!: Phaser.GameObjects.Container;
+  private trucoResponseTitle!: Phaser.GameObjects.Text;
   private trucoResponseRaiseText!: Phaser.GameObjects.Text;
   private handGroup!: Phaser.GameObjects.Container;
+  private handHintGroup!: Phaser.GameObjects.Container;
   private opponentHandGroup!: Phaser.GameObjects.Container;
   private opponentAvatarGroup!: Phaser.GameObjects.Container;
   private opponentAvatarImage!: Phaser.GameObjects.Image;
@@ -400,6 +403,7 @@ class TableScene extends Phaser.Scene {
     this.load.image("opponent-avatar", opponentAvatarUrl);
     this.load.image("arrow-up-action-icon", arrowUpActionIconUrl);
     this.load.image("check-action-icon", checkActionIconUrl);
+    this.load.image("chevron-up-hint-icon", chevronUpHintIconUrl);
     this.load.image("running-player-icon", runningPlayerIconUrl);
 
   }
@@ -529,6 +533,8 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     //#endregion
 
     this.handGroup = this.add.container(0, 0);
+    this.handHintGroup = this.createHandHintGroup();
+    this.handGroup.add(this.handHintGroup);
     this.opponentHandGroup = this.add.container(0, 0);
     this.opponentAvatarGroup = this.createOpponentAvatar();
     this.deckGroup = this.add.container(0, 0);
@@ -751,6 +757,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     const raise = this.createTrucoResponseButton(182, 44, "AUMENTAR", 0x1976a8, "raise");
     const group = this.add.container(0, 0, [bg, title, reject.container, accept.container, raise.container]);
 
+    this.trucoResponseTitle = title;
     this.trucoResponseRaiseText = raise.text;
     group.setDepth(15000);
     group.setVisible(false);
@@ -770,14 +777,20 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     bg.fillStyle(0x000000, 0.38);
     bg.fillRoundedRect(-76, -38, 160, 84, 12);
 
-    bg.fillStyle(color, 1);
+    const gradientColors = {
+      reject: { topLeft: 0xf2a334, topRight: 0xa85b16, bottomLeft: 0x4a1e07, bottomRight: 0x160804 },
+      accept: { topLeft: 0x66d05f, topRight: 0x238c35, bottomLeft: 0x0d3914, bottomRight: 0x061907 },
+      raise: { topLeft: 0x68c9ff, topRight: 0x238ac9, bottomLeft: 0x0b3556, bottomRight: 0x041622 }
+    }[action];
+
+    bg.fillGradientStyle(
+      gradientColors.topLeft,
+      gradientColors.topRight,
+      gradientColors.bottomLeft,
+      gradientColors.bottomRight,
+      1
+    );
     bg.fillRoundedRect(-80, -42, 160, 84, 12);
-
-    bg.fillStyle(0xffffff, 0.16);
-    bg.fillRoundedRect(-72, -36, 144, 28, 10);
-
-    bg.fillStyle(0x000000, 0.24);
-    bg.fillRoundedRect(-76, 10, 152, 28, 9);
 
     bg.lineStyle(3, 0xffffff, 0.22);
     bg.strokeRoundedRect(-80, -42, 160, 84, 12);
@@ -1670,7 +1683,14 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
         9: "DOZE",
         12: "DOZE"
       }[request.requestedValue];
+      const requestLabel = {
+        3: "truco",
+        6: "seis",
+        9: "nove",
+        12: "doze"
+      }[request.requestedValue];
 
+      this.trucoResponseTitle.setText(`Pedido de ${requestLabel}`);
       this.trucoResponseRaiseText.setText(raiseLabel);
       this.setTrucoResponseRaiseEnabled(request.requestedValue < 12);
     }
@@ -1902,6 +1922,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     const scale = this.getHandCardScale(cards.length);
     const spacing = this.getHandCardSpacing(cards.length, scale);
     const startX = -((cards.length - 1) * spacing) / 2;
+    const middleIndex = (cards.length - 1) / 2;
     const activeCardIds = new Set<string>();
 
     cards.forEach((cardData, index) => {
@@ -1915,12 +1936,33 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       const faceDown = this.faceDownHandCardIds.has(cardData.id);
       const signature = this.getHandCardSignature(enabled, faceDown);
       const cached = this.handCardObjects.get(cardData.id);
+      const shouldAnimatePosition = Boolean(cached && cached.signature === signature);
       const card = cached?.signature === signature
         ? cached.container
         : this.replaceCachedHandCard(cardData.id, this.createCard(cardData, enabled, faceDown), signature);
+      const spread = index - middleIndex;
+      const targetX = startX + index * spacing;
+      const targetY = Math.abs(spread) * 8 * this.uiScale;
+      const targetRotation = Phaser.Math.DegToRad(spread * 8);
 
-      card.setPosition(startX + index * spacing, 0);
-      card.setScale(scale);
+      card.setDepth(index);
+
+      if (shouldAnimatePosition) {
+        this.tweens.killTweensOf(card);
+        this.tweens.add({
+          targets: card,
+          x: targetX,
+          y: targetY,
+          scale,
+          rotation: targetRotation,
+          duration: 420,
+          ease: "Cubic.Out"
+        });
+      } else {
+        card.setPosition(targetX, targetY);
+        card.setScale(scale);
+        card.setRotation(targetRotation);
+      }
     });
 
     for (const cardId of Array.from(this.handCardObjects.keys())) {
@@ -1928,6 +1970,10 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
         this.destroyCachedHandCard(cardId);
       }
     }
+
+    this.handHintGroup.setPosition(0, 86 * scale);
+    this.handHintGroup.setScale(this.uiScale);
+    this.handHintGroup.setVisible(cards.length > 0 && enabled);
   }
 
   private getHandCardScale(cardCount: number): number {
@@ -1940,7 +1986,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     }
 
     const maxWidth = Math.max(220, this.getViewWidth() - horizontalPadding * 2);
-    const naturalWidth = cardWidth * maxScale + (cardCount - 1) * 86 * this.uiScale;
+    const naturalWidth = cardWidth * maxScale + (cardCount - 1) * 104 * this.uiScale;
 
     return Math.min(maxScale, maxWidth / naturalWidth * maxScale);
   }
@@ -1953,7 +1999,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     const horizontalPadding = 28;
     const cardWidth = 80 * cardScale;
     const minGap = 10 * this.uiScale;
-    const maxSpacing = 92 * this.uiScale;
+    const maxSpacing = 108 * this.uiScale;
     const availableWidth = Math.max(cardWidth, this.getViewWidth() - horizontalPadding * 2);
     const fitSpacing = (availableWidth - cardWidth) / (cardCount - 1);
 
@@ -1962,6 +2008,39 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
 
   private getHandCardSignature(enabled: boolean, faceDown: boolean): string {
     return `${enabled ? "enabled" : "disabled"}:${faceDown ? "back" : "front"}`;
+  }
+
+  private createHandHintGroup(): Phaser.GameObjects.Container {
+    const container = this.add.container(0, 0);
+    const topArrow = this.add.image(0, -20, "chevron-up-hint-icon")
+      .setDisplaySize(34, 34);
+    const bottomArrow = this.add.image(0, -8, "chevron-up-hint-icon")
+      .setDisplaySize(34, 34)
+      .setAlpha(0.72);
+
+    const text = this.add.text(0, 28, "ARRASTE PARA JOGAR", {
+      color: "#f8f1d9",
+      fontFamily: "Arial Black",
+      fontSize: "13px",
+      fontStyle: "900",
+      stroke: "#000000",
+      strokeThickness: 3
+    }).setOrigin(0.5);
+
+    container.add([topArrow, bottomArrow, text]);
+    container.setDepth(100);
+    container.setVisible(false);
+    this.tweens.add({
+      targets: [topArrow, bottomArrow],
+      y: "-=8",
+      alpha: 0.55,
+      yoyo: true,
+      repeat: -1,
+      duration: 520,
+      ease: "Sine.InOut"
+    });
+
+    return container;
   }
 
   private replaceCachedHandCard(
@@ -2205,6 +2284,9 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       let hasPlayed = false;
       let isDragging = false;
       let isAnimatingToTable = false;
+      let dragStartX = 0;
+      let dragStartY = 0;
+      let dragStartRotation = 0;
       const playCard = () => {
         if (hasPlayed) {
           return;
@@ -2231,7 +2313,11 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       container.on("dragstart", () => {
         hasDragged = false;
         isDragging = true;
+        dragStartX = container.x;
+        dragStartY = container.y;
+        dragStartRotation = container.rotation;
         this.tweens.killTweensOf(container);
+        container.setRotation(0);
         container.setDepth(20);
       });
       container.on("drag", (pointer: Phaser.Input.Pointer) => {
@@ -2261,7 +2347,14 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
         } else {
           isDragging = false;
           container.setDepth(0);
-          this.tweens.add({ targets: container, x: container.input?.dragStartX ?? container.x, y: 0, duration: 160, ease: "Back.Out" });
+          this.tweens.add({
+            targets: container,
+            x: dragStartX,
+            y: dragStartY,
+            rotation: dragStartRotation,
+            duration: 160,
+            ease: "Back.Out"
+          });
         }
       });
       container.on("pointerup", () => {
