@@ -53,7 +53,7 @@ export type RoomState = {
 };
 
 export type ClientToServerEvents = {
-  "room:join": (payload: { roomId: string; name: string; token: string }) => void;
+  "room:join": (payload: { roomId?: string; name: string; token: string }) => void;
   "room:leave": (payload: { roomId: string }) => void;
   "card:play": (payload: { roomId: string; cardId: string; faceDown?: boolean }) => void;
   "truco:raise": (payload: { roomId: string }) => void;

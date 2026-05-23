@@ -12,8 +12,8 @@ import feltTealUrl from "./img/table-backgrounds/felt-teal.png";
 
 type TrucoSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 
-const serverUrl = 'https://truco-1wfk.onrender.com';
-//const serverUrl = import.meta.env.VITE_SERVER_URL ?? `${window.location.protocol}//${window.location.hostname}:3000`;
+//const serverUrl = 'https://truco-1wfk.onrender.com';
+const serverUrl = import.meta.env.VITE_SERVER_URL ?? `${window.location.protocol}//${window.location.hostname}:3000`;
 const tableBackgrounds = {
   "felt-teal": { label: "Teal", url: feltTealUrl },
   "felt-emerald": { label: "Emerald", url: feltEmeraldUrl },
@@ -257,7 +257,7 @@ class TableScene extends Phaser.Scene {
   private pendingFaceDownTableCardIds = new Set<string>();
   private handCardObjects = new Map<string, { container: Phaser.GameObjects.Container; signature: string }>();
   private tableCardObjects = new Map<string, { container: Phaser.GameObjects.Container; signature: string }>();
-  private roomId = "mesa-1";
+  private roomId = "";
   private playerName = `Jogador ${Math.floor(Math.random() * 900 + 100)}`;
   private status!: Phaser.GameObjects.Text;
   private scoreboardGroup!: Phaser.GameObjects.Container;
@@ -441,6 +441,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.socket.on("room:state", (state) => {
       this.previousRoomState = this.roomState;
       this.roomState = state;
+      this.roomId = state.roomId;
       this.syncFaceDownHandCards();
 
       if (state.status === "waiting") {

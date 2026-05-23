@@ -14,6 +14,13 @@ import {
   type TrucoRequest,
   shuffle
 } from "@truco/shared";
+import {
+  createMatch,
+  finishMatch,
+  isDatabaseEnabled,
+  recordHandResult,
+  upsertPlayer
+} from "./db.js";
 
 type PlayerState = {
   id: string;
@@ -40,6 +47,7 @@ type Room = {
     playerName: string;
     value: RoomState["handValue"];
   };
+  dbMatchId?: string;
 };
 
 const app = express();
@@ -55,6 +63,7 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 
 const rooms = new Map<string, Room>();
 const trickRevealDelayMs = 1200;
+let nextAutoRoomNumber = 1;
 
 function toPublicPlayer(player: PlayerState): PublicPlayer {
   return {
@@ -87,6 +96,48 @@ function getRoom(roomId: string): Room {
 
   rooms.set(roomId, room);
   return room;
+}
+
+function createAutoRoom(): Room {
+  let roomId = `mesa-${nextAutoRoomNumber}`;
+
+  while (rooms.has(roomId)) {
+    nextAutoRoomNumber += 1;
+    roomId = `mesa-${nextAutoRoomNumber}`;
+  }
+
+  nextAutoRoomNumber += 1;
+  return getRoom(roomId);
+}
+
+function findRoomByPlayerToken(token: string): Room | undefined {
+  for (const room of rooms.values()) {
+    if (room.players.some((player) => player.token === token)) {
+      return room;
+    }
+  }
+
+  return undefined;
+}
+
+function findWaitingRoom(): Room | undefined {
+  for (const room of rooms.values()) {
+    if (room.status === "waiting" && room.players.length < 2) {
+      return room;
+    }
+  }
+
+  return undefined;
+}
+
+function getJoinRoom(roomId: string | undefined, token: string): Room {
+  const requestedRoomId = roomId?.trim();
+
+  if (requestedRoomId) {
+    return getRoom(requestedRoomId);
+  }
+
+  return findRoomByPlayerToken(token) ?? findWaitingRoom() ?? createAutoRoom();
 }
 
 function buildState(room: Room, viewerId: string): RoomState {
@@ -127,6 +178,28 @@ function broadcastState(room: Room): void {
   }
 }
 
+function runDatabaseTask(task: () => Promise<void>): void {
+  if (!isDatabaseEnabled()) {
+    return;
+  }
+
+  void task().catch((error: unknown) => {
+    console.error("Database task failed", error);
+  });
+}
+
+function startPersistentMatch(room: Room): void {
+  runDatabaseTask(async () => {
+    room.dbMatchId = await createMatch(
+      room.id,
+      room.players.map((player) => ({
+        token: player.token,
+        name: player.name
+      }))
+    ) ?? undefined;
+  });
+}
+
 function dealHand(room: Room, firstPlayerId = room.players[0]?.id): void {
   const deck = shuffle(createDeck());
 
@@ -142,6 +215,7 @@ function dealHand(room: Room, firstPlayerId = room.players[0]?.id): void {
   room.trucoRequest = undefined;
   room.lastTrucoRequesterId = undefined;
   room.lastTrucoRaise = undefined;
+  room.dbMatchId = undefined;
 }
 
 function startMatch(room: Room): void {
@@ -152,6 +226,7 @@ function startMatch(room: Room): void {
   }
 
   dealHand(room);
+  startPersistentMatch(room);
 }
 
 function finishHand(room: Room, winner: PlayerState): void {
@@ -159,9 +234,35 @@ function finishHand(room: Room, winner: PlayerState): void {
 }
 
 function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue"]): void {
-  winner.points += points;
+  const loser = room.players.find((player) => player.id !== winner.id);
+  const matchId = room.dbMatchId;
 
-  if (winner.points >= 12) {
+  winner.points += points;
+  const finishedGame = winner.points >= 12;
+  const winnerPointsAfter = winner.points;
+  const loserPointsAfter = loser?.points ?? 0;
+
+  runDatabaseTask(async () => {
+    await recordHandResult({
+      matchId,
+      roomId: room.id,
+      winnerToken: winner.token,
+      winnerName: winner.name,
+      handValue: points,
+      winnerPointsAfter,
+      loserPointsAfter,
+      finishedGame
+    });
+
+    if (finishedGame) {
+      await finishMatch(matchId, {
+        token: winner.token,
+        name: winner.name
+      });
+    }
+  });
+
+  if (finishedGame) {
     winner.games += 1;
     winner.points = 0;
     for (const player of room.players) {
@@ -172,6 +273,10 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
   }
 
   dealHand(room, winner.id);
+
+  if (finishedGame) {
+    startPersistentMatch(room);
+  }
 }
 
 function finishTrickIfReady(room: Room): void {
@@ -259,7 +364,7 @@ function canAskForTruco(player: PlayerState): boolean {
 
 io.on("connection", (socket) => {
   socket.on("room:join", ({ roomId, name, token }) => {
-    const room = getRoom(roomId.trim() || "mesa-1");
+    const room = getJoinRoom(roomId, token);
     const existing = room.players.find((player) => player.token === token);
 
     if (!existing && room.players.length >= 2) {
@@ -269,7 +374,14 @@ io.on("connection", (socket) => {
 
     if (existing) {
       existing.id = socket.id;
+      existing.name = name.trim() || existing.name;
       socket.join(room.id);
+      runDatabaseTask(async () => {
+        await upsertPlayer({
+          token: existing.token,
+          name: existing.name
+        });
+      });
 
       broadcastState(room);
       return;
@@ -287,6 +399,12 @@ io.on("connection", (socket) => {
       });
 
       socket.join(room.id);
+      runDatabaseTask(async () => {
+        await upsertPlayer({
+          token,
+          name: name.trim() || "Jogador"
+        });
+      });
     }
 
     if (room.players.length === 2 && room.status === "waiting") {
@@ -538,6 +656,7 @@ socket.on("room:leave", ({ roomId }) => {
           room.trucoRequest = undefined;
           room.lastTrucoRequesterId = undefined;
           room.lastTrucoRaise = undefined;
+          room.dbMatchId = undefined;
 
           broadcastState(room);
         }
