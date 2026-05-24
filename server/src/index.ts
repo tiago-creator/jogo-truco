@@ -184,6 +184,7 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 });
 
 const rooms = new Map<string, Room>();
+const closedRoomIds = new Set<string>();
 const trickRevealDelayMs = 1200;
 let nextAutoRoomNumber = 1;
 
@@ -246,6 +247,13 @@ function restoreRoomSnapshot(snapshot: unknown): Room | null {
 }
 
 function persistRoom(room: Room): void {
+  if (closedRoomIds.has(room.id)) {
+    runDatabaseTask(async () => {
+      await deleteActiveRoom(room.id);
+    });
+    return;
+  }
+
   if (room.players.length === 0 || room.status === "waiting") {
     runDatabaseTask(async () => {
       await deleteActiveRoom(room.id);
@@ -254,6 +262,11 @@ function persistRoom(room: Room): void {
   }
 
   runDatabaseTask(async () => {
+    if (closedRoomIds.has(room.id)) {
+      await deleteActiveRoom(room.id);
+      return;
+    }
+
     await saveActiveRoom(room.id, sanitizeRoomForStorage(room));
   });
 }
@@ -316,6 +329,10 @@ async function getJoinRoom(roomId: string | undefined, token: string): Promise<R
   const requestedRoomId = roomId?.trim();
 
   if (requestedRoomId) {
+    if (closedRoomIds.has(requestedRoomId)) {
+      return findWaitingRoom() ?? createAutoRoom();
+    }
+
     return getRoom(requestedRoomId);
   }
 
@@ -329,6 +346,13 @@ async function getJoinRoom(roomId: string | undefined, token: string): Promise<R
     console.error("Could not restore active room", error);
     return null;
   });
+  if (restoredSnapshot && closedRoomIds.has(restoredSnapshot.id)) {
+    runDatabaseTask(async () => {
+      await deleteActiveRoom(restoredSnapshot.id);
+    });
+    return findWaitingRoom() ?? createAutoRoom();
+  }
+
   const restoredRoom = restoredSnapshot ? restoreRoomSnapshot(restoredSnapshot) : null;
 
   return restoredRoom ?? findWaitingRoom() ?? createAutoRoom();
@@ -349,6 +373,16 @@ function replacePlayerId(room: Room, previousId: string, nextId: string): void {
     }
   }
 
+  for (const trickResult of room.trickResults) {
+    if (trickResult.winnerPlayerId === previousId) {
+      trickResult.winnerPlayerId = nextId;
+    }
+  }
+
+  if (room.elevenHandDecision?.playerId === previousId) {
+    room.elevenHandDecision.playerId = nextId;
+  }
+
   if (room.trucoRequest?.requestedByPlayerId === previousId) {
     room.trucoRequest.requestedByPlayerId = nextId;
   }
@@ -363,6 +397,14 @@ function replacePlayerId(room: Room, previousId: string, nextId: string): void {
 
   if (room.lastTrucoRaise?.playerId === previousId) {
     room.lastTrucoRaise.playerId = nextId;
+  }
+
+  if (room.lastTrucoResponse?.playerId === previousId) {
+    room.lastTrucoResponse.playerId = nextId;
+  }
+
+  if (room.lastGameWinnerId === previousId) {
+    room.lastGameWinnerId = nextId;
   }
 }
 
@@ -759,6 +801,7 @@ function handlePlayerExit(socketId: string, explicitRoomId?: string): void {
     room.cpuActionTimer = undefined;
 
     if (remainingHumans.length === 0) {
+      closedRoomIds.add(room.id);
       rooms.delete(room.id);
       runDatabaseTask(async () => {
         await deleteActiveRoom(room.id);
