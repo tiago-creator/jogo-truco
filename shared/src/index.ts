@@ -81,12 +81,14 @@ export type ClientToServerEvents = {
   "truco:respond": (payload: { roomId: string; action: "accept" | "reject" | "raise" }) => void;
   "eleven-hand:respond": (payload: { roomId: string; action: "play" | "run" }) => void;
   "audio:send": (payload: { roomId: string; audio: ArrayBuffer; mimeType: string }) => void;
+  "meme:play": (payload: { roomId: string; memeId: string }) => void;
 };
 
 export type ServerToClientEvents = {
   "room:state": (state: RoomState) => void;
   "room:error": (payload: { message: string }) => void;
   "audio:message": (payload: { playerId: string; playerName: string; audio: ArrayBuffer; mimeType: string }) => void;
+  "meme:play": (payload: { playerId: string; playerName: string; memeId: string }) => void;
 };
 
 export const ranks: Rank[] = ["4", "5", "6", "7", "Q", "J", "K", "A", "2", "3"];

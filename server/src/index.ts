@@ -1400,6 +1400,28 @@ socket.on("room:leave", ({ roomId }) => {
     }
   });
 
+  socket.on("meme:play", ({ roomId, memeId }) => {
+    const room = rooms.get(roomId);
+    const player = room?.players.find((item) => item.id === socket.id);
+    const cleanMemeId = typeof memeId === "string" ? memeId.trim() : "";
+
+    if (!room || !player || room.status !== "playing") {
+      socket.emit("room:error", { message: "Partida indisponivel" });
+      return;
+    }
+
+    if (!cleanMemeId || cleanMemeId.length > 120 || cleanMemeId.includes("/") || cleanMemeId.includes("\\")) {
+      socket.emit("room:error", { message: "Meme invalido" });
+      return;
+    }
+
+    io.to(room.id).emit("meme:play", {
+      playerId: player.id,
+      playerName: player.name,
+      memeId: cleanMemeId
+    });
+  });
+
   socket.on("disconnect", () => {
     setTimeout(() => {
       handlePlayerExit(socket.id);

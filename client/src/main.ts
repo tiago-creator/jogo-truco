@@ -19,6 +19,26 @@ import dealingCardsAudioUrl from "./audio/distribuindo-cartas-na-mesa.mp3";
 import flipCardAudioUrl from "./audio/flip-carta.mp3";
 import removingCardAudioUrl from "./audio/tirando-carta-da-mesa.mp3";
 
+const memeAudioUrls = import.meta.glob("./audio/memes/*.mp3", {
+  eager: true,
+  query: "?url",
+  import: "default"
+}) as Record<string, string>;
+
+const memeAudios = Object.entries(memeAudioUrls)
+  .map(([path, url]) => {
+    const fileName = path.split("/").pop() ?? path;
+    const name = fileName.replace(/\.mp3$/i, "").replace(/[-_]+/g, " ");
+
+    return {
+      id: fileName,
+      key: `meme-${fileName}`,
+      name: name.replace(/\b\w/g, (letter) => letter.toUpperCase()),
+      url
+    };
+  })
+  .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
+
 type TrucoSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 type PlayerProfile = {
   token: string;
@@ -404,6 +424,9 @@ class TableScene extends Phaser.Scene {
   private audioButtonBg!: Phaser.GameObjects.Graphics;
   private audioButtonText!: Phaser.GameObjects.Text;
   private audioButtonHint!: Phaser.GameObjects.Text;
+  private memeButton!: Phaser.GameObjects.Container;
+  private memeButtonBg!: Phaser.GameObjects.Graphics;
+  private memePopup!: Phaser.GameObjects.Container;
   private audioRecorder = new WavAudioRecorder();
   private isRecordingAudio = false;
   private audioRecordingSession = 0;
@@ -429,6 +452,9 @@ class TableScene extends Phaser.Scene {
     this.load.audio("cards-deal", dealingCardsAudioUrl);
     this.load.audio("card-flip", flipCardAudioUrl);
     this.load.audio("card-remove", removingCardAudioUrl);
+    for (const meme of memeAudios) {
+      this.load.audio(meme.key, meme.url);
+    }
 
   }
 
@@ -562,6 +588,9 @@ exitButtonHitZone.on("pointerup", () => {
     this.drawAudioButton();
     //#endregion
 
+    this.memeButton = this.createMemeButton();
+    this.memePopup = this.createMemePopup();
+
     this.handGroup = this.add.container(0, 0);
     this.handHintGroup = this.createHandHintGroup();
     this.handGroup.add(this.handHintGroup);
@@ -580,6 +609,8 @@ exitButtonHitZone.on("pointerup", () => {
     this.trucoButton.setDepth(100);
     this.trucoButtonHitZone.setDepth(101);
     this.audioButton.setDepth(100);
+    this.memeButton.setDepth(100);
+    this.memePopup.setDepth(240);
     this.exitButton.setDepth(100);
 
     this.socket.on("connect", () => {
@@ -698,6 +729,11 @@ exitButtonHitZone.on("pointerup", () => {
       void playIncomingAudio(audio).catch(() => {
         this.status.setText("Toque uma vez na tela para liberar o audio");
       });
+    });
+
+    this.socket.on("meme:play", ({ playerName, memeId }) => {
+      this.playMeme(memeId);
+      this.showOpponentSpeechBubble(`${playerName}: meme`);
     });
 
     this.scale.on("resize", () => this.layout());
@@ -834,6 +870,108 @@ exitButtonHitZone.on("pointerup", () => {
 
     this.audioButtonText.setText(recording ? "SOLTE" : "AUDIO");
     this.audioButtonHint.setText(recording ? "ENVIAR" : "SEGURE");
+  }
+
+  private createMemeButton(): Phaser.GameObjects.Container {
+    const bg = this.add.graphics();
+    const title = this.add.text(0, -8, "MEMES", {
+      color: "#ffffff",
+      fontFamily: "Arial Black",
+      fontSize: "15px",
+      fontStyle: "900"
+    }).setOrigin(0.5);
+    const hint = this.add.text(0, 13, "SONS", {
+      color: "#fff3a3",
+      fontFamily: "Arial",
+      fontSize: "11px",
+      fontStyle: "bold"
+    }).setOrigin(0.5);
+    const hitZone = this.add.zone(0, 0, 104, 64);
+    const button = this.add.container(0, 0, [bg, title, hint, hitZone]);
+
+    this.memeButtonBg = bg;
+    this.drawMemeButton();
+    button.setSize(104, 64);
+    hitZone.setInteractive({ useHandCursor: true });
+    hitZone.on("pointerup", () => {
+      this.playButtonClickSound();
+      this.memePopup.setVisible(!this.memePopup.visible);
+    });
+
+    return button;
+  }
+
+  private drawMemeButton(): void {
+    const g = this.memeButtonBg;
+
+    g.clear();
+    g.fillStyle(0x000000, 0.34);
+    g.fillRoundedRect(-43, -23, 90, 52, 10);
+    g.fillStyle(0x4a2372, 1);
+    g.fillRoundedRect(-48, -29, 90, 52, 10);
+    g.lineStyle(3, 0xffcf5a, 1);
+    g.strokeRoundedRect(-48, -29, 90, 52, 10);
+    g.fillStyle(0xffffff, 0.1);
+    g.fillRoundedRect(-40, -24, 72, 12, 8);
+  }
+
+  private createMemePopup(): Phaser.GameObjects.Container {
+    const popup = this.add.container(0, 0);
+    const width = 380;
+    const rowHeight = 34;
+    const visibleRows = Math.min(memeAudios.length, 10);
+    const height = 74 + visibleRows * rowHeight;
+    const bg = this.add.graphics();
+    const title = this.add.text(0, -height / 2 + 26, "Memes", {
+      color: "#fff3a3",
+      fontFamily: "Arial Black",
+      fontSize: "20px",
+      fontStyle: "900"
+    }).setOrigin(0.5);
+
+    bg.fillStyle(0x06130f, 0.95);
+    bg.fillRoundedRect(-width / 2, -height / 2, width, height, 14);
+    bg.lineStyle(3, 0xffcf5a, 1);
+    bg.strokeRoundedRect(-width / 2, -height / 2, width, height, 14);
+    popup.add([bg, title]);
+
+    memeAudios.slice(0, visibleRows).forEach((meme, index) => {
+      const y = -height / 2 + 58 + index * rowHeight;
+      const rowBg = this.add.graphics();
+      const text = this.add.text(-width / 2 + 22, y, meme.name, {
+        color: "#ffffff",
+        fontFamily: "Arial",
+        fontSize: "15px",
+        fontStyle: "bold"
+      }).setOrigin(0, 0.5);
+      const hitZone = this.add.zone(0, y, width - 26, rowHeight - 4);
+
+      rowBg.fillStyle(index % 2 === 0 ? 0x10281f : 0x163428, 0.9);
+      rowBg.fillRoundedRect(-width / 2 + 13, y - rowHeight / 2 + 2, width - 26, rowHeight - 4, 7);
+      hitZone.setInteractive({ useHandCursor: true });
+      hitZone.on("pointerup", () => {
+        this.playButtonClickSound();
+        this.socket.emit("meme:play", {
+          roomId: this.roomId,
+          memeId: meme.id
+        });
+        popup.setVisible(false);
+      });
+      popup.add([rowBg, text, hitZone]);
+    });
+
+    popup.setVisible(false);
+    return popup;
+  }
+
+  private playMeme(memeId: string): void {
+    const meme = memeAudios.find((item) => item.id === memeId);
+
+    if (!meme) {
+      return;
+    }
+
+    this.playGameSound(meme.key, 0.9);
   }
 
   private createTrucoResponseGroup(): Phaser.GameObjects.Container {
@@ -1361,6 +1499,10 @@ exitButtonHitZone.on("pointerup", () => {
     this.elevenHandGroup.setScale(Math.min(this.uiScale, (width - 24) / 420));
     this.audioButton.setScale(this.actionButtonScale * 2.18);
     this.audioButton.setPosition(130 * this.actionButtonScale, height - this.actionBottom);
+    this.memeButton.setScale(this.actionButtonScale * 2.18);
+    this.memeButton.setPosition(320 * this.actionButtonScale, height - this.actionBottom);
+    this.memePopup.setScale(Math.min(this.uiScale, (width - 24) / 380));
+    this.memePopup.setPosition(width / 2, height / 2);
     this.exitButton.setPosition(
   width - 54 * this.uiScale,
   60 * this.uiScale
@@ -1390,6 +1532,10 @@ exitButtonHitZone.on("pointerup", () => {
 
     this.status.setText(this.roomState.message);
     this.audioButton.setVisible(this.roomState.status === "playing");
+    this.memeButton.setVisible(this.roomState.status === "playing");
+    if (this.roomState.status !== "playing") {
+      this.memePopup.setVisible(false);
+    }
     this.renderTrucoResponse();
     this.renderElevenHandDecision();
 
