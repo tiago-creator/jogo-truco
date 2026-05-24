@@ -47,7 +47,8 @@ export type RankingPlayer = {
 
 export type ActiveRoomSnapshot = {
   id: string;
-  players?: Array<{ token?: string }>;
+  status?: string;
+  players?: Array<{ token?: string; isCpu?: boolean }>;
 };
 
 const connectionString = process.env.DATABASE_URL;
@@ -414,7 +415,13 @@ export async function findActiveRoomByPlayerToken(token: string): Promise<Active
     `
   );
 
-  return result.rows.find((row) => row.snapshot.players?.some((player) => player.token === token))?.snapshot ?? null;
+  return result.rows.find((row) => {
+    const players = row.snapshot.players ?? [];
+    const hasPlayer = players.some((player) => player.token === token);
+    const hasHuman = players.some((player) => player.isCpu !== true);
+
+    return row.snapshot.status === "playing" && hasHuman && hasPlayer;
+  })?.snapshot ?? null;
 }
 
 export async function finishMatch(

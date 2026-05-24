@@ -236,7 +236,7 @@ function restoreRoomSnapshot(snapshot: unknown): Room | null {
 
   room.players = room.players.map((player) => ({
     ...player,
-    isCpu: player.isCpu ?? true
+    isCpu: player.isCpu ?? false
   }));
   room.cpuActionTimer = undefined;
   room.trickResults ??= [];
@@ -927,7 +927,7 @@ io.on("connection", (socket) => {
     const existing = room.players.find((player) => player.token === token);
 
     const cpuSeat = !existing && room.players.length >= 2
-      ? room.players.find((player) => player.isCpu)
+      ? room.players.find((player) => player.isCpu && player.token === token)
       : undefined;
 
     if (!existing && room.players.length >= 2 && !cpuSeat) {
