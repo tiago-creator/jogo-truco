@@ -1415,7 +1415,7 @@ socket.on("room:leave", ({ roomId }) => {
       return;
     }
 
-    io.to(room.id).emit("meme:play", {
+    socket.to(room.id).emit("meme:play", {
       playerId: player.id,
       playerName: player.name,
       memeId: cleanMemeId

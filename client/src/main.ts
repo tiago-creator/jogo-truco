@@ -18,26 +18,47 @@ import placingCardAudioUrl from "./audio/colocando-carta-na-mesa.mp3";
 import dealingCardsAudioUrl from "./audio/distribuindo-cartas-na-mesa.mp3";
 import flipCardAudioUrl from "./audio/flip-carta.mp3";
 import removingCardAudioUrl from "./audio/tirando-carta-da-mesa.mp3";
+import meme67Url from "./audio/memes/67.mp3";
+import memeKikoUrl from "./audio/memes/a-risada-do-kiko.mp3";
+import memeAiPaiUrl from "./audio/memes/ai-pai-para-hihi.mp3";
+import memeMickeyUrl from "./audio/memes/ai-que-delicia-mickey.mp3";
+import memeFahUrl from "./audio/memes/fahhhhhhhhhhhhhh.mp3";
+import memeFogosUrl from "./audio/memes/fogos-caruaru-foguete-12x1-8.mp3";
+import memeGriloUrl from "./audio/memes/grilo_1.mp3";
+import memeLulaAjudaUrl from "./audio/memes/lula-por-favor-me-ajuda.mp3";
+import memeNaoSobrouUrl from "./audio/memes/nao-sobrou-nada_fZprXSC.mp3";
+import memeHomemMaquinaUrl from "./audio/memes/o-homem-uma-maquina-uma-besta-enjaulada.mp3";
+import memeUndaiaUrl from "./audio/memes/papo-de-undaia.mp3";
+import memePeidoUrl from "./audio/memes/peido.mp3";
+import memeRisadaLadraoUrl from "./audio/memes/risada-de-ladrao-mp3cut.mp3";
+import memeSelocoUrl from "./audio/memes/seloco-nao-compensa.mp3";
+import memeSetembroUrl from "./audio/memes/setembro-vai-entrar-o-grosso-lula.mp3";
+import memeTmpUrl from "./audio/memes/tmpyhr2sh8l.mp3";
+import memeVouNadaUrl from "./audio/memes/vou-nada.mp3";
+import memeWowUrl from "./audio/memes/wow_8.mp3";
+import memeZeMangaUrl from "./audio/memes/ze-da-manga_G3QwWGi.mp3";
 
-const memeAudioUrls = import.meta.glob("./audio/memes/*.mp3", {
-  eager: true,
-  query: "?url",
-  import: "default"
-}) as Record<string, string>;
-
-const memeAudios = Object.entries(memeAudioUrls)
-  .map(([path, url]) => {
-    const fileName = path.split("/").pop() ?? path;
-    const name = fileName.replace(/\.mp3$/i, "").replace(/[-_]+/g, " ");
-
-    return {
-      id: fileName,
-      key: `meme-${fileName}`,
-      name: name.replace(/\b\w/g, (letter) => letter.toUpperCase()),
-      url
-    };
-  })
-  .sort((left, right) => left.name.localeCompare(right.name, "pt-BR"));
+const memeAudios = [
+  { id: "67.mp3", key: "meme-67.mp3", name: "67", url: meme67Url },
+  { id: "a-risada-do-kiko.mp3", key: "meme-a-risada-do-kiko.mp3", name: "A Risada Do Kiko", url: memeKikoUrl },
+  { id: "ai-pai-para-hihi.mp3", key: "meme-ai-pai-para-hihi.mp3", name: "Ai Pai Para Hihi", url: memeAiPaiUrl },
+  { id: "ai-que-delicia-mickey.mp3", key: "meme-ai-que-delicia-mickey.mp3", name: "Ai Que Delicia Mickey", url: memeMickeyUrl },
+  { id: "fahhhhhhhhhhhhhh.mp3", key: "meme-fahhhhhhhhhhhhhh.mp3", name: "Fahhhhhhhhhhhhhh", url: memeFahUrl },
+  { id: "fogos-caruaru-foguete-12x1-8.mp3", key: "meme-fogos-caruaru-foguete-12x1-8.mp3", name: "Fogos Caruaru", url: memeFogosUrl },
+  { id: "grilo_1.mp3", key: "meme-grilo_1.mp3", name: "Grilo", url: memeGriloUrl },
+  { id: "lula-por-favor-me-ajuda.mp3", key: "meme-lula-por-favor-me-ajuda.mp3", name: "Lula Por Favor Me Ajuda", url: memeLulaAjudaUrl },
+  { id: "nao-sobrou-nada_fZprXSC.mp3", key: "meme-nao-sobrou-nada_fZprXSC.mp3", name: "Nao Sobrou Nada", url: memeNaoSobrouUrl },
+  { id: "o-homem-uma-maquina-uma-besta-enjaulada.mp3", key: "meme-o-homem-uma-maquina-uma-besta-enjaulada.mp3", name: "O Homem Uma Maquina", url: memeHomemMaquinaUrl },
+  { id: "papo-de-undaia.mp3", key: "meme-papo-de-undaia.mp3", name: "Papo De Undaia", url: memeUndaiaUrl },
+  { id: "peido.mp3", key: "meme-peido.mp3", name: "Peido", url: memePeidoUrl },
+  { id: "risada-de-ladrao-mp3cut.mp3", key: "meme-risada-de-ladrao-mp3cut.mp3", name: "Risada De Ladrao", url: memeRisadaLadraoUrl },
+  { id: "seloco-nao-compensa.mp3", key: "meme-seloco-nao-compensa.mp3", name: "Seloco Nao Compensa", url: memeSelocoUrl },
+  { id: "setembro-vai-entrar-o-grosso-lula.mp3", key: "meme-setembro-vai-entrar-o-grosso-lula.mp3", name: "Setembro Vai Entrar", url: memeSetembroUrl },
+  { id: "tmpyhr2sh8l.mp3", key: "meme-tmpyhr2sh8l.mp3", name: "Tmpyhr2sh8l", url: memeTmpUrl },
+  { id: "vou-nada.mp3", key: "meme-vou-nada.mp3", name: "Vou Nada", url: memeVouNadaUrl },
+  { id: "wow_8.mp3", key: "meme-wow_8.mp3", name: "Wow", url: memeWowUrl },
+  { id: "ze-da-manga_G3QwWGi.mp3", key: "meme-ze-da-manga_G3QwWGi.mp3", name: "Ze Da Manga", url: memeZeMangaUrl }
+];
 
 type TrucoSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 type PlayerProfile = {
@@ -427,6 +448,7 @@ class TableScene extends Phaser.Scene {
   private memeButton!: Phaser.GameObjects.Container;
   private memeButtonBg!: Phaser.GameObjects.Graphics;
   private memePopup!: Phaser.GameObjects.Container;
+  private memePopupIgnoreClicksUntil = 0;
   private audioRecorder = new WavAudioRecorder();
   private isRecordingAudio = false;
   private audioRecordingSession = 0;
@@ -895,7 +917,13 @@ exitButtonHitZone.on("pointerup", () => {
     hitZone.setInteractive({ useHandCursor: true });
     hitZone.on("pointerup", () => {
       this.playButtonClickSound();
-      this.memePopup.setVisible(!this.memePopup.visible);
+      const shouldOpen = !this.memePopup.visible;
+
+      if (shouldOpen) {
+        this.memePopupIgnoreClicksUntil = this.time.now + 220;
+      }
+
+      this.memePopup.setVisible(shouldOpen);
     });
 
     return button;
@@ -918,10 +946,13 @@ exitButtonHitZone.on("pointerup", () => {
   private createMemePopup(): Phaser.GameObjects.Container {
     const popup = this.add.container(0, 0);
     const width = 380;
-    const rowHeight = 34;
-    const visibleRows = Math.min(memeAudios.length, 10);
+    const rowHeight = 52;
+    const visibleRows = Math.min(memeAudios.length, 7);
     const height = 74 + visibleRows * rowHeight;
+    const listTop = -height / 2 + 58;
+    const maxStartIndex = Math.max(0, memeAudios.length - visibleRows);
     const bg = this.add.graphics();
+    const outsideCloseZone = this.add.zone(0, 0, this.getViewWidth(), this.getViewHeight());
     const title = this.add.text(0, -height / 2 + 26, "Memes", {
       color: "#fff3a3",
       fontFamily: "Arial Black",
@@ -929,37 +960,116 @@ exitButtonHitZone.on("pointerup", () => {
       fontStyle: "900"
     }).setOrigin(0.5);
 
+    outsideCloseZone.setInteractive({ useHandCursor: false });
+    outsideCloseZone.on("pointerup", () => {
+      if (this.time.now < this.memePopupIgnoreClicksUntil) {
+        return;
+      }
+
+      popup.setVisible(false);
+    });
+    outsideCloseZone.setDepth(-1);
     bg.fillStyle(0x06130f, 0.95);
     bg.fillRoundedRect(-width / 2, -height / 2, width, height, 14);
     bg.lineStyle(3, 0xffcf5a, 1);
     bg.strokeRoundedRect(-width / 2, -height / 2, width, height, 14);
-    popup.add([bg, title]);
+    popup.add([outsideCloseZone, bg, title]);
 
-    memeAudios.slice(0, visibleRows).forEach((meme, index) => {
-      const y = -height / 2 + 58 + index * rowHeight;
-      const rowBg = this.add.graphics();
-      const text = this.add.text(-width / 2 + 22, y, meme.name, {
-        color: "#ffffff",
-        fontFamily: "Arial",
-        fontSize: "15px",
-        fontStyle: "bold"
-      }).setOrigin(0, 0.5);
-      const hitZone = this.add.zone(0, y, width - 26, rowHeight - 4);
+    const rows = this.add.container(0, 0);
+    const scrollTrack = this.add.graphics();
+    const scrollThumb = this.add.graphics();
+    let startIndex = 0;
+    let dragStartY = 0;
+    let dragStartIndex = 0;
+    let dragDistance = 0;
 
-      rowBg.fillStyle(index % 2 === 0 ? 0x10281f : 0x163428, 0.9);
-      rowBg.fillRoundedRect(-width / 2 + 13, y - rowHeight / 2 + 2, width - 26, rowHeight - 4, 7);
-      hitZone.setInteractive({ useHandCursor: true });
-      hitZone.on("pointerup", () => {
-        this.playButtonClickSound();
-        this.socket.emit("meme:play", {
-          roomId: this.roomId,
-          memeId: meme.id
+    popup.add([rows, scrollTrack, scrollThumb]);
+
+    const drawScrollBar = () => {
+      scrollTrack.clear();
+      scrollThumb.clear();
+
+      if (maxStartIndex <= 0) {
+        return;
+      }
+
+      const trackX = width / 2 - 18;
+      const trackTop = listTop - rowHeight / 2 + 6;
+      const trackHeight = visibleRows * rowHeight - 12;
+      const thumbHeight = Math.max(42, trackHeight * (visibleRows / memeAudios.length));
+      const thumbY = trackTop + (trackHeight - thumbHeight) * (startIndex / maxStartIndex);
+
+      scrollTrack.fillStyle(0x000000, 0.35);
+      scrollTrack.fillRoundedRect(trackX, trackTop, 6, trackHeight, 4);
+      scrollThumb.fillStyle(0xffcf5a, 0.95);
+      scrollThumb.fillRoundedRect(trackX - 1, thumbY, 8, thumbHeight, 4);
+    };
+
+    const renderRows = () => {
+      rows.removeAll(true);
+
+      memeAudios.slice(startIndex, startIndex + visibleRows).forEach((meme, index) => {
+        const y = listTop + index * rowHeight;
+        const rowBg = this.add.graphics();
+        const text = this.add.text(-width / 2 + 22, y, meme.name, {
+          color: "#ffffff",
+          fontFamily: "Arial",
+          fontSize: "17px",
+          fontStyle: "bold"
+        }).setOrigin(0, 0.5);
+        const hitZone = this.add.zone(0, y, width - 26, rowHeight - 4);
+
+        rowBg.fillStyle((startIndex + index) % 2 === 0 ? 0x10281f : 0x163428, 0.9);
+        rowBg.fillRoundedRect(-width / 2 + 13, y - rowHeight / 2 + 3, width - 26, rowHeight - 6, 10);
+        rowBg.lineStyle(1, 0xffcf5a, 0.32);
+        rowBg.strokeRoundedRect(-width / 2 + 13, y - rowHeight / 2 + 3, width - 26, rowHeight - 6, 10);
+        hitZone.setInteractive({ useHandCursor: true });
+        hitZone.on("wheel", (_pointer: Phaser.Input.Pointer, _dx: number, dy: number) => {
+          setScrollIndex(startIndex + Math.sign(dy));
         });
-        popup.setVisible(false);
-      });
-      popup.add([rowBg, text, hitZone]);
-    });
+        hitZone.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+          dragStartY = pointer.y;
+          dragStartIndex = startIndex;
+          dragDistance = 0;
+        });
+        hitZone.on("pointermove", (pointer: Phaser.Input.Pointer) => {
+          if (!pointer.isDown) {
+            return;
+          }
 
+          dragDistance = Math.max(dragDistance, Math.abs(pointer.y - dragStartY));
+          setScrollIndex(dragStartIndex + Math.round((dragStartY - pointer.y) / rowHeight));
+        });
+        hitZone.on("pointerup", () => {
+        if (dragDistance > 8) {
+          this.time.delayedCall(50, () => {
+            dragDistance = 0;
+          });
+          return;
+        }
+
+        if (this.time.now < this.memePopupIgnoreClicksUntil) {
+          return;
+        }
+
+        this.playButtonClickSound();
+        this.playMeme(meme.id);
+          this.socket.emit("meme:play", {
+            roomId: this.roomId,
+            memeId: meme.id
+          });
+          popup.setVisible(false);
+        });
+        rows.add([rowBg, text, hitZone]);
+      });
+    };
+
+    const setScrollIndex = (index: number) => {
+      startIndex = Phaser.Math.Clamp(index, 0, maxStartIndex);
+      renderRows();
+      drawScrollBar();
+    };
+    setScrollIndex(0);
     popup.setVisible(false);
     return popup;
   }
@@ -1503,6 +1613,10 @@ exitButtonHitZone.on("pointerup", () => {
     this.memeButton.setPosition(320 * this.actionButtonScale, height - this.actionBottom);
     this.memePopup.setScale(Math.min(this.uiScale, (width - 24) / 380));
     this.memePopup.setPosition(width / 2, height / 2);
+    const memeOutsideCloseZone = this.memePopup.list[0];
+    if (memeOutsideCloseZone instanceof Phaser.GameObjects.Zone) {
+      memeOutsideCloseZone.setSize(width / this.memePopup.scaleX, height / this.memePopup.scaleY);
+    }
     this.exitButton.setPosition(
   width - 54 * this.uiScale,
   60 * this.uiScale
