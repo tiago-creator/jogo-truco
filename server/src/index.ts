@@ -56,6 +56,7 @@ type Room = {
   vira?: Card;
   handValue: RoomState["handValue"];
   turnPlayerId: string | null;
+  footPlayerId?: string;
   status: RoomState["status"];
   handSequence: number;
   isIronHand?: boolean;
@@ -217,6 +218,7 @@ function getRoom(roomId: string): Room {
     vira: undefined,
     handValue: 1,
     turnPlayerId: null,
+    footPlayerId: undefined,
     status: "waiting",
     handSequence: 0,
     trickResults: []
@@ -372,6 +374,10 @@ function replacePlayerId(room: Room, previousId: string, nextId: string): void {
     room.turnPlayerId = nextId;
   }
 
+  if (room.footPlayerId === previousId) {
+    room.footPlayerId = nextId;
+  }
+
   for (const tableCard of room.table) {
     if (tableCard.playerId === previousId) {
       tableCard.playerId = nextId;
@@ -424,6 +430,7 @@ function buildState(room: Room, viewerId: string): RoomState {
     vira: room.vira,
     handValue: room.handValue,
     turnPlayerId: room.turnPlayerId,
+    footPlayerId: room.footPlayerId,
     status: room.status,
     message: buildMessage(room, viewerId),
     isIronHand: room.isIronHand,
@@ -505,8 +512,34 @@ function startPersistentMatch(room: Room): void {
   });
 }
 
-function dealHand(room: Room, firstPlayerId = room.players[0]?.id): void {
+function getOpponentPlayerId(room: Room, playerId: string | undefined): string | undefined {
+  return room.players.find((player) => player.id !== playerId)?.id;
+}
+
+function ensureFootPlayer(room: Room): string | undefined {
+  if (room.footPlayerId && room.players.some((player) => player.id === room.footPlayerId)) {
+    return room.footPlayerId;
+  }
+
+  room.footPlayerId = room.players[1]?.id ?? room.players[0]?.id;
+  return room.footPlayerId;
+}
+
+function rotateFootPlayer(room: Room): string | undefined {
+  const currentFootPlayerId = ensureFootPlayer(room);
+  const nextFootPlayerId = getOpponentPlayerId(room, currentFootPlayerId);
+
+  if (nextFootPlayerId) {
+    room.footPlayerId = nextFootPlayerId;
+  }
+
+  return room.footPlayerId;
+}
+
+function dealHand(room: Room, rotateFootPlayerBeforeDeal = false): void {
   const deck = shuffle(createDeck());
+  const footPlayerId = rotateFootPlayerBeforeDeal ? rotateFootPlayer(room) : ensureFootPlayer(room);
+  const firstPlayerId = getOpponentPlayerId(room, footPlayerId) ?? room.players[0]?.id;
   const isIronHand = room.players.length === 2 && room.players.every((player) => player.points === 11);
   const elevenHandPlayer = room.players.find((player) => player.points === 11);
 
@@ -545,6 +578,7 @@ function startMatch(room: Room): void {
     player.games = 0;
   }
 
+  room.footPlayerId = room.players[1]?.id ?? room.players[0]?.id;
   room.dbMatchId = undefined;
   dealHand(room);
   startPersistentMatch(room);
@@ -602,7 +636,7 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
     }
   }
 
-  dealHand(room, winner.id);
+  dealHand(room, true);
 
   if (finishedGame) {
     room.lastGameWinnerId = winner.id;
@@ -696,7 +730,7 @@ function finishTrickIfReady(room: Room, expectedHandSequence = room.handSequence
       return;
     }
 
-    dealHand(room, first.playerId);
+    dealHand(room, true);
     return;
   }
 
@@ -718,7 +752,7 @@ function finishTrickIfReady(room: Room, expectedHandSequence = room.handSequence
       return;
     }
 
-    dealHand(room, first.playerId);
+    dealHand(room, true);
   }
 }
 
@@ -829,6 +863,7 @@ function handlePlayerExit(socketId: string, explicitRoomId?: string): void {
     room.handValue = 1;
     room.status = "waiting";
     room.turnPlayerId = null;
+    room.footPlayerId = undefined;
     room.trucoRequest = undefined;
     room.lastTrucoRequesterId = undefined;
     room.lastTrucoRaise = undefined;

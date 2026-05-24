@@ -56,6 +56,7 @@ export type RoomState = {
   vira?: Card;
   handValue: 1 | 3 | 6 | 9 | 12;
   turnPlayerId: string | null;
+  footPlayerId?: string;
   status: "waiting" | "playing" | "finished";
   message: string;
   isIronHand?: boolean;

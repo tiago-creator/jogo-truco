@@ -384,6 +384,8 @@ class TableScene extends Phaser.Scene {
   private opponentAvatarImage!: Phaser.GameObjects.Image;
   private opponentAvatarMaskShape!: Phaser.GameObjects.Graphics;
   private opponentNameText!: Phaser.GameObjects.Text;
+  private opponentFootMarker!: Phaser.GameObjects.Container;
+  private selfFootMarker!: Phaser.GameObjects.Container;
   private currentOpponentAvatarUrl: string | null = null;
   private deckGroup!: Phaser.GameObjects.Container;
   private viraGroup!: Phaser.GameObjects.Container;
@@ -563,6 +565,8 @@ exitButtonHitZone.on("pointerup", () => {
     this.handGroup = this.add.container(0, 0);
     this.handHintGroup = this.createHandHintGroup();
     this.handGroup.add(this.handHintGroup);
+    this.selfFootMarker = this.createFootMarker();
+    this.handGroup.add(this.selfFootMarker);
     this.opponentHandGroup = this.add.container(0, 0);
     this.opponentAvatarGroup = this.createOpponentAvatar();
     this.deckGroup = this.add.container(0, 0);
@@ -749,6 +753,22 @@ exitButtonHitZone.on("pointerup", () => {
 
   private playButtonClickSound(): void {
     this.playGameSound("button-click", 0.65);
+  }
+
+  private createFootMarker(): Phaser.GameObjects.Container {
+    const marker = this.add.container(0, 0);
+    const bg = this.add.circle(0, 0, 19, 0x000000, 0.92)
+      .setStrokeStyle(2, 0xffcf5a, 1);
+    const icon = this.add.text(0, 0, "🦶", {
+      fontFamily: "Arial",
+      fontSize: "22px"
+    }).setOrigin(0.5);
+
+    marker.add([bg, icon]);
+    marker.setSize(38, 38);
+    marker.setDepth(80);
+    marker.setVisible(false);
+    return marker;
   }
 
   private drawExitButton(): void {
@@ -1366,6 +1386,7 @@ exitButtonHitZone.on("pointerup", () => {
 
     this.opponentNameText.setText(opponent?.name ?? "Oponente");
     this.updateOpponentAvatar(opponent);
+    this.renderFootMarkers();
 
     this.status.setText(this.roomState.message);
     this.audioButton.setVisible(this.roomState.status === "playing");
@@ -1395,6 +1416,23 @@ exitButtonHitZone.on("pointerup", () => {
     const safeY = actionTopY - handHalfHeight - gap;
 
     this.handGroup.setPosition(width / 2, Math.min(defaultY, safeY));
+  }
+
+  private renderFootMarkers(): void {
+    const footPlayerId = this.roomState?.footPlayerId;
+    const selfId = this.roomState?.self?.id;
+    const selfIsFoot = Boolean(footPlayerId && selfId && footPlayerId === selfId);
+    const opponentIsFoot = Boolean(footPlayerId && selfId && footPlayerId !== selfId);
+
+    this.selfFootMarker.setVisible(selfIsFoot);
+    this.opponentFootMarker.setVisible(opponentIsFoot);
+
+    if (selfIsFoot) {
+      const handCount = this.roomState?.self?.hand.length ?? 3;
+      const cardScale = this.getHandCardScale(handCount);
+      this.selfFootMarker.setPosition(0, -82 * cardScale);
+      this.selfFootMarker.setScale(1 / Math.max(0.75, this.uiScale));
+    }
   }
 
   private syncFaceDownHandCards(): void {
@@ -2464,11 +2502,14 @@ exitButtonHitZone.on("pointerup", () => {
       fontSize: "14px",
       fontStyle: "bold"
     }).setOrigin(0.5);
+    this.opponentFootMarker = this.createFootMarker();
+    this.opponentFootMarker.setPosition(37, -39);
     this.opponentNameText = name;
 
     container.add([
       bg,
       avatar,
+      this.opponentFootMarker,
       nameBox,
       name
     ]);
