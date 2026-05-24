@@ -735,6 +735,10 @@ function handlePlayerExit(socketId: string, explicitRoomId?: string): void {
       continue;
     }
 
+    if (player.isCpu) {
+      return;
+    }
+
     const hasHumanOpponent = room.players.some((item) => item.id !== socketId && !item.isCpu);
 
     if (room.status === "playing" && room.players.length === 2 && hasHumanOpponent) {
@@ -744,6 +748,17 @@ function handlePlayerExit(socketId: string, explicitRoomId?: string): void {
     }
 
     const remainingHumans = room.players.filter((item) => item.id !== socketId && !item.isCpu);
+
+    clearTimeout(room.cpuActionTimer);
+    room.cpuActionTimer = undefined;
+
+    if (remainingHumans.length === 0) {
+      rooms.delete(room.id);
+      runDatabaseTask(async () => {
+        await deleteActiveRoom(room.id);
+      });
+      return;
+    }
 
     room.players = remainingHumans;
     room.table = [];
@@ -761,8 +776,6 @@ function handlePlayerExit(socketId: string, explicitRoomId?: string): void {
     room.isIronHand = false;
     room.trickResults = [];
     room.dbMatchId = undefined;
-    clearTimeout(room.cpuActionTimer);
-    room.cpuActionTimer = undefined;
 
     broadcastState(room);
     return;
