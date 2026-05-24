@@ -721,7 +721,9 @@ function handlePlayerExit(socketId: string, explicitRoomId?: string): void {
       return;
     }
 
-    room.players = room.players.filter((item) => item.id !== socketId);
+    const remainingHumans = room.players.filter((item) => item.id !== socketId && !item.isCpu);
+
+    room.players = remainingHumans;
     room.table = [];
     room.vira = undefined;
     room.handValue = 1;
