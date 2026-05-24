@@ -36,6 +36,7 @@ type PlayerState = {
   name: string;
   avatarUrl?: string;
   isCpu?: boolean;
+  cpuToken?: string;
   hand: Card[];
   roundWins: number;
   points: number;
@@ -521,6 +522,8 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
       roomId: room.id,
       winnerToken: winner.token,
       winnerName: winner.name,
+      winnerIsCpu: winner.isCpu,
+      winnerCpuToken: winner.cpuToken,
       handValue: points,
       winnerPointsAfter,
       loserPointsAfter,
@@ -530,7 +533,9 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
     if (finishedGame) {
       await finishMatch(matchId, {
         token: winner.token,
-        name: winner.name
+        name: winner.name,
+        isCpu: winner.isCpu,
+        cpuToken: winner.cpuToken
       });
     }
   });
@@ -721,6 +726,7 @@ function canRoomAskForTruco(room: Room): boolean {
 
 function makePlayerCpu(room: Room, player: PlayerState): void {
   player.isCpu = true;
+  player.cpuToken = `cpu:${room.id}:${player.token}`;
   player.name = "CPU";
   player.avatarUrl = undefined;
 }
@@ -979,6 +985,7 @@ io.on("connection", (socket) => {
       joinedPlayer.avatarUrl = avatarUrl;
       joinedPlayer.token = token;
       joinedPlayer.isCpu = false;
+      joinedPlayer.cpuToken = undefined;
       replacePlayerId(room, previousId, socket.id);
       socket.join(room.id);
       runDatabaseTask(async () => {

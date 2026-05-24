@@ -14,6 +14,14 @@ create table if not exists players (
   last_seen_at timestamptz not null default now()
 );
 
+create table if not exists cpu_players (
+  id uuid primary key default gen_random_uuid(),
+  token text not null unique,
+  name text not null default 'CPU',
+  created_at timestamptz not null default now(),
+  last_seen_at timestamptz not null default now()
+);
+
 alter table players add column if not exists email text;
 alter table players add column if not exists avatar_url text;
 alter table players add column if not exists rank_points integer not null default 0;
@@ -29,8 +37,11 @@ create table if not exists matches (
   status text not null check (status in ('playing', 'finished')),
   started_at timestamptz not null default now(),
   finished_at timestamptz,
-  winner_player_id uuid references players(id)
+  winner_player_id uuid references players(id),
+  winner_cpu_player_id uuid references cpu_players(id)
 );
+
+alter table matches add column if not exists winner_cpu_player_id uuid references cpu_players(id);
 
 create table if not exists match_players (
   match_id uuid not null references matches(id) on delete cascade,
@@ -46,12 +57,15 @@ create table if not exists hands (
   match_id uuid references matches(id) on delete set null,
   room_id text not null,
   winner_player_id uuid references players(id),
+  winner_cpu_player_id uuid references cpu_players(id),
   hand_value smallint not null,
   winner_points_after smallint not null,
   loser_points_after smallint not null,
   finished_game boolean not null default false,
   created_at timestamptz not null default now()
 );
+
+alter table hands add column if not exists winner_cpu_player_id uuid references cpu_players(id);
 
 create table if not exists active_rooms (
   room_id text primary key,

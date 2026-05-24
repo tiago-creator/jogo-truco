@@ -6,6 +6,8 @@ export type PlayerSnapshot = {
   name: string;
   email?: string | null;
   avatarUrl?: string | null;
+  isCpu?: boolean;
+  cpuToken?: string;
 };
 
 export type PlayerProfile = {
@@ -20,6 +22,8 @@ export type HandResultSnapshot = {
   roomId: string;
   winnerToken: string;
   winnerName: string;
+  winnerIsCpu?: boolean;
+  winnerCpuToken?: string;
   handValue: number;
   winnerPointsAfter: number;
   loserPointsAfter: number;
@@ -61,6 +65,37 @@ const pool = connectionString
     })
   : null;
 
+function getHumanPlayerName(name: string): string | null {
+  const cleanedName = name.replace(/(\s+CPU)+$/gi, "").trim();
+
+  if (!cleanedName || cleanedName.toLowerCase() === "cpu") {
+    return null;
+  }
+
+  return cleanedName;
+}
+
+async function upsertCpuPlayer(cpuToken = "cpu", name = "CPU"): Promise<string | null> {
+  if (!pool) {
+    return null;
+  }
+
+  const result = await pool.query<{ id: string }>(
+    `
+      insert into cpu_players (token, name)
+      values ($1, $2)
+      on conflict (token)
+      do update set
+        name = excluded.name,
+        last_seen_at = now()
+      returning id
+    `,
+    [cpuToken, name || "CPU"]
+  );
+
+  return result.rows[0]?.id ?? null;
+}
+
 export function isDatabaseEnabled(): boolean {
   return Boolean(pool);
 }
@@ -68,6 +103,17 @@ export function isDatabaseEnabled(): boolean {
 export async function upsertPlayer(player: PlayerSnapshot): Promise<string | null> {
   if (!pool) {
     return null;
+  }
+
+  const playerName = getHumanPlayerName(player.name);
+
+  if (!playerName) {
+    const existingPlayer = await pool.query<{ id: string }>(
+      "select id from players where token = $1 limit 1",
+      [player.token]
+    );
+
+    return existingPlayer.rows[0]?.id ?? null;
   }
 
   const result = await pool.query<{ id: string }>(
@@ -82,7 +128,7 @@ export async function upsertPlayer(player: PlayerSnapshot): Promise<string | nul
         last_seen_at = now()
       returning id
     `,
-    [player.token, player.name, player.email ?? null, player.avatarUrl ?? null]
+    [player.token, playerName, player.email ?? null, player.avatarUrl ?? null]
   );
 
   return result.rows[0]?.id ?? null;
@@ -115,7 +161,7 @@ export async function getPlayerProfile(token: string): Promise<PlayerProfile | n
 
   return {
     token: row.token,
-    name: row.name,
+    name: getHumanPlayerName(row.name) ?? row.name,
     email: row.email,
     avatarUrl: row.avatar_url
   };
@@ -148,7 +194,7 @@ export async function getPlayerProfileByEmail(email: string): Promise<PlayerProf
 
   return {
     token: row.token,
-    name: row.name,
+    name: getHumanPlayerName(row.name) ?? row.name,
     email: row.email,
     avatarUrl: row.avatar_url
   };
@@ -158,6 +204,8 @@ export async function savePlayerProfile(profile: PlayerProfile): Promise<PlayerP
   if (!pool) {
     return profile;
   }
+
+  const profileName = getHumanPlayerName(profile.name) ?? profile.name.trim();
 
   const result = await pool.query<{
     token: string;
@@ -176,7 +224,7 @@ export async function savePlayerProfile(profile: PlayerProfile): Promise<PlayerP
         last_seen_at = now()
       returning token, name, email, avatar_url
     `,
-    [profile.token, profile.name, profile.email, profile.avatarUrl ?? null]
+    [profile.token, profileName, profile.email, profile.avatarUrl ?? null]
   );
   const row = result.rows[0];
 
@@ -204,6 +252,12 @@ export async function createMatch(roomId: string, players: PlayerSnapshot[]): Pr
     );
 
     for (const [index, player] of players.entries()) {
+      const playerName = getHumanPlayerName(player.name);
+
+      if (!playerName) {
+        continue;
+      }
+
       const playerResult = await client.query<{ id: string }>(
         `
           insert into players (token, name, email, avatar_url)
@@ -216,7 +270,7 @@ export async function createMatch(roomId: string, players: PlayerSnapshot[]): Pr
             last_seen_at = now()
           returning id
         `,
-        [player.token, player.name, player.email ?? null, player.avatarUrl ?? null]
+        [player.token, playerName, player.email ?? null, player.avatarUrl ?? null]
       );
       const playerId = playerResult.rows[0]?.id;
 
@@ -227,10 +281,10 @@ export async function createMatch(roomId: string, players: PlayerSnapshot[]): Pr
       await client.query(
         `
           insert into match_players (match_id, player_id, seat, name_at_match)
-          values ($1, $2, $3, $4)
-          on conflict (match_id, player_id) do nothing
-        `,
-        [matchId, playerId, index + 1, player.name]
+        values ($1, $2, $3, $4)
+        on conflict (match_id, player_id) do nothing
+      `,
+        [matchId, playerId, index + 1, playerName]
       );
     }
 
@@ -249,10 +303,15 @@ export async function recordHandResult(result: HandResultSnapshot): Promise<void
     return;
   }
 
-  const winnerPlayerId = await upsertPlayer({
-    token: result.winnerToken,
-    name: result.winnerName
-  });
+  const winnerPlayerId = result.winnerIsCpu
+    ? null
+    : await upsertPlayer({
+      token: result.winnerToken,
+      name: result.winnerName
+    });
+  const winnerCpuPlayerId = result.winnerIsCpu
+    ? await upsertCpuPlayer(result.winnerCpuToken, result.winnerName)
+    : null;
 
   await pool.query(
     `
@@ -260,17 +319,19 @@ export async function recordHandResult(result: HandResultSnapshot): Promise<void
         match_id,
         room_id,
         winner_player_id,
+        winner_cpu_player_id,
         hand_value,
         winner_points_after,
         loser_points_after,
         finished_game
       )
-      values ($1, $2, $3, $4, $5, $6, $7)
+      values ($1, $2, $3, $4, $5, $6, $7, $8)
     `,
     [
       result.matchId ?? null,
       result.roomId,
       winnerPlayerId,
+      winnerCpuPlayerId,
       result.handValue,
       result.winnerPointsAfter,
       result.loserPointsAfter,
@@ -368,7 +429,7 @@ export async function getRanking(limit = 50): Promise<RankingPlayer[]> {
 
   return result.rows.map((row, index) => ({
     position: index + 1,
-    name: row.name,
+    name: getHumanPlayerName(row.name) ?? row.name,
     avatarUrl: row.avatar_url,
     rankPoints: row.rank_points,
     gamesPlayed: row.games_played,
@@ -432,17 +493,19 @@ export async function finishMatch(
     return;
   }
 
-  const winnerPlayerId = await upsertPlayer(winner);
+  const winnerPlayerId = winner.isCpu ? null : await upsertPlayer(winner);
+  const winnerCpuPlayerId = winner.isCpu ? await upsertCpuPlayer(winner.cpuToken, winner.name) : null;
 
   await pool.query(
     `
       update matches
       set status = 'finished',
         finished_at = now(),
-        winner_player_id = $2
+        winner_player_id = $2,
+        winner_cpu_player_id = $3
       where id = $1
     `,
-    [matchId, winnerPlayerId]
+    [matchId, winnerPlayerId, winnerCpuPlayerId]
   );
 }
 
