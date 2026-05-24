@@ -13,6 +13,11 @@ import feltCharcoalUrl from "./img/table-backgrounds/felt-charcoal.png";
 import feltEmeraldUrl from "./img/table-backgrounds/felt-emerald.png";
 import feltNavyUrl from "./img/table-backgrounds/felt-navy.png";
 import feltTealUrl from "./img/table-backgrounds/felt-teal.png";
+import buttonClickAudioUrl from "./audio/clique-botao.mp3";
+import placingCardAudioUrl from "./audio/colocando-carta-na-mesa.mp3";
+import dealingCardsAudioUrl from "./audio/distribuindo-cartas-na-mesa.mp3";
+import flipCardAudioUrl from "./audio/flip-carta.mp3";
+import removingCardAudioUrl from "./audio/tirando-carta-da-mesa.mp3";
 
 type TrucoSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
 type PlayerProfile = {
@@ -417,6 +422,11 @@ class TableScene extends Phaser.Scene {
     this.load.image("check-action-icon", checkActionIconUrl);
     this.load.image("chevron-up-hint-icon", chevronUpHintIconUrl);
     this.load.image("running-player-icon", runningPlayerIconUrl);
+    this.load.audio("button-click", buttonClickAudioUrl);
+    this.load.audio("card-place", placingCardAudioUrl);
+    this.load.audio("cards-deal", dealingCardsAudioUrl);
+    this.load.audio("card-flip", flipCardAudioUrl);
+    this.load.audio("card-remove", removingCardAudioUrl);
 
   }
 
@@ -461,6 +471,7 @@ class TableScene extends Phaser.Scene {
       this.trucoButtonText
     ]);
     this.trucoButtonHitZone.on("pointerup", () => {
+      this.playButtonClickSound();
       const selfPoints = this.roomState?.self?.points ?? 0;
       const lastRaiseWasMine = this.roomState?.lastTrucoRaise?.playerId === this.roomState?.self?.id;
 
@@ -506,7 +517,10 @@ this.exitButton.add(exitButtonHitZone);
 this.exitButton.setSize(84, 84);
 
 exitButtonHitZone.setInteractive({ useHandCursor: true });
-exitButtonHitZone.on("pointerup", () => this.leaveTable());
+exitButtonHitZone.on("pointerup", () => {
+  this.playButtonClickSound();
+  this.leaveTable();
+});
 //#endregion
 
     //#region Audio Button
@@ -534,6 +548,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.audioButton.setSize(104, 64);
     audioButtonHitZone.setInteractive({ useHandCursor: true });
     audioButtonHitZone.on("pointerdown", () => {
+      this.playButtonClickSound();
       void this.startAudioRecording();
     });
     audioButtonHitZone.on("pointerup", () => {
@@ -576,6 +591,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       this.roomState = state;
       this.roomId = state.roomId;
       this.syncFaceDownHandCards();
+      this.playTableClearSoundIfNeeded(state);
 
       if (state.status === "waiting") {
         showWaitingRoom(state.message);
@@ -717,6 +733,22 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
         this.sharpenTextsInGameObject(child as Phaser.GameObjects.GameObject);
       }
     }
+  }
+
+  private playGameSound(key: string, volume = 0.8): void {
+    if (!this.sound.get(key) && !this.cache.audio.exists(key)) {
+      return;
+    }
+
+    try {
+      this.sound.play(key, { volume });
+    } catch {
+      // Audio playback can still be blocked until the first user interaction.
+    }
+  }
+
+  private playButtonClickSound(): void {
+    this.playGameSound("button-click", 0.65);
   }
 
   private drawExitButton(): void {
@@ -873,6 +905,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     button.setSize(150, 80);
     hitZone.setInteractive({ useHandCursor: true });
     hitZone.on("pointerup", () => {
+      this.playButtonClickSound();
       this.socket.emit("eleven-hand:respond", {
         roomId: this.roomId,
         action
@@ -951,6 +984,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     button.setSize(160, 84);
     hitZone.setInteractive({ useHandCursor: true });
     hitZone.on("pointerup", () => {
+      this.playButtonClickSound();
       this.socket.emit("truco:respond", {
         roomId: this.roomId,
         action
@@ -1388,11 +1422,21 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     }
   }
 
+  private playTableClearSoundIfNeeded(state: RoomState): void {
+    const previousTableCount = this.previousRoomState?.table.length ?? 0;
+
+    if (previousTableCount >= 2 && state.table.length === 0 && state.status === "playing") {
+      this.playGameSound("card-remove", 0.78);
+    }
+  }
+
   private canToggleFaceDownCard(): boolean {
     return !this.roomState?.isIronHand && (this.roomState?.self?.hand.length ?? 0) < 3;
   }
 
   private toggleFaceDownCard(cardId: string): void {
+    this.playGameSound("card-flip", 0.72);
+
     if (this.faceDownHandCardIds.has(cardId)) {
       this.faceDownHandCardIds.delete(cardId);
     } else {
@@ -1791,6 +1835,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     const toY = this.tableGroup.y + targetPosition.y;
     const animatedCard = this.createTableCard(playedEntry);
 
+    this.playGameSound("card-place", 0.75);
     this.animatingTableCardIds.add(playedEntry.card.id);
     animatedCard.setPosition(fromX, fromY);
     animatedCard.setScale(0.72 * this.uiScale);
@@ -1850,6 +1895,8 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       return;
     }
 
+    this.playGameSound("cards-deal", 0.72);
+
     for (const item of cardsToAnimate) {
       this.animatingHandCardIds.add(item.card.id);
     }
@@ -1901,6 +1948,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
       ease: "Sine.In",
       onComplete: () => {
         cardBack.destroy();
+        this.playGameSound("card-flip", 0.68);
 
         const cardFace = this.createCard(card, false);
         cardFace.setPosition(target.x, target.y);
@@ -2589,6 +2637,7 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
           this.pendingFaceDownTableCardIds.add(card.id);
         }
 
+        this.playGameSound("card-place", 0.78);
         this.socket.emit("card:play", {
           roomId: this.roomId,
           cardId: card.id,
