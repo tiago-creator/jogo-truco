@@ -53,7 +53,14 @@ create table if not exists hands (
   created_at timestamptz not null default now()
 );
 
+create table if not exists active_rooms (
+  room_id text primary key,
+  snapshot jsonb not null,
+  updated_at timestamptz not null default now()
+);
+
 create index if not exists idx_matches_room_started_at on matches(room_id, started_at desc);
 create index if not exists idx_hands_match_created_at on hands(match_id, created_at);
 create index if not exists idx_players_last_seen_at on players(last_seen_at desc);
 create index if not exists idx_players_rank_points on players(rank_points desc, games_won desc);
+create index if not exists idx_active_rooms_updated_at on active_rooms(updated_at desc);

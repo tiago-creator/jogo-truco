@@ -17,6 +17,8 @@ import {
 } from "@truco/shared";
 import {
   createMatch,
+  deleteActiveRoom,
+  findActiveRoomByPlayerToken,
   finishMatch,
   getPlayerProfile,
   getPlayerProfileByEmail,
@@ -24,6 +26,7 @@ import {
   isDatabaseEnabled,
   recordHandResult,
   recordRankingGameResult,
+  saveActiveRoom,
   savePlayerProfile,
   upsertPlayer
 } from "./db.js";
@@ -218,6 +221,42 @@ function getRoom(roomId: string): Room {
   return room;
 }
 
+function sanitizeRoomForStorage(room: Room): Omit<Room, "cpuActionTimer"> {
+  const { cpuActionTimer: _cpuActionTimer, ...snapshot } = room;
+
+  return snapshot;
+}
+
+function restoreRoomSnapshot(snapshot: unknown): Room | null {
+  const room = snapshot as Room | null;
+
+  if (!room?.id || !Array.isArray(room.players)) {
+    return null;
+  }
+
+  room.players = room.players.map((player) => ({
+    ...player,
+    isCpu: player.isCpu ?? true
+  }));
+  room.cpuActionTimer = undefined;
+  room.trickResults ??= [];
+  rooms.set(room.id, room);
+  return room;
+}
+
+function persistRoom(room: Room): void {
+  if (room.players.length === 0 || room.status === "waiting") {
+    runDatabaseTask(async () => {
+      await deleteActiveRoom(room.id);
+    });
+    return;
+  }
+
+  runDatabaseTask(async () => {
+    await saveActiveRoom(room.id, sanitizeRoomForStorage(room));
+  });
+}
+
 function createAutoRoom(): Room {
   let roomId = `mesa-${nextAutoRoomNumber}`;
 
@@ -250,14 +289,26 @@ function findWaitingRoom(): Room | undefined {
   return undefined;
 }
 
-function getJoinRoom(roomId: string | undefined, token: string): Room {
+async function getJoinRoom(roomId: string | undefined, token: string): Promise<Room> {
   const requestedRoomId = roomId?.trim();
 
   if (requestedRoomId) {
     return getRoom(requestedRoomId);
   }
 
-  return findRoomByPlayerToken(token) ?? findWaitingRoom() ?? createAutoRoom();
+  const memoryRoom = findRoomByPlayerToken(token);
+
+  if (memoryRoom) {
+    return memoryRoom;
+  }
+
+  const restoredSnapshot = await findActiveRoomByPlayerToken(token).catch((error: unknown) => {
+    console.error("Could not restore active room", error);
+    return null;
+  });
+  const restoredRoom = restoredSnapshot ? restoreRoomSnapshot(restoredSnapshot) : null;
+
+  return restoredRoom ?? findWaitingRoom() ?? createAutoRoom();
 }
 
 function replacePlayerId(room: Room, previousId: string, nextId: string): void {
@@ -339,6 +390,8 @@ function buildMessage(room: Room, viewerId: string): string {
 }
 
 function broadcastState(room: Room): void {
+  persistRoom(room);
+
   for (const player of room.players) {
     if (player.isCpu) {
       continue;
@@ -868,28 +921,34 @@ io.on("connection", (socket) => {
     const profile = await getProfileForJoin(token);
     const playerName = (profile?.name ?? name.trim()) || "Jogador";
     const avatarUrl = profile?.avatarUrl ?? undefined;
-    const room = getJoinRoom(roomId, token);
+    const room = await getJoinRoom(roomId, token);
     const existing = room.players.find((player) => player.token === token);
 
-    if (!existing && room.players.length >= 2) {
+    const cpuSeat = !existing && room.players.length >= 2
+      ? room.players.find((player) => player.isCpu)
+      : undefined;
+
+    if (!existing && room.players.length >= 2 && !cpuSeat) {
       socket.emit("room:error", { message: "Mesa cheia" });
       return;
     }
 
-    if (existing) {
-      const previousId = existing.id;
+    if (existing || cpuSeat) {
+      const joinedPlayer = existing ?? cpuSeat!;
+      const previousId = joinedPlayer.id;
 
-      existing.id = socket.id;
-      existing.name = playerName || existing.name;
-      existing.avatarUrl = avatarUrl;
-      existing.isCpu = false;
+      joinedPlayer.id = socket.id;
+      joinedPlayer.name = playerName || joinedPlayer.name;
+      joinedPlayer.avatarUrl = avatarUrl;
+      joinedPlayer.token = token;
+      joinedPlayer.isCpu = false;
       replacePlayerId(room, previousId, socket.id);
       socket.join(room.id);
       runDatabaseTask(async () => {
         await upsertPlayer({
-          token: existing.token,
-          name: existing.name,
-          avatarUrl: existing.avatarUrl
+          token: joinedPlayer.token,
+          name: joinedPlayer.name,
+          avatarUrl: joinedPlayer.avatarUrl
         });
       });
 

@@ -45,6 +45,11 @@ export type RankingPlayer = {
   handsWon: number;
 };
 
+export type ActiveRoomSnapshot = {
+  id: string;
+  players?: Array<{ token?: string }>;
+};
+
 const connectionString = process.env.DATABASE_URL;
 const shouldUseSsl = process.env.DATABASE_SSL === "true";
 
@@ -369,6 +374,47 @@ export async function getRanking(limit = 50): Promise<RankingPlayer[]> {
     gamesWon: row.games_won,
     handsWon: row.hands_won
   }));
+}
+
+export async function saveActiveRoom(roomId: string, snapshot: unknown): Promise<void> {
+  if (!pool) {
+    return;
+  }
+
+  await pool.query(
+    `
+      insert into active_rooms (room_id, snapshot, updated_at)
+      values ($1, $2, now())
+      on conflict (room_id)
+      do update set snapshot = excluded.snapshot, updated_at = now()
+    `,
+    [roomId, JSON.stringify(snapshot)]
+  );
+}
+
+export async function deleteActiveRoom(roomId: string): Promise<void> {
+  if (!pool) {
+    return;
+  }
+
+  await pool.query("delete from active_rooms where room_id = $1", [roomId]);
+}
+
+export async function findActiveRoomByPlayerToken(token: string): Promise<ActiveRoomSnapshot | null> {
+  if (!pool) {
+    return null;
+  }
+
+  const result = await pool.query<{ snapshot: ActiveRoomSnapshot }>(
+    `
+      select snapshot
+      from active_rooms
+      order by updated_at desc
+      limit 100
+    `
+  );
+
+  return result.rows.find((row) => row.snapshot.players?.some((player) => player.token === token))?.snapshot ?? null;
 }
 
 export async function finishMatch(
