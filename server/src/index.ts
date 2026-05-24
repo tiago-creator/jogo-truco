@@ -721,7 +721,7 @@ function canRoomAskForTruco(room: Room): boolean {
 
 function makePlayerCpu(room: Room, player: PlayerState): void {
   player.isCpu = true;
-  player.name = `${player.name} CPU`;
+  player.name = "CPU";
   player.avatarUrl = undefined;
 }
 
