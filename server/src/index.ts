@@ -279,6 +279,28 @@ function findRoomByPlayerToken(token: string): Room | undefined {
   return undefined;
 }
 
+function hasConnectedHumanOpponent(room: Room, playerToken: string): boolean {
+  return room.players.some((player) => (
+    player.token !== playerToken &&
+    !player.isCpu &&
+    io.sockets.sockets.has(player.id)
+  ));
+}
+
+function shouldRejoinMemoryRoom(room: Room, token: string): boolean {
+  const player = room.players.find((item) => item.token === token);
+
+  if (!player) {
+    return false;
+  }
+
+  if (player.isCpu && !hasConnectedHumanOpponent(room, token)) {
+    return false;
+  }
+
+  return true;
+}
+
 function findWaitingRoom(): Room | undefined {
   for (const room of rooms.values()) {
     if (room.status === "waiting" && room.players.length < 2) {
@@ -298,7 +320,7 @@ async function getJoinRoom(roomId: string | undefined, token: string): Promise<R
 
   const memoryRoom = findRoomByPlayerToken(token);
 
-  if (memoryRoom) {
+  if (memoryRoom && shouldRejoinMemoryRoom(memoryRoom, token)) {
     return memoryRoom;
   }
 

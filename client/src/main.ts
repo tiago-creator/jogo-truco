@@ -744,13 +744,18 @@ exitButtonHitZone.on("pointerup", () => this.leaveTable());
     this.isRecordingAudio = false;
     this.audioRecordingSession += 1;
 
+    const currentSocket = this.socket;
+
     if (this.roomState) {
       this.socket.emit("room:leave", {
         roomId: this.roomId
       });
     }
 
-    this.socket.disconnect();
+    this.roomId = "";
+    window.setTimeout(() => {
+      currentSocket.disconnect();
+    }, 200);
     this.roomState = null;
     this.previousRoomState = null;
     this.lastAnimatedTrucoValue = null;
