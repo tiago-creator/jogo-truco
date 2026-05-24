@@ -39,6 +39,7 @@ type PlayerState = {
   cpuToken?: string;
   hand: Card[];
   roundWins: number;
+  handsWonInGame: number;
   points: number;
   games: number;
   token: string;
@@ -56,6 +57,7 @@ type Room = {
   handValue: RoomState["handValue"];
   turnPlayerId: string | null;
   status: RoomState["status"];
+  handSequence: number;
   isIronHand?: boolean;
   trickResults: TrickResult[];
   elevenHandDecision?: RoomState["elevenHandDecision"];
@@ -216,6 +218,7 @@ function getRoom(roomId: string): Room {
     handValue: 1,
     turnPlayerId: null,
     status: "waiting",
+    handSequence: 0,
     trickResults: []
   };
 
@@ -238,9 +241,11 @@ function restoreRoomSnapshot(snapshot: unknown): Room | null {
 
   room.players = room.players.map((player) => ({
     ...player,
-    isCpu: player.isCpu ?? false
+    isCpu: player.isCpu ?? false,
+    handsWonInGame: player.handsWonInGame ?? 0
   }));
   room.cpuActionTimer = undefined;
+  room.handSequence ??= 0;
   room.trickResults ??= [];
   rooms.set(room.id, room);
   return room;
@@ -508,6 +513,7 @@ function dealHand(room: Room, firstPlayerId = room.players[0]?.id): void {
   room.players[0].hand = deck.slice(0, 3);
   room.players[1].hand = deck.slice(3, 6);
   room.vira = deck[6];
+  room.handSequence = (room.handSequence ?? 0) + 1;
   room.players[0].roundWins = 0;
   room.players[1].roundWins = 0;
   room.table = [];
@@ -529,16 +535,17 @@ function dealHand(room: Room, firstPlayerId = room.players[0]?.id): void {
   room.lastTrucoResponse = undefined;
   room.lastGameWinnerId = undefined;
   room.lastGameWinnerName = undefined;
-  room.dbMatchId = undefined;
 }
 
 function startMatch(room: Room): void {
   for (const player of room.players) {
     player.roundWins = 0;
+    player.handsWonInGame = 0;
     player.points = 0;
     player.games = 0;
   }
 
+  room.dbMatchId = undefined;
   dealHand(room);
   startPersistentMatch(room);
 }
@@ -552,11 +559,12 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
   const matchId = room.dbMatchId;
 
   winner.points += points;
+  winner.handsWonInGame = (winner.handsWonInGame ?? 0) + 1;
   const finishedGame = winner.points >= 12;
   const winnerPointsAfter = winner.points;
   const loserPointsAfter = loser?.points ?? 0;
-  const winnerHandsWon = winner.roundWins;
-  const loserHandsWon = loser?.roundWins ?? 0;
+  const winnerHandsWon = winner.handsWonInGame;
+  const loserHandsWon = loser?.handsWonInGame ?? 0;
 
   runDatabaseTask(async () => {
     await recordHandResult({
@@ -585,9 +593,11 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
   if (finishedGame) {
     winner.games += 1;
     winner.points = 0;
+    winner.handsWonInGame = 0;
     for (const player of room.players) {
       if (player.id !== winner.id) {
         player.points = 0;
+        player.handsWonInGame = 0;
       }
     }
   }
@@ -620,11 +630,16 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
         });
       });
     }
+    room.dbMatchId = undefined;
     startPersistentMatch(room);
   }
 }
 
-function finishTrickIfReady(room: Room): void {
+function finishTrickIfReady(room: Room, expectedHandSequence = room.handSequence): void {
+  if (closedRoomIds.has(room.id) || expectedHandSequence !== room.handSequence) {
+    return;
+  }
+
   if (room.table.length < 2) {
     return;
   }
@@ -673,9 +688,8 @@ function finishTrickIfReady(room: Room): void {
   }
 
   if (trickCount >= 3) {
-    const handWinner = firstTrickWinnerId
-      ? room.players.find((player) => player.id === firstTrickWinnerId)
-      : winnerPlayer;
+    const handWinner = winnerPlayer
+      ?? (firstTrickWinnerId ? room.players.find((player) => player.id === firstTrickWinnerId) : undefined);
 
     if (handWinner) {
       finishHand(room, handWinner);
@@ -989,10 +1003,11 @@ function playCardAsCpu(room: Room): void {
 
   if (room.table.length === 2) {
     room.turnPlayerId = null;
+    const handSequence = room.handSequence;
     broadcastState(room);
 
     setTimeout(() => {
-      finishTrickIfReady(room);
+      finishTrickIfReady(room, handSequence);
       broadcastState(room);
     }, trickRevealDelayMs);
     return;
@@ -1052,6 +1067,7 @@ io.on("connection", (socket) => {
         token,
         hand: [],
         roundWins: 0,
+        handsWonInGame: 0,
         points: 0,
         games: 0
       });
@@ -1119,10 +1135,11 @@ socket.on("room:leave", ({ roomId }) => {
 
     if (room.table.length === 2) {
       room.turnPlayerId = null;
+      const handSequence = room.handSequence;
       broadcastState(room);
 
       setTimeout(() => {
-        finishTrickIfReady(room);
+        finishTrickIfReady(room, handSequence);
         broadcastState(room);
       }, trickRevealDelayMs);
       return;
@@ -1143,6 +1160,11 @@ socket.on("room:leave", ({ roomId }) => {
 
     if (room.trucoRequest) {
       socket.emit("room:error", { message: "Ja existe um pedido de truco pendente" });
+      return;
+    }
+
+    if (room.turnPlayerId !== socket.id) {
+      socket.emit("room:error", { message: "So pode pedir truco na sua vez" });
       return;
     }
 
