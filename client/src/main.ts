@@ -108,7 +108,7 @@ type PendingReliableAction = {
 const opponentAvatarPhotoSize = 106;
 const opponentAvatarMaskRadius = 49;
 
-const serverUrl = import.meta.env.VITE_SERVER_URL ?? "https://truco-1wfk.onrender.com";
+const serverUrl = import.meta.env.VITE_SERVER_URL ?? "https://app-truco-9ddcf4b48235.herokuapp.com";
 const tableBackgrounds = {
   "felt-teal": { label: "Teal", url: feltTealUrl },
   "felt-emerald": { label: "Emerald", url: feltEmeraldUrl },
