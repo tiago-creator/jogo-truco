@@ -1608,7 +1608,7 @@ socket.on("room:leave", ({ roomId }) => {
   socket.on("disconnect", () => {
     setTimeout(() => {
       handlePlayerExit(socket.id);
-    }, 15000);
+    }, 60000);
   });
 });
 

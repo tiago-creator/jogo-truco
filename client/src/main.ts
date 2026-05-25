@@ -553,11 +553,10 @@ class TableScene extends Phaser.Scene {
       this.trucoButtonText
     ]);
     this.trucoButtonHitZone.on("pointerup", () => {
-      this.playButtonClickSound();
-      const selfPoints = this.roomState?.self?.points ?? 0;
-      const lastRaiseWasMine = this.roomState?.lastTrucoRaise?.playerId === this.roomState?.self?.id;
+      const state = this.roomState;
 
-      if (this.roomState?.status === "playing" && !this.roomState.trucoRequest && !lastRaiseWasMine && selfPoints !== 11 && this.roomState.handValue < 12) {
+      if (state && this.canRaiseTruco()) {
+        this.playButtonClickSound();
         this.sendReliableAction("truco:raise", { roomId: this.roomId });
         const value = {
           1: "TRUCO",
@@ -565,8 +564,8 @@ class TableScene extends Phaser.Scene {
           6: "NOVE",
           9: "DOZE",
           12: "DOZE"
-        }[this.roomState.handValue] ?? "TRUCO";
-        this.playTrucoRaiseAnimation(this.roomState.self?.name ?? "Jogador",
+        }[state.handValue] ?? "TRUCO";
+        this.playTrucoRaiseAnimation(state.self?.name ?? "Jogador",
           value);
 
       }
@@ -2400,7 +2399,7 @@ exitButtonHitZone.on("pointerup", () => {
         delay: index * 90,
         ease: "Cubic.Out",
         onComplete: () => {
-          if (item.owner === "self") {
+          if (item.owner === "self" && !this.roomState?.isIronHand) {
             this.revealDealtCard(animatedCard, item.card, target);
             return;
           }
@@ -2454,12 +2453,30 @@ exitButtonHitZone.on("pointerup", () => {
     }
   }
 
+  private canRaiseTruco(): boolean {
+    const handValue = this.roomState?.handValue ?? 1;
+    const self = this.roomState?.self;
+    const isPlaying = this.roomState?.status === "playing";
+    const isMyTurn = Boolean(self && this.roomState?.turnPlayerId === self.id);
+    const selfPoints = self?.points ?? 0;
+    const hasElevenHand = Boolean(
+      this.roomState?.isIronHand ||
+      this.roomState?.elevenHandDecision ||
+      this.roomState?.players.some((player) => player.points === 11)
+    );
+    const lastRaiseWasMine = this.roomState?.lastTrucoRaise?.playerId === self?.id;
+
+    return isPlaying &&
+      isMyTurn &&
+      !hasElevenHand &&
+      !this.roomState?.trucoRequest &&
+      !lastRaiseWasMine &&
+      selfPoints !== 11 &&
+      handValue < 12;
+  }
+
   private renderTrucoButton(): void {
     const handValue = this.roomState?.handValue ?? 1;
-    const isPlaying = this.roomState?.status === "playing";
-    const selfPoints = this.roomState?.self?.points ?? 0;
-    const hasElevenHand = Boolean(this.roomState?.isIronHand || this.roomState?.elevenHandDecision || this.roomState?.players.some((player) => player.points === 11));
-    const lastRaiseWasMine = this.roomState?.lastTrucoRaise?.playerId === this.roomState?.self?.id;
     const label = {
       1: "Truco",
       3: "Seis",
@@ -2467,7 +2484,7 @@ exitButtonHitZone.on("pointerup", () => {
       9: "Doze",
       12: "Doze"
     }[handValue];
-    const enabled = isPlaying && !hasElevenHand && !this.roomState?.trucoRequest && !lastRaiseWasMine && selfPoints !== 11 && handValue < 12;
+    const enabled = this.canRaiseTruco();
 
     this.drawTrucoRaiseButton(label, enabled);
     this.setTrucoButtonInteractive(enabled);
