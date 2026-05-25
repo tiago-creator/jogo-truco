@@ -603,6 +603,43 @@ function rotateFootPlayer(room: Room): string | undefined {
   return room.footPlayerId;
 }
 
+function suitName(suit: Card["suit"]): string {
+  const names: Record<Card["suit"], string> = {
+    clubs: "paus",
+    hearts: "copas",
+    spades: "espadas",
+    diamonds: "ouros"
+  };
+
+  return names[suit];
+}
+
+function formatCard(card: Card | undefined): string {
+  if (!card) {
+    return "sem carta";
+  }
+
+  return `${card.rank} de ${suitName(card.suit)}`;
+}
+
+function logHandDeal(room: Room): void {
+  const players = room.players
+    .map((player) => `${player.name}: ${player.hand.map(formatCard).join(", ")}`)
+    .join(" | ");
+
+  console.info(
+    `[truco:mao] mesa=${room.id} mao=${room.handSequence} vira=${formatCard(room.vira)} valor=${room.handValue} cartas=[${players}]`
+  );
+}
+
+function logCardPlay(room: Room, player: PlayerState, card: Card, faceDown = false): void {
+  const playedAs = faceDown ? " fechada" : "";
+
+  console.info(
+    `[truco:jogada] mesa=${room.id} mao=${room.handSequence} jogador="${player.name}" carta=${formatCard(card)}${playedAs} vira=${formatCard(room.vira)}`
+  );
+}
+
 function dealHand(room: Room, rotateFootPlayerBeforeDeal = false): void {
   const deck = shuffle(createDeck());
   const footPlayerId = rotateFootPlayerBeforeDeal ? rotateFootPlayer(room) : ensureFootPlayer(room);
@@ -635,6 +672,7 @@ function dealHand(room: Room, rotateFootPlayerBeforeDeal = false): void {
   room.lastTrucoResponse = undefined;
   room.lastGameWinnerId = undefined;
   room.lastGameWinnerName = undefined;
+  logHandDeal(room);
 }
 
 function startMatch(room: Room): void {
@@ -1109,6 +1147,7 @@ function playCardAsCpu(room: Room): void {
   const [card] = cpu.hand.splice(selected.index, 1);
 
   room.table.push({ playerId: cpu.id, card });
+  logCardPlay(room, cpu, card);
 
   if (room.table.length === 1) {
     room.turnPlayerId = room.players.find((player) => player.id !== cpu.id)?.id ?? null;
@@ -1248,6 +1287,7 @@ socket.on("room:leave", ({ roomId }) => {
 
     const [card] = player.hand.splice(cardIndex, 1);
     room.table.push({ playerId: player.id, card, faceDown: shouldPlayFaceDown });
+    logCardPlay(room, player, card, shouldPlayFaceDown);
     markActionProcessed(room, actionId);
 
     if (room.table.length === 1) {
