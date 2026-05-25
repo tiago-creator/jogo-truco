@@ -54,6 +54,7 @@ export type RoomState = {
   self?: ClientPlayer;
   table: TableCard[];
   vira?: Card;
+  handSequence: number;
   handValue: 1 | 3 | 6 | 9 | 12;
   turnPlayerId: string | null;
   footPlayerId?: string;

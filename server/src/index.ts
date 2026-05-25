@@ -428,6 +428,7 @@ function buildState(room: Room, viewerId: string): RoomState {
     self: self ? toPublicPlayer(self) : undefined,
     table: room.table,
     vira: room.vira,
+    handSequence: room.handSequence,
     handValue: room.handValue,
     turnPlayerId: room.turnPlayerId,
     footPlayerId: room.footPlayerId,
@@ -591,6 +592,24 @@ function finishHand(room: Room, winner: PlayerState): void {
 function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue"]): void {
   const loser = room.players.find((player) => player.id !== winner.id);
   const matchId = room.dbMatchId;
+  const winnerSnapshot = {
+    id: winner.id,
+    token: winner.token,
+    name: winner.name,
+    avatarUrl: winner.avatarUrl,
+    isCpu: winner.isCpu,
+    cpuToken: winner.cpuToken
+  };
+  const loserSnapshot = loser
+    ? {
+      id: loser.id,
+      token: loser.token,
+      name: loser.name,
+      avatarUrl: loser.avatarUrl,
+      isCpu: loser.isCpu,
+      cpuToken: loser.cpuToken
+    }
+    : undefined;
 
   winner.points += points;
   winner.handsWonInGame = (winner.handsWonInGame ?? 0) + 1;
@@ -604,10 +623,10 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
     await recordHandResult({
       matchId,
       roomId: room.id,
-      winnerToken: winner.token,
-      winnerName: winner.name,
-      winnerIsCpu: winner.isCpu,
-      winnerCpuToken: winner.cpuToken,
+      winnerToken: winnerSnapshot.token,
+      winnerName: winnerSnapshot.name,
+      winnerIsCpu: winnerSnapshot.isCpu,
+      winnerCpuToken: winnerSnapshot.cpuToken,
       handValue: points,
       winnerPointsAfter,
       loserPointsAfter,
@@ -616,10 +635,10 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
 
     if (finishedGame) {
       await finishMatch(matchId, {
-        token: winner.token,
-        name: winner.name,
-        isCpu: winner.isCpu,
-        cpuToken: winner.cpuToken
+        token: winnerSnapshot.token,
+        name: winnerSnapshot.name,
+        isCpu: winnerSnapshot.isCpu,
+        cpuToken: winnerSnapshot.cpuToken
       });
     }
   });
@@ -639,22 +658,22 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
   dealHand(room, true);
 
   if (finishedGame) {
-    room.lastGameWinnerId = winner.id;
-    room.lastGameWinnerName = winner.name;
+    room.lastGameWinnerId = winnerSnapshot.id;
+    room.lastGameWinnerName = winnerSnapshot.name;
     room.lastGameWinnerSequence = (room.lastGameWinnerSequence ?? 0) + 1;
-    if (!winner.isCpu) {
+    if (!winnerSnapshot.isCpu) {
       runDatabaseTask(async () => {
         await recordRankingGameResult({
           winner: {
-            token: winner.token,
-            name: winner.name,
-            avatarUrl: winner.avatarUrl
+            token: winnerSnapshot.token,
+            name: winnerSnapshot.name,
+            avatarUrl: winnerSnapshot.avatarUrl
           },
-          loser: loser && !loser.isCpu
+          loser: loserSnapshot && !loserSnapshot.isCpu
             ? {
-              token: loser.token,
-              name: loser.name,
-              avatarUrl: loser.avatarUrl
+              token: loserSnapshot.token,
+              name: loserSnapshot.name,
+              avatarUrl: loserSnapshot.avatarUrl
             }
             : undefined,
           winnerHandsWon,
@@ -911,7 +930,11 @@ function scheduleCpuAction(room: Room): void {
       return;
     }
 
-    if (room.elevenHandDecision && cpuElevenHandPlayer) {
+    const activeCpuElevenHandPlayer = room.elevenHandDecision
+      ? room.players.find((player) => player.isCpu && player.id === room.elevenHandDecision?.playerId)
+      : undefined;
+
+    if (room.elevenHandDecision && activeCpuElevenHandPlayer) {
       room.elevenHandDecision = undefined;
       room.handValue = 3;
       broadcastState(room);

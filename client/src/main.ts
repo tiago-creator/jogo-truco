@@ -399,6 +399,7 @@ class TableScene extends Phaser.Scene {
   private socket!: TrucoSocket;
   private roomState: RoomState | null = null;
   private previousRoomState: RoomState | null = null;
+  private hasReceivedRoomState = false;
   private animatingTableCardIds = new Set<string>();
   private animatingHandCardIds = new Set<string>();
   private faceDownHandCardIds = new Set<string>();
@@ -644,8 +645,11 @@ exitButtonHitZone.on("pointerup", () => {
     });
 
     this.socket.on("room:state", (state) => {
-      this.previousRoomState = this.roomState;
+      const previousState = this.hasReceivedRoomState ? this.roomState : null;
+
+      this.previousRoomState = previousState;
       this.roomState = state;
+      this.hasReceivedRoomState = true;
       this.roomId = state.roomId;
       this.syncFaceDownHandCards();
       this.playTableClearSoundIfNeeded(state);
@@ -803,6 +807,13 @@ exitButtonHitZone.on("pointerup", () => {
     }
 
     try {
+      const soundManager = this.sound as Phaser.Sound.WebAudioSoundManager | Phaser.Sound.HTML5AudioSoundManager;
+      const audioContext = "context" in soundManager ? soundManager.context : null;
+
+      if (audioContext?.state === "suspended") {
+        void audioContext.resume().catch(() => undefined);
+      }
+
       this.sound.play(key, { volume });
     } catch {
       // Audio playback can still be blocked until the first user interaction.
@@ -2155,16 +2166,21 @@ exitButtonHitZone.on("pointerup", () => {
   }
 
   private animateDealIfNeeded(): void {
-    if (!this.roomState?.self || this.roomState.status !== "playing") {
+    if (!this.previousRoomState || !this.roomState?.self || this.roomState.status !== "playing") {
       return;
     }
 
-    const previousSelfHandIds = new Set(this.previousRoomState?.self?.hand.map((card) => card.id) ?? []);
-    const selfCards = this.roomState.self.hand.filter((card) => !previousSelfHandIds.has(card.id));
+    const isNewHand = this.previousRoomState.handSequence !== this.roomState.handSequence;
+    const previousSelfHandIds = new Set(this.previousRoomState.self?.hand.map((card) => card.id) ?? []);
+    const selfCards = isNewHand
+      ? [...this.roomState.self.hand]
+      : this.roomState.self.hand.filter((card) => !previousSelfHandIds.has(card.id));
     const opponent = this.roomState.players.find((player) => player.id !== this.roomState?.self?.id);
     const previousOpponent = this.previousRoomState?.players.find((player) => player.id === opponent?.id);
     const previousOpponentHandIds = new Set(previousOpponent?.hand.map((card) => card.id) ?? []);
-    const opponentCards = opponent?.hand.filter((card) => !previousOpponentHandIds.has(card.id)) ?? [];
+    const opponentCards = isNewHand
+      ? [...(opponent?.hand ?? [])]
+      : opponent?.hand.filter((card) => !previousOpponentHandIds.has(card.id)) ?? [];
     const cardsToAnimate: Array<{ card: Card; owner: "self" | "opponent"; hand: Card[] }> = [];
     const dealCount = Math.max(selfCards.length, opponentCards.length);
 
@@ -3461,6 +3477,7 @@ async function startOnlineGame(): Promise<void> {
 }
 
 document.getElementById("play-online")?.addEventListener("click", () => {
+  void unlockAudioPlayback().catch(() => undefined);
   void startOnlineGame();
 });
 document.getElementById("login-form")?.addEventListener("submit", (event) => {
