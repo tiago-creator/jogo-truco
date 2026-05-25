@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { io, type Socket } from "socket.io-client";
-import type { Card, ClientToServerEvents, RoomState, ServerToClientEvents } from "@truco/shared";
+import type { ActionAck, Card, ClientToServerEvents, RoomState, ServerToClientEvents } from "@truco/shared";
 import "./styles.css";
 import opponentAvatarUrl from "./img/avatar/user-secret.svg";
 import cardBackUrl from "./img/cartas/ivory-emerald.svg";
@@ -75,6 +75,34 @@ type RankingPlayer = {
   gamesPlayed: number;
   gamesWon: number;
   handsWon: number;
+};
+type ReliableClientEvent =
+  | "card:play"
+  | "truco:raise"
+  | "truco:respond"
+  | "eleven-hand:respond"
+  | "audio:send"
+  | "meme:play";
+type ReliableActionPayload =
+  | { roomId: string; cardId: string; faceDown?: boolean; actionId: string }
+  | { roomId: string; actionId: string }
+  | { roomId: string; action: "accept" | "reject" | "raise"; actionId: string }
+  | { roomId: string; action: "play" | "run"; actionId: string }
+  | { roomId: string; audio: ArrayBuffer; mimeType: string; actionId: string }
+  | { roomId: string; memeId: string; actionId: string };
+type ReliableActionInput =
+  | { roomId: string; cardId: string; faceDown?: boolean }
+  | { roomId: string }
+  | { roomId: string; action: "accept" | "reject" | "raise" }
+  | { roomId: string; action: "play" | "run" }
+  | { roomId: string; audio: ArrayBuffer; mimeType: string }
+  | { roomId: string; memeId: string };
+type PendingReliableAction = {
+  event: ReliableClientEvent;
+  payload: ReliableActionPayload;
+  key: string;
+  attempts: number;
+  retryTimer?: number;
 };
 
 const opponentAvatarPhotoSize = 106;
@@ -400,10 +428,13 @@ class TableScene extends Phaser.Scene {
   private roomState: RoomState | null = null;
   private previousRoomState: RoomState | null = null;
   private hasReceivedRoomState = false;
+  private suppressNextStateEffects = false;
   private animatingTableCardIds = new Set<string>();
   private animatingHandCardIds = new Set<string>();
   private faceDownHandCardIds = new Set<string>();
   private pendingFaceDownTableCardIds = new Set<string>();
+  private pendingReliableActions = new Map<string, PendingReliableAction>();
+  private pendingReliableActionKeys = new Set<string>();
   private handCardObjects = new Map<string, { container: Phaser.GameObjects.Container; signature: string }>();
   private tableCardObjects = new Map<string, { container: Phaser.GameObjects.Container; signature: string }>();
   private roomId = "";
@@ -527,7 +558,7 @@ class TableScene extends Phaser.Scene {
       const lastRaiseWasMine = this.roomState?.lastTrucoRaise?.playerId === this.roomState?.self?.id;
 
       if (this.roomState?.status === "playing" && !this.roomState.trucoRequest && !lastRaiseWasMine && selfPoints !== 11 && this.roomState.handValue < 12) {
-        this.socket.emit("truco:raise", { roomId: this.roomId });
+        this.sendReliableAction("truco:raise", { roomId: this.roomId });
         const value = {
           1: "TRUCO",
           3: "SEIS",
@@ -637,6 +668,9 @@ exitButtonHitZone.on("pointerup", () => {
     this.exitButton.setDepth(100);
 
     this.socket.on("connect", () => {
+     if (this.hasReceivedRoomState) {
+       this.suppressNextStateEffects = true;
+     }
      this.socket.emit("room:join", {
   roomId: this.roomId,
   name: this.playerName,
@@ -646,13 +680,17 @@ exitButtonHitZone.on("pointerup", () => {
 
     this.socket.on("room:state", (state) => {
       const previousState = this.hasReceivedRoomState ? this.roomState : null;
+      const suppressStateEffects = this.suppressNextStateEffects;
 
+      this.suppressNextStateEffects = false;
       this.previousRoomState = previousState;
       this.roomState = state;
       this.hasReceivedRoomState = true;
       this.roomId = state.roomId;
       this.syncFaceDownHandCards();
-      this.playTableClearSoundIfNeeded(state);
+      if (!suppressStateEffects) {
+        this.playTableClearSoundIfNeeded(state);
+      }
 
       if (state.status === "waiting") {
         showWaitingRoom(state.message);
@@ -673,6 +711,8 @@ exitButtonHitZone.on("pointerup", () => {
 
       if (!trucoResponse || !trucoResponseKey) {
         this.lastShownTrucoResponseKey = null;
+      } else if (suppressStateEffects) {
+        this.lastShownTrucoResponseKey = trucoResponseKey;
       } else if (
         trucoResponse.playerId !== state.self?.id &&
         this.lastShownTrucoResponseKey !== trucoResponseKey
@@ -687,6 +727,8 @@ exitButtonHitZone.on("pointerup", () => {
 
       if (!gameWinnerKey) {
         this.lastCelebratedGameWinnerKey = null;
+      } else if (suppressStateEffects) {
+        this.lastCelebratedGameWinnerKey = gameWinnerKey;
       } else if (
         state.lastGameWinnerId === state.self?.id &&
         this.lastCelebratedGameWinnerKey !== gameWinnerKey
@@ -706,6 +748,7 @@ exitButtonHitZone.on("pointerup", () => {
 
       // animação do truco do oponente
       if (
+        !suppressStateEffects &&
         state.lastTrucoRaise &&
         state.lastTrucoRaise.playerId !== state.self?.id &&
         this.lastAnimatedTrucoValue !== state.lastTrucoRaise.value
@@ -737,9 +780,16 @@ exitButtonHitZone.on("pointerup", () => {
         }
       }
 
-      this.animateDealIfNeeded();
-      this.animateOpponentPlayIfNeeded();
+      if (suppressStateEffects && state.lastTrucoRaise) {
+        this.lastAnimatedTrucoValue = state.lastTrucoRaise.value;
+      }
+
+      if (!suppressStateEffects) {
+        this.animateDealIfNeeded();
+        this.animateOpponentPlayIfNeeded();
+      }
       this.renderState();
+      this.flushPendingReliableActions();
     });
 
     this.socket.on("room:error", ({ message }) => {
@@ -769,6 +819,117 @@ exitButtonHitZone.on("pointerup", () => {
 
   private getTextResolution(): number {
     return Phaser.Math.Clamp((window.devicePixelRatio || 1) * 1.75, 2, 4);
+  }
+
+  private createReliableActionId(): string {
+    const randomUUID = globalThis.crypto?.randomUUID;
+
+    if (randomUUID) {
+      return randomUUID.call(globalThis.crypto);
+    }
+
+    return `action-${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+  }
+
+  private getReliableActionKey(event: ReliableClientEvent, payload: ReliableActionPayload): string {
+    if (event === "card:play" && "cardId" in payload) {
+      return `${event}:${payload.roomId}:${payload.cardId}`;
+    }
+
+    if ((event === "truco:respond" || event === "eleven-hand:respond") && "action" in payload) {
+      return `${event}:${payload.roomId}:${payload.action}`;
+    }
+
+    if (event === "meme:play" && "memeId" in payload) {
+      return `${event}:${payload.roomId}:${payload.memeId}`;
+    }
+
+    return `${event}:${payload.roomId}`;
+  }
+
+  private sendReliableAction(event: ReliableClientEvent, payload: ReliableActionInput): boolean {
+    const payloadWithId = {
+      ...payload,
+      actionId: this.createReliableActionId()
+    } as ReliableActionPayload;
+    const key = this.getReliableActionKey(event, payloadWithId);
+
+    if (this.pendingReliableActionKeys.has(key)) {
+      this.status.setText("Enviando acao...");
+      return false;
+    }
+
+    const pendingAction: PendingReliableAction = {
+      event,
+      payload: payloadWithId,
+      key,
+      attempts: 0
+    };
+
+    this.pendingReliableActions.set(payloadWithId.actionId, pendingAction);
+    this.pendingReliableActionKeys.add(key);
+    this.flushReliableAction(pendingAction);
+    return true;
+  }
+
+  private flushPendingReliableActions(): void {
+    for (const pendingAction of this.pendingReliableActions.values()) {
+      this.flushReliableAction(pendingAction);
+    }
+  }
+
+  private flushReliableAction(pendingAction: PendingReliableAction): void {
+    if (!this.socket.connected || !this.roomId) {
+      this.scheduleReliableActionRetry(pendingAction);
+      return;
+    }
+
+    window.clearTimeout(pendingAction.retryTimer);
+    pendingAction.attempts += 1;
+
+    const reliableSocket = this.socket as unknown as {
+      timeout: (milliseconds: number) => {
+        emit: (
+          event: string,
+          payload: ReliableActionPayload,
+          callback: (error: Error | null, response?: ActionAck) => void
+        ) => void;
+      };
+    };
+
+    reliableSocket.timeout(2500).emit(pendingAction.event, pendingAction.payload, (error, response) => {
+      if (error || !response) {
+        this.scheduleReliableActionRetry(pendingAction);
+        return;
+      }
+
+      this.pendingReliableActions.delete(pendingAction.payload.actionId);
+      this.pendingReliableActionKeys.delete(pendingAction.key);
+      window.clearTimeout(pendingAction.retryTimer);
+
+      if (!response.ok) {
+        this.status.setText(response.message ?? "Acao nao realizada");
+      }
+    });
+  }
+
+  private scheduleReliableActionRetry(pendingAction: PendingReliableAction): void {
+    window.clearTimeout(pendingAction.retryTimer);
+
+    const delay = Math.min(1000 + pendingAction.attempts * 600, 4000);
+
+    pendingAction.retryTimer = window.setTimeout(() => {
+      this.flushReliableAction(pendingAction);
+    }, delay);
+  }
+
+  private clearReliableActions(): void {
+    for (const pendingAction of this.pendingReliableActions.values()) {
+      window.clearTimeout(pendingAction.retryTimer);
+    }
+
+    this.pendingReliableActions.clear();
+    this.pendingReliableActionKeys.clear();
   }
 
   private sharpenText<T extends Phaser.GameObjects.Text>(text: T): T {
@@ -859,6 +1020,7 @@ exitButtonHitZone.on("pointerup", () => {
   }
 
   leaveTable(): void {
+    this.clearReliableActions();
     this.audioRecorder.cancel();
     this.audioStopTimer?.remove(false);
     this.audioStopTimer = null;
@@ -1065,7 +1227,7 @@ exitButtonHitZone.on("pointerup", () => {
 
         this.playButtonClickSound();
         this.playMeme(meme.id);
-          this.socket.emit("meme:play", {
+          this.sendReliableAction("meme:play", {
             roomId: this.roomId,
             memeId: meme.id
           });
@@ -1185,7 +1347,7 @@ exitButtonHitZone.on("pointerup", () => {
     hitZone.setInteractive({ useHandCursor: true });
     hitZone.on("pointerup", () => {
       this.playButtonClickSound();
-      this.socket.emit("eleven-hand:respond", {
+      this.sendReliableAction("eleven-hand:respond", {
         roomId: this.roomId,
         action
       });
@@ -1264,7 +1426,7 @@ exitButtonHitZone.on("pointerup", () => {
     hitZone.setInteractive({ useHandCursor: true });
     hitZone.on("pointerup", () => {
       this.playButtonClickSound();
-      this.socket.emit("truco:respond", {
+      this.sendReliableAction("truco:respond", {
         roomId: this.roomId,
         action
       });
@@ -1333,7 +1495,7 @@ exitButtonHitZone.on("pointerup", () => {
       return;
     }
 
-    this.socket.emit("audio:send", {
+    this.sendReliableAction("audio:send", {
       roomId: this.roomId,
       audio,
       mimeType: "audio/wav"
@@ -2955,7 +3117,7 @@ exitButtonHitZone.on("pointerup", () => {
         }
 
         this.playGameSound("card-place", 0.78);
-        this.socket.emit("card:play", {
+        this.sendReliableAction("card:play", {
           roomId: this.roomId,
           cardId: card.id,
           faceDown: shouldPlayFaceDown

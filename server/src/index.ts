@@ -1,10 +1,11 @@
 import express from "express";
 import cors from "cors";
 import { createServer } from "node:http";
-import { Server } from "socket.io";
+import { Server, type Socket } from "socket.io";
 import {
   type Card,
   type ClientToServerEvents,
+  type ActionAck,
   compareCardsWithVira,
   createDeck,
   type PublicPlayer,
@@ -18,6 +19,7 @@ import {
 import {
   createMatch,
   deleteActiveRoom,
+  findActiveRoomById,
   findActiveRoomByPlayerToken,
   finishMatch,
   getPlayerProfile,
@@ -49,6 +51,11 @@ type TrickResult = {
   winnerPlayerId: string | null;
 };
 
+type HandOutcome =
+  | { type: "continue" }
+  | { type: "draw" }
+  | { type: "winner"; winnerPlayerId: string };
+
 type Room = {
   id: string;
   players: PlayerState[];
@@ -74,8 +81,11 @@ type Room = {
   lastGameWinnerSequence?: number;
   lastTrucoResponse?: RoomState["lastTrucoResponse"];
   dbMatchId?: string;
+  processedActionIds?: string[];
   cpuActionTimer?: ReturnType<typeof setTimeout>;
 };
+
+type TrucoServerSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
 
 const app = express();
 app.use(cors());
@@ -221,7 +231,8 @@ function getRoom(roomId: string): Room {
     footPlayerId: undefined,
     status: "waiting",
     handSequence: 0,
-    trickResults: []
+    trickResults: [],
+    processedActionIds: []
   };
 
   rooms.set(roomId, room);
@@ -249,8 +260,23 @@ function restoreRoomSnapshot(snapshot: unknown): Room | null {
   room.cpuActionTimer = undefined;
   room.handSequence ??= 0;
   room.trickResults ??= [];
+  room.processedActionIds ??= [];
   rooms.set(room.id, room);
+  resumeRestoredRoom(room);
   return room;
+}
+
+function resumeRestoredRoom(room: Room): void {
+  if (room.status !== "playing" || room.table.length < 2 || room.turnPlayerId) {
+    return;
+  }
+
+  const handSequence = room.handSequence;
+
+  setTimeout(() => {
+    finishTrickIfReady(room, handSequence);
+    broadcastState(room);
+  }, trickRevealDelayMs);
 }
 
 function persistRoom(room: Room): void {
@@ -340,7 +366,19 @@ async function getJoinRoom(roomId: string | undefined, token: string): Promise<R
       return findWaitingRoom() ?? createAutoRoom();
     }
 
-    return getRoom(requestedRoomId);
+    const existingRoom = rooms.get(requestedRoomId);
+
+    if (existingRoom) {
+      return existingRoom;
+    }
+
+    const restoredSnapshot = await findActiveRoomById(requestedRoomId).catch((error: unknown) => {
+      console.error("Could not restore requested active room", error);
+      return null;
+    });
+    const restoredRoom = restoredSnapshot ? restoreRoomSnapshot(restoredSnapshot) : null;
+
+    return restoredRoom ?? getRoom(requestedRoomId);
   }
 
   const memoryRoom = findRoomByPlayerToken(token);
@@ -481,6 +519,34 @@ function broadcastState(room: Room): void {
   scheduleCpuAction(room);
 }
 
+function failAction(socket: TrucoServerSocket, ack: ((response: ActionAck) => void) | undefined, message: string): void {
+  socket.emit("room:error", { message });
+  ack?.({ ok: false, message });
+}
+
+function acknowledgeAction(ack?: (response: ActionAck) => void): void {
+  ack?.({ ok: true });
+}
+
+function wasActionProcessed(room: Room, actionId?: string): boolean {
+  return Boolean(actionId && room.processedActionIds?.includes(actionId));
+}
+
+function markActionProcessed(room: Room, actionId?: string): void {
+  if (!actionId) {
+    return;
+  }
+
+  room.processedActionIds ??= [];
+
+  if (room.processedActionIds.includes(actionId)) {
+    return;
+  }
+
+  room.processedActionIds.push(actionId);
+  room.processedActionIds = room.processedActionIds.slice(-200);
+}
+
 function runDatabaseTask(task: () => Promise<void>): void {
   if (!isDatabaseEnabled()) {
     return;
@@ -587,6 +653,40 @@ function startMatch(room: Room): void {
 
 function finishHand(room: Room, winner: PlayerState): void {
   awardHand(room, winner, room.handValue);
+}
+
+export function getHandOutcome(trickResults: TrickResult[]): HandOutcome {
+  const [first, second, third] = trickResults.map((result) => result.winnerPlayerId);
+
+  if (trickResults.length < 2) {
+    return { type: "continue" };
+  }
+
+  if (!first) {
+    if (second) {
+      return { type: "winner", winnerPlayerId: second };
+    }
+
+    if (trickResults.length < 3) {
+      return { type: "continue" };
+    }
+
+    return third
+      ? { type: "winner", winnerPlayerId: third }
+      : { type: "draw" };
+  }
+
+  if (!second || second === first) {
+    return { type: "winner", winnerPlayerId: first };
+  }
+
+  if (trickResults.length < 3) {
+    return { type: "continue" };
+  }
+
+  return !third || third === first
+    ? { type: "winner", winnerPlayerId: first }
+    : { type: "winner", winnerPlayerId: third };
 }
 
 function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue"]): void {
@@ -700,7 +800,6 @@ function finishTrickIfReady(room: Room, expectedHandSequence = room.handSequence
   const [first, second] = room.table;
   const winner = getTrickWinner(room, first, second);
   const winnerPlayer = room.players.find((player) => player.id === winner);
-  const firstTrickWinnerId = room.trickResults[0]?.winnerPlayerId ?? null;
 
   if (winnerPlayer) {
     winnerPlayer.roundWins += 1;
@@ -709,69 +808,22 @@ function finishTrickIfReady(room: Room, expectedHandSequence = room.handSequence
   room.trickResults.push({ winnerPlayerId: winner });
   room.table = [];
   room.turnPlayerId = winner ?? first.playerId;
-  const allCardsPlayed = room.players.every((player) => player.hand.length === 0);
-  const trickCount = room.trickResults.length;
 
-  if (trickCount === 1) {
+  const outcome = getHandOutcome(room.trickResults);
+
+  if (outcome.type === "continue") {
     return;
   }
 
-  if (trickCount === 2) {
-    if (!firstTrickWinnerId && winnerPlayer) {
-      finishHand(room, winnerPlayer);
-      return;
-    }
-
-    if (firstTrickWinnerId && !winner) {
-      const handWinner = room.players.find((player) => player.id === firstTrickWinnerId);
-
-      if (handWinner) {
-        finishHand(room, handWinner);
-      }
-
-      return;
-    }
-
-    if (winnerPlayer && winnerPlayer.id === firstTrickWinnerId) {
-      finishHand(room, winnerPlayer);
-      return;
-    }
-
-    return;
-  }
-
-  if (trickCount >= 3) {
-    const handWinner = winnerPlayer
-      ?? (firstTrickWinnerId ? room.players.find((player) => player.id === firstTrickWinnerId) : undefined);
-
-    if (handWinner) {
-      finishHand(room, handWinner);
-      return;
-    }
-
+  if (outcome.type === "draw") {
     dealHand(room, true);
     return;
   }
 
-  if (winnerPlayer && allCardsPlayed) {
-    finishHand(room, winnerPlayer);
-    return;
-  }
+  const handWinner = room.players.find((player) => player.id === outcome.winnerPlayerId);
 
-  if (allCardsPlayed) {
-    const [leftPlayer, rightPlayer] = room.players;
-    const handWinner = leftPlayer.roundWins === rightPlayer.roundWins
-      ? null
-      : leftPlayer.roundWins > rightPlayer.roundWins
-        ? leftPlayer
-        : rightPlayer;
-
-    if (handWinner) {
-      finishHand(room, handWinner);
-      return;
-    }
-
-    dealHand(room, true);
+  if (handWinner) {
+    finishHand(room, handWinner);
   }
 }
 
@@ -833,14 +885,19 @@ function canRoomAskForTruco(room: Room): boolean {
   return !room.elevenHandDecision && !room.players.some((player) => player.points === 11);
 }
 
-function makePlayerCpu(room: Room, player: PlayerState): void {
+function makePlayerCpu(room: Room, player: PlayerState, preserveReconnectSeat = true): void {
+  const previousToken = player.token;
+
   player.isCpu = true;
-  player.cpuToken = `cpu:${room.id}:${player.token}`;
+  player.cpuToken = `cpu:${room.id}:${previousToken}`;
+  if (!preserveReconnectSeat) {
+    player.token = player.cpuToken;
+  }
   player.name = "CPU";
   player.avatarUrl = undefined;
 }
 
-function handlePlayerExit(socketId: string, explicitRoomId?: string): void {
+function handlePlayerExit(socketId: string, explicitRoomId?: string, preserveReconnectSeat = true): void {
   const targetRooms = explicitRoomId ? [rooms.get(explicitRoomId)].filter(Boolean) as Room[] : Array.from(rooms.values());
 
   for (const room of targetRooms) {
@@ -857,7 +914,7 @@ function handlePlayerExit(socketId: string, explicitRoomId?: string): void {
     const hasHumanOpponent = room.players.some((item) => item.id !== socketId && !item.isCpu);
 
     if (room.status === "playing" && room.players.length === 2 && hasHumanOpponent) {
-      makePlayerCpu(room, player);
+      makePlayerCpu(room, player, preserveReconnectSeat);
       broadcastState(room);
       return;
     }
@@ -1148,36 +1205,41 @@ io.on("connection", (socket) => {
   });
 
 socket.on("room:leave", ({ roomId }) => {
-  handlePlayerExit(socket.id, roomId);
+  handlePlayerExit(socket.id, roomId, false);
 });
-  socket.on("card:play", ({ roomId, cardId, faceDown }) => {
+  socket.on("card:play", ({ roomId, cardId, faceDown, actionId }, ack) => {
     const room = rooms.get(roomId);
     const player = room?.players.find((item) => item.id === socket.id);
 
     if (!room || !player || room.status !== "playing") {
-      socket.emit("room:error", { message: "Partida indisponivel" });
+      failAction(socket, ack, "Partida indisponivel");
+      return;
+    }
+
+    if (wasActionProcessed(room, actionId)) {
+      acknowledgeAction(ack);
       return;
     }
 
     if (room.trucoRequest) {
-      socket.emit("room:error", { message: "Responda o pedido de truco antes de jogar" });
+      failAction(socket, ack, "Responda o pedido de truco antes de jogar");
       return;
     }
 
     if (room.elevenHandDecision && room.elevenHandDecision.playerId === socket.id && !room.elevenHandDecision.isIronHand) {
-      socket.emit("room:error", { message: "Decida se vai jogar a mao de 11" });
+      failAction(socket, ack, "Decida se vai jogar a mao de 11");
       return;
     }
 
     if (room.turnPlayerId !== socket.id) {
-      socket.emit("room:error", { message: "Ainda nao e sua vez" });
+      failAction(socket, ack, "Ainda nao e sua vez");
       return;
     }
 
     const cardIndex = player.hand.findIndex((card) => card.id === cardId);
 
     if (cardIndex < 0) {
-      socket.emit("room:error", { message: "Carta invalida" });
+      failAction(socket, ack, "Carta invalida");
       return;
     }
 
@@ -1186,6 +1248,7 @@ socket.on("room:leave", ({ roomId }) => {
 
     const [card] = player.hand.splice(cardIndex, 1);
     room.table.push({ playerId: player.id, card, faceDown: shouldPlayFaceDown });
+    markActionProcessed(room, actionId);
 
     if (room.table.length === 1) {
       room.turnPlayerId = room.players.find((item) => item.id !== player.id)?.id ?? null;
@@ -1195,6 +1258,7 @@ socket.on("room:leave", ({ roomId }) => {
       room.turnPlayerId = null;
       const handSequence = room.handSequence;
       broadcastState(room);
+      acknowledgeAction(ack);
 
       setTimeout(() => {
         finishTrickIfReady(room, handSequence);
@@ -1205,53 +1269,59 @@ socket.on("room:leave", ({ roomId }) => {
 
     finishTrickIfReady(room);
     broadcastState(room);
+    acknowledgeAction(ack);
   });
 
-  socket.on("truco:raise", ({ roomId }) => {
+  socket.on("truco:raise", ({ roomId, actionId }, ack) => {
     const room = rooms.get(roomId);
     const player = room?.players.find((item) => item.id === socket.id);
 
     if (!room || !player || room.status !== "playing") {
-      socket.emit("room:error", { message: "Partida indisponivel" });
+      failAction(socket, ack, "Partida indisponivel");
+      return;
+    }
+
+    if (wasActionProcessed(room, actionId)) {
+      acknowledgeAction(ack);
       return;
     }
 
     if (room.trucoRequest) {
-      socket.emit("room:error", { message: "Ja existe um pedido de truco pendente" });
+      failAction(socket, ack, "Ja existe um pedido de truco pendente");
       return;
     }
 
     if (room.turnPlayerId !== socket.id) {
-      socket.emit("room:error", { message: "So pode pedir truco na sua vez" });
+      failAction(socket, ack, "So pode pedir truco na sua vez");
       return;
     }
 
     if (!canRoomAskForTruco(room)) {
-      socket.emit("room:error", { message: "Nao pode pedir truco na mao de 11" });
+      failAction(socket, ack, "Nao pode pedir truco na mao de 11");
       return;
     }
 
     if (!canAskForTruco(player)) {
-      socket.emit("room:error", { message: "Quem esta com 11 pontos nao pode pedir truco" });
+      failAction(socket, ack, "Quem esta com 11 pontos nao pode pedir truco");
       return;
     }
 
     if (room.lastTrucoRequesterId === socket.id) {
-      socket.emit("room:error", { message: "Voce deve esperar o oponente aumentar a aposta" });
+      failAction(socket, ack, "Voce deve esperar o oponente aumentar a aposta");
       return;
     }
 
     const raisedValue = nextHandValue(room.handValue);
 
     if (!raisedValue) {
-      socket.emit("room:error", { message: "A mao ja esta valendo 12" });
+      failAction(socket, ack, "A mao ja esta valendo 12");
       return;
     }
 
     const opponent = room.players.find((item) => item.id !== socket.id);
 
     if (!opponent) {
-      socket.emit("room:error", { message: "Sem oponente na mesa" });
+      failAction(socket, ack, "Sem oponente na mesa");
       return;
     }
 
@@ -1268,21 +1338,33 @@ socket.on("room:leave", ({ roomId }) => {
       value: raisedValue
     };
     room.lastTrucoRequesterId = player.id;
+    markActionProcessed(room, actionId);
     broadcastState(room);
+    acknowledgeAction(ack);
   });
 
-  socket.on("truco:respond", ({ roomId, action }) => {
+  socket.on("truco:respond", ({ roomId, action, actionId }, ack) => {
     const room = rooms.get(roomId);
     const player = room?.players.find((item) => item.id === socket.id);
     const request = room?.trucoRequest;
 
-    if (!room || !player || room.status !== "playing" || !request) {
-      socket.emit("room:error", { message: "Nao existe pedido de truco pendente" });
+    if (!room || !player || room.status !== "playing") {
+      failAction(socket, ack, "Partida indisponivel");
+      return;
+    }
+
+    if (wasActionProcessed(room, actionId)) {
+      acknowledgeAction(ack);
+      return;
+    }
+
+    if (!request) {
+      failAction(socket, ack, "Nao existe pedido de truco pendente");
       return;
     }
 
     if (request.responderPlayerId !== socket.id) {
-      socket.emit("room:error", { message: "A resposta e do oponente" });
+      failAction(socket, ack, "A resposta e do oponente");
       return;
     }
 
@@ -1291,6 +1373,7 @@ socket.on("room:leave", ({ roomId }) => {
     if (!requester) {
       room.trucoRequest = undefined;
       broadcastState(room);
+      acknowledgeAction(ack);
       return;
     }
 
@@ -1303,7 +1386,9 @@ socket.on("room:leave", ({ roomId }) => {
       };
       room.handValue = request.requestedValue;
       room.trucoRequest = undefined;
+      markActionProcessed(room, actionId);
       broadcastState(room);
+      acknowledgeAction(ack);
       return;
     }
 
@@ -1317,25 +1402,27 @@ socket.on("room:leave", ({ roomId }) => {
         requestedValue: request.requestedValue
       };
       room.trucoRequest = undefined;
+      markActionProcessed(room, actionId);
       awardHand(room, requester, points);
       broadcastState(room);
+      acknowledgeAction(ack);
       return;
     }
 
     if (!canAskForTruco(player)) {
-      socket.emit("room:error", { message: "Quem esta com 11 pontos nao pode aumentar" });
+      failAction(socket, ack, "Quem esta com 11 pontos nao pode aumentar");
       return;
     }
 
     if (request.requestedByPlayerId === socket.id) {
-      socket.emit("room:error", { message: "Voce nao pode aumentar o proprio pedido" });
+      failAction(socket, ack, "Voce nao pode aumentar o proprio pedido");
       return;
     }
 
     const raisedValue = nextHandValue(request.requestedValue);
 
     if (!raisedValue) {
-      socket.emit("room:error", { message: "A mao ja esta valendo 12" });
+      failAction(socket, ack, "A mao ja esta valendo 12");
       return;
     }
 
@@ -1359,21 +1446,33 @@ socket.on("room:leave", ({ roomId }) => {
       value: raisedValue
     };
     room.lastTrucoRequesterId = player.id;
+    markActionProcessed(room, actionId);
     broadcastState(room);
+    acknowledgeAction(ack);
   });
 
-  socket.on("eleven-hand:respond", ({ roomId, action }) => {
+  socket.on("eleven-hand:respond", ({ roomId, action, actionId }, ack) => {
     const room = rooms.get(roomId);
     const player = room?.players.find((item) => item.id === socket.id);
     const decision = room?.elevenHandDecision;
 
-    if (!room || !player || room.status !== "playing" || !decision) {
-      socket.emit("room:error", { message: "Nao existe decisao de mao de 11 pendente" });
+    if (!room || !player || room.status !== "playing") {
+      failAction(socket, ack, "Partida indisponivel");
+      return;
+    }
+
+    if (wasActionProcessed(room, actionId)) {
+      acknowledgeAction(ack);
+      return;
+    }
+
+    if (!decision) {
+      failAction(socket, ack, "Nao existe decisao de mao de 11 pendente");
       return;
     }
 
     if (decision.playerId !== socket.id) {
-      socket.emit("room:error", { message: "A decisao da mao de 11 e do jogador com 11 pontos" });
+      failAction(socket, ack, "A decisao da mao de 11 e do jogador com 11 pontos");
       return;
     }
 
@@ -1382,35 +1481,46 @@ socket.on("room:leave", ({ roomId }) => {
     if (!opponent) {
       room.elevenHandDecision = undefined;
       broadcastState(room);
+      acknowledgeAction(ack);
       return;
     }
 
     if (action === "run") {
       room.elevenHandDecision = undefined;
+      markActionProcessed(room, actionId);
       awardHand(room, opponent, 1);
       broadcastState(room);
+      acknowledgeAction(ack);
       return;
     }
 
     room.handValue = 3;
     room.elevenHandDecision = undefined;
+    markActionProcessed(room, actionId);
     broadcastState(room);
+    acknowledgeAction(ack);
   });
 
-  socket.on("audio:send", ({ roomId, audio, mimeType }) => {
+  socket.on("audio:send", ({ roomId, audio, mimeType, actionId }, ack) => {
     const room = rooms.get(roomId);
     const player = room?.players.find((item) => item.id === socket.id);
 
     if (!room || !player || room.status !== "playing") {
-      socket.emit("room:error", { message: "Partida indisponivel" });
+      failAction(socket, ack, "Partida indisponivel");
+      return;
+    }
+
+    if (wasActionProcessed(room, actionId)) {
+      acknowledgeAction(ack);
       return;
     }
 
     if (audio.byteLength > 800_000) {
-      socket.emit("room:error", { message: "Audio muito longo" });
+      failAction(socket, ack, "Audio muito longo");
       return;
     }
 
+    markActionProcessed(room, actionId);
     for (const opponent of room.players) {
       if (opponent.id !== socket.id) {
         io.to(opponent.id).emit("audio:message", {
@@ -1421,28 +1531,38 @@ socket.on("room:leave", ({ roomId }) => {
         });
       }
     }
+    persistRoom(room);
+    acknowledgeAction(ack);
   });
 
-  socket.on("meme:play", ({ roomId, memeId }) => {
+  socket.on("meme:play", ({ roomId, memeId, actionId }, ack) => {
     const room = rooms.get(roomId);
     const player = room?.players.find((item) => item.id === socket.id);
     const cleanMemeId = typeof memeId === "string" ? memeId.trim() : "";
 
     if (!room || !player || room.status !== "playing") {
-      socket.emit("room:error", { message: "Partida indisponivel" });
+      failAction(socket, ack, "Partida indisponivel");
+      return;
+    }
+
+    if (wasActionProcessed(room, actionId)) {
+      acknowledgeAction(ack);
       return;
     }
 
     if (!cleanMemeId || cleanMemeId.length > 120 || cleanMemeId.includes("/") || cleanMemeId.includes("\\")) {
-      socket.emit("room:error", { message: "Meme invalido" });
+      failAction(socket, ack, "Meme invalido");
       return;
     }
 
+    markActionProcessed(room, actionId);
     socket.to(room.id).emit("meme:play", {
       playerId: player.id,
       playerName: player.name,
       memeId: cleanMemeId
     });
+    persistRoom(room);
+    acknowledgeAction(ack);
   });
 
   socket.on("disconnect", () => {

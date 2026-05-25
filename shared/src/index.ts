@@ -48,6 +48,15 @@ export type TrucoResponseNotice = {
   requestedValue: 3 | 6 | 9 | 12;
 };
 
+export type ActionAck = {
+  ok: boolean;
+  message?: string;
+};
+
+export type ReliableActionPayload = {
+  actionId?: string;
+};
+
 export type RoomState = {
   roomId: string;
   players: PublicPlayer[];
@@ -77,12 +86,12 @@ export type RoomState = {
 export type ClientToServerEvents = {
   "room:join": (payload: { roomId?: string; name: string; token: string }) => void;
   "room:leave": (payload: { roomId: string }) => void;
-  "card:play": (payload: { roomId: string; cardId: string; faceDown?: boolean }) => void;
-  "truco:raise": (payload: { roomId: string }) => void;
-  "truco:respond": (payload: { roomId: string; action: "accept" | "reject" | "raise" }) => void;
-  "eleven-hand:respond": (payload: { roomId: string; action: "play" | "run" }) => void;
-  "audio:send": (payload: { roomId: string; audio: ArrayBuffer; mimeType: string }) => void;
-  "meme:play": (payload: { roomId: string; memeId: string }) => void;
+  "card:play": (payload: { roomId: string; cardId: string; faceDown?: boolean } & ReliableActionPayload, ack?: (response: ActionAck) => void) => void;
+  "truco:raise": (payload: { roomId: string } & ReliableActionPayload, ack?: (response: ActionAck) => void) => void;
+  "truco:respond": (payload: { roomId: string; action: "accept" | "reject" | "raise" } & ReliableActionPayload, ack?: (response: ActionAck) => void) => void;
+  "eleven-hand:respond": (payload: { roomId: string; action: "play" | "run" } & ReliableActionPayload, ack?: (response: ActionAck) => void) => void;
+  "audio:send": (payload: { roomId: string; audio: ArrayBuffer; mimeType: string } & ReliableActionPayload, ack?: (response: ActionAck) => void) => void;
+  "meme:play": (payload: { roomId: string; memeId: string } & ReliableActionPayload, ack?: (response: ActionAck) => void) => void;
 };
 
 export type ServerToClientEvents = {

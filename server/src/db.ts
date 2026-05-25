@@ -485,6 +485,24 @@ export async function findActiveRoomByPlayerToken(token: string): Promise<Active
   })?.snapshot ?? null;
 }
 
+export async function findActiveRoomById(roomId: string): Promise<ActiveRoomSnapshot | null> {
+  if (!pool) {
+    return null;
+  }
+
+  const result = await pool.query<{ snapshot: ActiveRoomSnapshot }>(
+    `
+      select snapshot
+      from active_rooms
+      where room_id = $1
+      limit 1
+    `,
+    [roomId]
+  );
+
+  return result.rows[0]?.snapshot ?? null;
+}
+
 export async function finishMatch(
   matchId: string | undefined,
   winner: PlayerSnapshot
