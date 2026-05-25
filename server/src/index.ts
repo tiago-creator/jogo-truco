@@ -640,6 +640,28 @@ function logCardPlay(room: Room, player: PlayerState, card: Card, faceDown = fal
   );
 }
 
+function logHandAward(
+  room: Room,
+  winner: PlayerState,
+  points: RoomState["handValue"],
+  previousPoints: number,
+  nextPoints: number,
+  finishedGame: boolean
+): void {
+  const loser = room.players.find((player) => player.id !== winner.id);
+  const loserPoints = loser?.points ?? 0;
+
+  console.info(
+    `[truco:ponto] mesa=${room.id} mao=${room.handSequence} vencedor="${winner.name}" pontosGanhos=${points} placar=${previousPoints}->${nextPoints} oponente=${loserPoints} fimDeJogo=${finishedGame}`
+  );
+}
+
+function logElevenHandCpuDecision(room: Room, cpu: PlayerState, action: "play" | "run"): void {
+  console.info(
+    `[truco:mao11] mesa=${room.id} mao=${room.handSequence} jogador="${cpu.name}" decisao=${action === "play" ? "jogar" : "correr"} vira=${formatCard(room.vira)} cartas=[${cpu.hand.map(formatCard).join(", ")}]`
+  );
+}
+
 function dealHand(room: Room, rotateFootPlayerBeforeDeal = false): void {
   const deck = shuffle(createDeck());
   const footPlayerId = rotateFootPlayerBeforeDeal ? rotateFootPlayer(room) : ensureFootPlayer(room);
@@ -749,6 +771,8 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
     }
     : undefined;
 
+  const winnerPointsBefore = winner.points;
+
   winner.points += points;
   winner.handsWonInGame = (winner.handsWonInGame ?? 0) + 1;
   const finishedGame = winner.points >= 12;
@@ -756,6 +780,8 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
   const loserPointsAfter = loser?.points ?? 0;
   const winnerHandsWon = winner.handsWonInGame;
   const loserHandsWon = loser?.handsWonInGame ?? 0;
+
+  logHandAward(room, winner, points, winnerPointsBefore, winnerPointsAfter, finishedGame);
 
   runDatabaseTask(async () => {
     await recordHandResult({
@@ -1030,14 +1056,47 @@ function scheduleCpuAction(room: Room): void {
       : undefined;
 
     if (room.elevenHandDecision && activeCpuElevenHandPlayer) {
-      room.elevenHandDecision = undefined;
-      room.handValue = 3;
-      broadcastState(room);
+      respondElevenHandAsCpu(room, activeCpuElevenHandPlayer);
       return;
     }
 
     playCardAsCpu(room);
   }, 1200);
+}
+
+function respondElevenHandAsCpu(room: Room, cpu: PlayerState): void {
+  const opponent = room.players.find((player) => player.id !== cpu.id);
+
+  room.elevenHandDecision = undefined;
+
+  if (!opponent) {
+    broadcastState(room);
+    return;
+  }
+
+  if (shouldCpuPlayElevenHand(room, cpu)) {
+    logElevenHandCpuDecision(room, cpu, "play");
+    room.handValue = 3;
+    broadcastState(room);
+    return;
+  }
+
+  logElevenHandCpuDecision(room, cpu, "run");
+  awardHand(room, opponent, 1);
+  broadcastState(room);
+}
+
+function shouldCpuPlayElevenHand(room: Room, cpu: PlayerState): boolean {
+  if (!room.vira || cpu.hand.length === 0) {
+    return false;
+  }
+
+  const handStrength = cpu.hand.reduce((total, card) => total + getCardStrength(room, card), 0);
+  const manilhaRankIndex = (ranks.indexOf(room.vira.rank) + 1) % ranks.length;
+  const manilhaCount = cpu.hand.filter((card) => ranks.indexOf(card.rank) === manilhaRankIndex).length;
+  const highCardCount = cpu.hand.filter((card) => ["3", "2", "A"].includes(card.rank)).length;
+
+  return manilhaCount > 0 || highCardCount >= 2 || handStrength >= 21;
 }
 
 function respondTrucoAsCpu(room: Room): void {

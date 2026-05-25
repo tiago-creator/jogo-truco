@@ -971,7 +971,12 @@ exitButtonHitZone.on("pointerup", () => {
       const audioContext = "context" in soundManager ? soundManager.context : null;
 
       if (audioContext?.state === "suspended") {
-        void audioContext.resume().catch(() => undefined);
+        void audioContext.resume()
+          .then(() => {
+            this.sound.play(key, { volume });
+          })
+          .catch(() => undefined);
+        return;
       }
 
       this.sound.play(key, { volume });
