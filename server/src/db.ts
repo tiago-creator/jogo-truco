@@ -52,7 +52,7 @@ export type RankingPlayer = {
 export type ActiveRoomSnapshot = {
   id: string;
   status?: string;
-  players?: Array<{ token?: string; isCpu?: boolean }>;
+  players?: Array<{ token?: string; cpuToken?: string; isCpu?: boolean }>;
 };
 
 const connectionString = process.env.DATABASE_URL;
@@ -478,7 +478,7 @@ export async function findActiveRoomByPlayerToken(token: string): Promise<Active
 
   return result.rows.find((row) => {
     const players = row.snapshot.players ?? [];
-    const hasPlayer = players.some((player) => player.token === token);
+    const hasPlayer = players.some((player) => player.token === token || player.cpuToken === token);
     const hasHuman = players.some((player) => player.isCpu !== true);
 
     return row.snapshot.status === "playing" && hasHuman && hasPlayer;

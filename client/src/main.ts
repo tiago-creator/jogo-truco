@@ -723,12 +723,17 @@ exitButtonHitZone.on("pointerup", () => {
       const gameWinnerKey = state.lastGameWinnerId
         ? `${state.lastGameWinnerId}:${state.lastGameWinnerSequence ?? 0}:${state.lastGameWinnerName ?? ""}`
         : null;
+      const previousGameWinnerKey = previousState?.lastGameWinnerId
+        ? `${previousState.lastGameWinnerId}:${previousState.lastGameWinnerSequence ?? 0}:${previousState.lastGameWinnerName ?? ""}`
+        : null;
 
       if (!gameWinnerKey) {
         this.lastCelebratedGameWinnerKey = null;
       } else if (suppressStateEffects) {
         this.lastCelebratedGameWinnerKey = gameWinnerKey;
       } else if (
+        previousState &&
+        previousGameWinnerKey !== gameWinnerKey &&
         state.lastGameWinnerId === state.self?.id &&
         this.lastCelebratedGameWinnerKey !== gameWinnerKey
       ) {

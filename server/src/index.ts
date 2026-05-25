@@ -318,7 +318,7 @@ function createAutoRoom(): Room {
 
 function findRoomByPlayerToken(token: string): Room | undefined {
   for (const room of rooms.values()) {
-    if (room.players.some((player) => player.token === token)) {
+    if (room.players.some((player) => player.token === token || player.cpuToken === token)) {
       return room;
     }
   }
@@ -335,7 +335,7 @@ function hasConnectedHumanOpponent(room: Room, playerToken: string): boolean {
 }
 
 function shouldRejoinMemoryRoom(room: Room, token: string): boolean {
-  const player = room.players.find((item) => item.token === token);
+  const player = room.players.find((item) => item.token === token || item.cpuToken === token);
 
   if (!player) {
     return false;
@@ -953,10 +953,8 @@ function makePlayerCpu(room: Room, player: PlayerState, preserveReconnectSeat = 
   const previousToken = player.token;
 
   player.isCpu = true;
-  player.cpuToken = `cpu:${room.id}:${previousToken}`;
-  if (!preserveReconnectSeat) {
-    player.token = player.cpuToken;
-  }
+  player.cpuToken = preserveReconnectSeat ? previousToken : undefined;
+  player.token = `cpu:${room.id}:${previousToken}`;
   player.name = "CPU";
   player.avatarUrl = undefined;
 }
@@ -1239,7 +1237,7 @@ io.on("connection", (socket) => {
     const existing = room.players.find((player) => player.token === token);
 
     const cpuSeat = !existing && room.players.length >= 2
-      ? room.players.find((player) => player.isCpu && player.token === token)
+      ? room.players.find((player) => player.isCpu && player.cpuToken === token)
       : undefined;
 
     if (!existing && room.players.length >= 2 && !cpuSeat) {
