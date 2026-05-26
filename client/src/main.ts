@@ -2757,7 +2757,7 @@ exitButtonHitZone.on("pointerup", () => {
 
       panel.fillStyle(0x020403, alpha);
       panel.fillRoundedRect(x - width / 2, y - height / 2, width, height, 18 * this.uiScale);
-      panel.lineStyle(1.9 * this.uiScale, 0xffcf5a, 0.42);
+      panel.lineStyle(3.4 * this.uiScale, 0xffcf5a, 0.42);
       panel.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 18 * this.uiScale);
       this.scoreboardGroup.add(panel);
     };
