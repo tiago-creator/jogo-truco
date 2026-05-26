@@ -3,13 +3,17 @@ import { io, type Socket } from "socket.io-client";
 import type { ActionAck, Card, ClientToServerEvents, RoomState, ServerToClientEvents } from "@truco/shared";
 import "./styles.css";
 import opponentAvatarUrl from "./img/avatar/user-secret.svg";
-import cardBackUrl from "./img/cartas/ivory-emerald.svg";
+import crimsonGoldCardBackUrl from "./img/cartas/crimson-gold.svg";
+import ivoryEmeraldCardBackUrl from "./img/cartas/ivory-emerald.svg";
+import midnightPurpleCardBackUrl from "./img/cartas/midnight-purple.svg";
+import royalBlueCardBackUrl from "./img/cartas/royal-blue.svg";
 import arrowUpActionIconUrl from "./img/icons/arrow-up-action.svg";
 import checkActionIconUrl from "./img/icons/check-action.svg";
 import chevronUpHintIconUrl from "./img/icons/chevron-up-hint.svg";
 import runningPlayerIconUrl from "./img/icons/running-player.svg";
 import feltBurgundyUrl from "./img/table-backgrounds/felt-burgundy.png";
 import feltCharcoalUrl from "./img/table-backgrounds/felt-charcoal.png";
+import feltDefaultUrl from "./img/table-backgrounds/felt-default.png";
 import feltEmeraldUrl from "./img/table-backgrounds/felt-emerald.png";
 import feltNavyUrl from "./img/table-backgrounds/felt-navy.png";
 import feltTealUrl from "./img/table-backgrounds/felt-teal.png";
@@ -112,22 +116,36 @@ const opponentAvatarMaskRadius = 57;
 
 const serverUrl = import.meta.env.VITE_SERVER_URL ?? "https://app-truco-9ddcf4b48235.herokuapp.com";
 const tableBackgrounds = {
+  "felt-default": { label: "Default", url: feltDefaultUrl },
   "felt-teal": { label: "Teal", url: feltTealUrl },
   "felt-emerald": { label: "Emerald", url: feltEmeraldUrl },
   "felt-navy": { label: "Navy", url: feltNavyUrl },
   "felt-burgundy": { label: "Burgundy", url: feltBurgundyUrl },
   "felt-charcoal": { label: "Charcoal", url: feltCharcoalUrl }
 } as const;
-const defaultTableBackground = "felt-teal";
+const defaultTableBackground = "felt-default";
+const cardBacks = {
+  "ivory-emerald": { label: "Ivory", url: ivoryEmeraldCardBackUrl },
+  "crimson-gold": { label: "Crimson", url: crimsonGoldCardBackUrl },
+  "royal-blue": { label: "Royal", url: royalBlueCardBackUrl },
+  "midnight-purple": { label: "Midnight", url: midnightPurpleCardBackUrl }
+} as const;
+const defaultCardBack = "ivory-emerald";
 const tableBackgroundStorageKey = "truco-table-background";
+const cardBackStorageKey = "truco-card-back";
 const profileStorageKey = "truco-player-profile";
 const sessionProfileStorageKey = "truco-session-profile";
 const playerTokenStorageKey = "truco-player-token";
 
 type TableBackgroundId = keyof typeof tableBackgrounds;
+type CardBackId = keyof typeof cardBacks;
 
 function isTableBackgroundId(value: string | null): value is TableBackgroundId {
   return Boolean(value && value in tableBackgrounds);
+}
+
+function isCardBackId(value: string | null): value is CardBackId {
+  return Boolean(value && value in cardBacks);
 }
 
 function getSelectedTableBackground(): TableBackgroundId {
@@ -147,6 +165,28 @@ function getSelectedTableBackground(): TableBackgroundId {
 function saveSelectedTableBackground(backgroundId: TableBackgroundId): void {
   try {
     localStorage.setItem(tableBackgroundStorageKey, backgroundId);
+  } catch {
+    // The current session still uses the selected value through the DOM state.
+  }
+}
+
+function getSelectedCardBack(): CardBackId {
+  try {
+    const storedCardBack = localStorage.getItem(cardBackStorageKey);
+
+    if (isCardBackId(storedCardBack)) {
+      return storedCardBack;
+    }
+  } catch {
+    // localStorage can be blocked on some mobile browsers.
+  }
+
+  return defaultCardBack;
+}
+
+function saveSelectedCardBack(cardBackId: CardBackId): void {
+  try {
+    localStorage.setItem(cardBackStorageKey, cardBackId);
   } catch {
     // The current session still uses the selected value through the DOM state.
   }
@@ -504,7 +544,9 @@ class TableScene extends Phaser.Scene {
       this.load.image(backgroundId, background.url);
     }
 
-    this.load.image("card-back", cardBackUrl);
+    for (const [cardBackId, cardBack] of Object.entries(cardBacks)) {
+      this.load.image(cardBackId, cardBack.url);
+    }
     this.load.image("opponent-avatar", opponentAvatarUrl);
     this.load.image("arrow-up-action-icon", arrowUpActionIconUrl);
     this.load.image("check-action-icon", checkActionIconUrl);
@@ -3598,7 +3640,7 @@ this.exitButton.setPosition(
     const width = 80;
     const height = 118;
     const shadow = this.add.graphics();
-    const back = this.add.image(0, 0, "card-back").setDisplaySize(width, height);
+    const back = this.add.image(0, 0, currentCardBack).setDisplaySize(width, height);
 
     shadow.fillStyle(0x06130f, 0.34);
     shadow.fillRoundedRect(-width / 2 + 4, -height / 2 + 6, width, height, 10);
@@ -3621,7 +3663,7 @@ this.exitButton.setPosition(
     shadow.fillRoundedRect(-width / 2 + 4, -height / 2 + 6, width, height, radius);
 
     if (faceDown) {
-      const back = this.add.image(0, 0, "card-back").setDisplaySize(width, height);
+      const back = this.add.image(0, 0, currentCardBack).setDisplaySize(width, height);
 
       container.add([shadow, back]);
     } else {
@@ -3790,10 +3832,17 @@ this.exitButton.setPosition(
   private suitColor(suit: Card["suit"]): string {
     return suit === "hearts" || suit === "diamonds" ? "#b92727" : "#161616";
   }
+
+  refreshCardBackSelection(): void {
+    if (this.roomState) {
+      this.renderState();
+    }
+  }
 }
 
 let game: Phaser.Game | null = null;
 let currentTableBackground = getSelectedTableBackground();
+let currentCardBack = getSelectedCardBack();
 let resizeGameCanvas: (() => void) | null = null;
 
 function getGameResolution(): number {
@@ -3915,6 +3964,25 @@ function renderBackgroundOptions(): void {
     }
 
     button.classList.toggle("is-selected", backgroundId === currentTableBackground);
+  });
+}
+
+function renderCardBackOptions(): void {
+  document.querySelectorAll<HTMLButtonElement>(".card-back-option").forEach((button) => {
+    const rawCardBackId = button.dataset.cardBack ?? null;
+
+    if (!isCardBackId(rawCardBackId)) {
+      return;
+    }
+
+    const cardBackId = rawCardBackId;
+    const preview = button.querySelector<HTMLElement>(".card-back-preview");
+
+    if (preview) {
+      preview.style.backgroundImage = `url("${cardBacks[cardBackId].url}")`;
+    }
+
+    button.classList.toggle("is-selected", cardBackId === currentCardBack);
   });
 }
 
@@ -4264,7 +4332,23 @@ document.querySelectorAll<HTMLButtonElement>(".background-option").forEach((butt
     renderBackgroundOptions();
   });
 });
+document.querySelectorAll<HTMLButtonElement>(".card-back-option").forEach((button) => {
+  button.addEventListener("click", () => {
+    const rawCardBackId = button.dataset.cardBack ?? null;
+
+    if (!isCardBackId(rawCardBackId)) {
+      return;
+    }
+
+    const cardBackId = rawCardBackId;
+    currentCardBack = cardBackId;
+    saveSelectedCardBack(cardBackId);
+    renderCardBackOptions();
+    (game?.scene.getScene("table") as TableScene | undefined)?.refreshCardBackSelection();
+  });
+});
 renderBackgroundOptions();
+renderCardBackOptions();
 if (currentPlayerProfile) {
   showHomeMenu();
 } else {

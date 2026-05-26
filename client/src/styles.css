@@ -41,7 +41,6 @@ canvas {
 .home-screen,
 .login-screen,
 .waiting-screen,
-.settings-screen,
 .rank-screen,
 .profile-screen {
   position: fixed;
@@ -51,6 +50,21 @@ canvas {
   place-items: center;
   padding: 24px;
   overflow: hidden;
+  background:
+    radial-gradient(circle at 18% 16%, rgba(255, 207, 90, 0.18), transparent 30%),
+    radial-gradient(circle at 82% 78%, rgba(248, 241, 217, 0.12), transparent 28%),
+    linear-gradient(145deg, #0c2b21 0%, #12372a 54%, #071b15 100%);
+  color: #f8f1d9;
+}
+
+.settings-screen {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: block;
+  padding: 24px;
+  overflow-y: auto;
+  overflow-x: hidden;
   background:
     radial-gradient(circle at 18% 16%, rgba(255, 207, 90, 0.18), transparent 30%),
     radial-gradient(circle at 82% 78%, rgba(248, 241, 217, 0.12), transparent 28%),
@@ -89,6 +103,11 @@ canvas {
   position: relative;
   width: min(100%, 440px);
   text-align: center;
+}
+
+.settings-content {
+  margin: 0 auto;
+  padding-block: 16px 28px;
 }
 
 .home-badge {
@@ -330,6 +349,20 @@ canvas {
   background-color: #12372a;
   background-position: center;
   background-size: cover;
+}
+
+.card-back-options {
+  margin-bottom: 24px;
+}
+
+.card-back-preview {
+  width: 54px;
+  aspect-ratio: 80 / 118;
+  margin: 0 auto 8px;
+  border-radius: 6px;
+  background-color: transparent;
+  background-size: contain;
+  background-repeat: no-repeat;
 }
 
 .waiting-content h2 {
