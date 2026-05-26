@@ -19,6 +19,7 @@ import dealingCardsAudioUrl from "./audio/distribuindo-cartas-na-mesa.mp3";
 import shufflingCardsAudioUrl from "./audio/embaralhar-carta.mp3";
 import flipCardAudioUrl from "./audio/flip-carta.mp3";
 import removingCardAudioUrl from "./audio/tirando-carta-da-mesa.mp3";
+import trucoAlertAudioUrl from "./audio/alerta-truco.mp3";
 import meme67Url from "./audio/memes/67.mp3";
 import memeKikoUrl from "./audio/memes/a-risada-do-kiko.mp3";
 import memeAiPaiUrl from "./audio/memes/ai-pai-para-hihi.mp3";
@@ -514,6 +515,7 @@ class TableScene extends Phaser.Scene {
     this.load.audio("cards-shuffle", shufflingCardsAudioUrl);
     this.load.audio("card-flip", flipCardAudioUrl);
     this.load.audio("card-remove", removingCardAudioUrl);
+    this.load.audio("truco-alert", trucoAlertAudioUrl);
     for (const meme of memeAudios) {
       this.load.audio(meme.key, meme.url);
     }
@@ -584,6 +586,7 @@ class TableScene extends Phaser.Scene {
           9: "DOZE",
           12: "DOZE"
         }[state.handValue] ?? "TRUCO";
+        this.playGameSound("truco-alert", 0.82);
         this.playTrucoRaiseAnimation(state.self?.name ?? "Jogador",
           value);
 
@@ -771,6 +774,7 @@ exitButtonHitZone.on("pointerup", () => {
       ) {
         this.lastAnimatedTrucoValue = state.lastTrucoRaise.value;
 
+        this.playGameSound("truco-alert", 0.82);
         this.playTrucoRaiseAnimation(
           state.lastTrucoRaise.playerName,
           {
@@ -2568,7 +2572,6 @@ this.exitButton.setPosition(
           return;
         }
 
-        this.playGameSound("cards-deal", 0.72);
         this.animateViraAfterShuffleIfNeeded(expectedHandSequence, () => {
           this.animateDealtCards(cardsToAnimate);
         });
@@ -2630,6 +2633,11 @@ this.exitButton.setPosition(
         duration: 460,
         delay: index * 90,
         ease: "Cubic.Out",
+        onStart: () => {
+          if (index === 0) {
+            this.playGameSound("cards-deal", 0.72);
+          }
+        },
         onComplete: () => {
           if (item.owner === "self" && !this.roomState?.isIronHand) {
             this.revealDealtCard(animatedCard, item.card, target);
@@ -3249,7 +3257,6 @@ this.exitButton.setPosition(
               y: targetY,
               scale: this.deckCardScale * this.uiScale,
               rotation: Phaser.Math.DegToRad(7),
-              alpha: 0.18,
               duration: 620,
               ease: "Cubic.easeIn",
               onComplete: () => {
