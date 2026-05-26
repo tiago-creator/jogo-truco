@@ -1,13 +1,100 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="750" height="1050" viewBox="0 0 750 1050">
+
   <defs>
-    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff1b8"/><stop offset=".45" stop-color="#b89145"/><stop offset="1" stop-color="#5b3b13"/></linearGradient>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#06101e"/><stop offset=".5" stop-color="#123e73"/><stop offset="1" stop-color="#020713"/></linearGradient>
-    <radialGradient id="glow" cx="50%" cy="45%" r="62%"><stop stop-color="#4fa6ff" stop-opacity=".34"/><stop offset=".52" stop-color="#0b2a52" stop-opacity=".24"/><stop offset="1" stop-color="#000" stop-opacity=".5"/></radialGradient>
-    <pattern id="dots" width="38" height="38" patternUnits="userSpaceOnUse"><circle cx="8" cy="9" r="1.4" fill="#fff" opacity=".05"/><circle cx="28" cy="25" r="1.2" fill="#f7d17a" opacity=".08"/></pattern>
-    <g id="corner"><path d="M0 0h140M0 0v140" fill="none" stroke="#d7a94c" stroke-width="6" stroke-linecap="round"/><path d="M26 26h88M26 26v88" fill="none" stroke="#fff1b8" stroke-width="2.5" stroke-linecap="round"/><path d="M90 26c0 28 20 48 48 48" fill="none" stroke="#d7a94c" stroke-width="4" stroke-linecap="round"/><circle cx="26" cy="26" r="7" fill="#fff1b8"/></g>
+
+    <!-- GOLD -->
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fff4b0"></stop>
+      <stop offset=".45" stop-color="#e1b93f"></stop>
+      <stop offset="1" stop-color="#7b4a09"></stop>
+    </linearGradient>
+
+    <!-- ROYAL BLUE -->
+    <linearGradient id="royal" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#03164d"></stop>
+      <stop offset=".5" stop-color="#0b36c9"></stop>
+      <stop offset="1" stop-color="#02081f"></stop>
+    </linearGradient>
+
+    <!-- LIGHT -->
+    <radialGradient id="light" cx="50%" cy="40%" r="70%">
+      <stop stop-color="#6ea2ff" stop-opacity=".22"></stop>
+      <stop offset=".7" stop-color="#000" stop-opacity=".05"></stop>
+      <stop offset="1" stop-color="#000" stop-opacity=".45"></stop>
+    </radialGradient>
+
+    <!-- TEXTURE -->
+    <pattern id="pattern" width="42" height="42" patternUnits="userSpaceOnUse">
+      <path d="M21 7L27 18L21 29L15 18Z" fill="none" stroke="#bcd0ff" stroke-width="1.3" opacity=".08"></path>
+    </pattern>
+
   </defs>
-  <rect width="750" height="1050" rx="58" fill="#05070c"/><rect x="18" y="18" width="714" height="1014" rx="52" fill="url(#edge)"/><rect x="32" y="32" width="686" height="986" rx="44" fill="#05070c"/><rect x="50" y="50" width="650" height="950" rx="36" fill="url(#bg)"/><rect x="50" y="50" width="650" height="950" rx="36" fill="url(#dots)"/><rect x="50" y="50" width="650" height="950" rx="36" fill="url(#glow)"/>
-  <rect x="82" y="82" width="586" height="886" rx="27" fill="none" stroke="#d7a94c" stroke-width="7"/><rect x="106" y="106" width="538" height="838" rx="20" fill="none" stroke="#fff1b8" stroke-opacity=".75" stroke-width="2.5"/><rect x="132" y="132" width="486" height="786" rx="17" fill="none" stroke="#d7a94c" stroke-opacity=".35" stroke-width="2" stroke-dasharray="15 14"/>
-  <use href="#corner" x="110" y="110"/><use href="#corner" x="640" y="110" transform="rotate(90 640 110)"/><use href="#corner" x="640" y="940" transform="rotate(180 640 940)"/><use href="#corner" x="110" y="940" transform="rotate(270 110 940)"/>
-  <g transform="translate(375 525)" fill="none"><circle r="190" stroke="#d7a94c" stroke-width="5" opacity=".82"/><circle r="150" stroke="#fff1b8" stroke-width="2.5" opacity=".42"/><path d="M0-180 42-42 180 0 42 42 0 180-42 42-180 0-42-42Z" fill="#071629" stroke="#d7a94c" stroke-width="7"/><path d="M0-92 92 0 0 92-92 0Z" fill="#123e73" stroke="#fff1b8" stroke-width="3"/><path d="M0-42 42 0 0 42-42 0Z" fill="#d7a94c"/></g>
+
+  <!-- BASE -->
+  <rect width="750" height="1050" rx="60" fill="#020202"></rect>
+
+  <!-- OUTER GOLD -->
+  <rect x="16" y="16" width="718" height="1018" rx="54" fill="url(#gold)"></rect>
+
+  <!-- DARK FRAME -->
+  <rect x="40" y="40" width="670" height="970" rx="44" fill="#03040c"></rect>
+
+  <!-- MAIN BLUE -->
+  <rect x="60" y="60" width="630" height="930" rx="36" fill="url(#royal)"></rect>
+
+  <!-- PATTERN -->
+  <rect x="60" y="60" width="630" height="930" rx="36" fill="url(#pattern)"></rect>
+
+  <!-- LIGHT -->
+  <rect x="60" y="60" width="630" height="930" rx="36" fill="url(#light)"></rect>
+
+  <!-- THICK BORDERS -->
+  <rect x="86" y="86" width="578" height="878" rx="28" fill="none" stroke="url(#gold)" stroke-width="14"></rect>
+
+  <rect x="112" y="112" width="526" height="826" rx="22" fill="none" stroke="#fff2b6" stroke-width="4" opacity=".9"></rect>
+
+  <!-- CORNERS -->
+  <g stroke="url(#gold)" stroke-linecap="round" fill="none">
+
+    <!-- TL -->
+    <path d="M126 126h110" stroke-width="14"></path>
+    <path d="M126 126v110" stroke-width="14"></path>
+    <circle cx="126" cy="126" r="16" fill="#f3c13a" stroke="none"></circle>
+
+    <!-- TR -->
+    <path d="M624 126h-110" stroke-width="14"></path>
+    <path d="M624 126v110" stroke-width="14"></path>
+    <circle cx="624" cy="126" r="16" fill="#f3c13a" stroke="none"></circle>
+
+    <!-- BL -->
+    <path d="M126 924h110" stroke-width="14"></path>
+    <path d="M126 924v-110" stroke-width="14"></path>
+    <circle cx="126" cy="924" r="16" fill="#f3c13a" stroke="none"></circle>
+
+    <!-- BR -->
+    <path d="M624 924h-110" stroke-width="14"></path>
+    <path d="M624 924v-110" stroke-width="14"></path>
+    <circle cx="624" cy="924" r="16" fill="#f3c13a" stroke="none"></circle>
+
+  </g>
+
+  <!-- CENTER SYMBOL -->
+  <g transform="translate(375 525)">
+
+    <!-- OUTER -->
+    <circle r="240" fill="#020d3f" opacity=".95" stroke="url(#gold)" stroke-width="18"></circle>
+
+    <!-- DIAMOND -->
+    <path d="M0-175L175 0L0 175L-175 0Z" fill="#1148ff" stroke="url(#gold)" stroke-width="18" stroke-linejoin="round"></path>
+
+    <!-- INNER HIGHLIGHT -->
+    <path d="M0-145L145 0L0 145L-145 0Z" fill="none" stroke="#dbe5ff" stroke-width="4" opacity=".55"></path>
+
+    <!-- CENTER COIN -->
+    <circle r="72" fill="url(#gold)" stroke="#fff2b6" stroke-width="4"></circle>
+
+    <circle r="58" fill="#efbe34" opacity=".55"></circle>
+
+  </g>
+
 </svg>

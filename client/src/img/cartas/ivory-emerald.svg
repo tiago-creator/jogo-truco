@@ -1,13 +1,101 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="750" height="1050" viewBox="0 0 750 1050">
+
   <defs>
-    <linearGradient id="edge" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff8df"/><stop offset=".45" stop-color="#d7a94c"/><stop offset="1" stop-color="#6b4718"/></linearGradient>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#fff6df"/><stop offset=".5" stop-color="#f4e4bd"/><stop offset="1" stop-color="#d8c28d"/></linearGradient>
-    <radialGradient id="glow" cx="50%" cy="45%" r="62%"><stop stop-color="#ffffff" stop-opacity=".42"/><stop offset=".6" stop-color="#0b3d2e" stop-opacity=".08"/><stop offset="1" stop-color="#000" stop-opacity=".16"/></radialGradient>
-    <pattern id="dots" width="38" height="38" patternUnits="userSpaceOnUse"><circle cx="10" cy="10" r="1.3" fill="#0b3d2e" opacity=".08"/><circle cx="27" cy="25" r="1" fill="#7a541f" opacity=".1"/></pattern>
-    <g id="corner"><path d="M0 0h140M0 0v140" fill="none" stroke="#0b3d2e" stroke-width="6" stroke-linecap="round"/><path d="M26 26h88M26 26v88" fill="none" stroke="#d7a94c" stroke-width="2.5" stroke-linecap="round"/><circle cx="26" cy="26" r="7" fill="#d7a94c"/></g>
+
+    <!-- IVORY -->
+    <linearGradient id="ivory" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fffdf4"></stop>
+      <stop offset=".45" stop-color="#efe2bb"></stop>
+      <stop offset="1" stop-color="#cdbb8b"></stop>
+    </linearGradient>
+
+    <!-- EMERALD -->
+    <linearGradient id="emerald" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#021b14"></stop>
+      <stop offset=".45" stop-color="#00885f"></stop>
+      <stop offset=".75" stop-color="#00583f"></stop>
+      <stop offset="1" stop-color="#010c09"></stop>
+    </linearGradient>
+
+    <!-- LIGHT -->
+    <radialGradient id="light" cx="50%" cy="40%" r="70%">
+      <stop stop-color="#8fffd1" stop-opacity=".18"></stop>
+      <stop offset=".7" stop-color="#000" stop-opacity=".04"></stop>
+      <stop offset="1" stop-color="#000" stop-opacity=".42"></stop>
+    </radialGradient>
+
+    <!-- TEXTURE -->
+    <pattern id="pattern" width="46" height="46" patternUnits="userSpaceOnUse">
+      <path d="M23 8L30 23L23 38L16 23Z" fill="none" stroke="#e8fff5" stroke-width="1.3" opacity=".06"></path>
+    </pattern>
+
   </defs>
-  <rect width="750" height="1050" rx="58" fill="#efe1b8"/><rect x="18" y="18" width="714" height="1014" rx="52" fill="url(#edge)"/><rect x="32" y="32" width="686" height="986" rx="44" fill="#0b3d2e"/><rect x="50" y="50" width="650" height="950" rx="36" fill="url(#bg)"/><rect x="50" y="50" width="650" height="950" rx="36" fill="url(#dots)"/><rect x="50" y="50" width="650" height="950" rx="36" fill="url(#glow)"/>
-  <rect x="82" y="82" width="586" height="886" rx="27" fill="none" stroke="#0b3d2e" stroke-width="7"/><rect x="106" y="106" width="538" height="838" rx="20" fill="none" stroke="#d7a94c" stroke-opacity=".8" stroke-width="2.5"/><rect x="132" y="132" width="486" height="786" rx="17" fill="none" stroke="#0b3d2e" stroke-opacity=".25" stroke-width="2" stroke-dasharray="15 14"/>
-  <use href="#corner" x="110" y="110"/><use href="#corner" x="640" y="110" transform="rotate(90 640 110)"/><use href="#corner" x="640" y="940" transform="rotate(180 640 940)"/><use href="#corner" x="110" y="940" transform="rotate(270 110 940)"/>
-  <g transform="translate(375 525)"><circle r="190" fill="#0b3d2e" opacity=".12"/><circle r="176" fill="none" stroke="#0b3d2e" stroke-width="5"/><path d="M0-178 38-38 178 0 38 38 0 178-38 38-178 0-38-38Z" fill="#f9edd0" stroke="#0b3d2e" stroke-width="7"/><path d="M0-95 95 0 0 95-95 0Z" fill="#0b3d2e"/><path d="M0-47 47 0 0 47-47 0Z" fill="#d7a94c"/><circle r="18" fill="#fff8df"/></g>
+
+  <!-- BASE -->
+  <rect width="750" height="1050" rx="60" fill="#f4efe2"></rect>
+
+  <!-- OUTER IVORY -->
+  <rect x="16" y="16" width="718" height="1018" rx="54" fill="url(#ivory)"></rect>
+
+  <!-- DARK FRAME -->
+  <rect x="40" y="40" width="670" height="970" rx="44" fill="#102018"></rect>
+
+  <!-- MAIN EMERALD -->
+  <rect x="60" y="60" width="630" height="930" rx="36" fill="url(#emerald)"></rect>
+
+  <!-- PATTERN -->
+  <rect x="60" y="60" width="630" height="930" rx="36" fill="url(#pattern)"></rect>
+
+  <!-- LIGHT -->
+  <rect x="60" y="60" width="630" height="930" rx="36" fill="url(#light)"></rect>
+
+  <!-- MAIN BORDERS -->
+  <rect x="86" y="86" width="578" height="878" rx="28" fill="none" stroke="url(#ivory)" stroke-width="14"></rect>
+
+  <rect x="112" y="112" width="526" height="826" rx="22" fill="none" stroke="#ffffff" stroke-width="4" opacity=".72"></rect>
+
+  <!-- CORNERS -->
+  <g stroke="url(#ivory)" stroke-linecap="round" fill="none">
+
+    <!-- TL -->
+    <path d="M126 126h110" stroke-width="14"></path>
+    <path d="M126 126v110" stroke-width="14"></path>
+    <circle cx="126" cy="126" r="16" fill="#f4e7c2" stroke="none"></circle>
+
+    <!-- TR -->
+    <path d="M624 126h-110" stroke-width="14"></path>
+    <path d="M624 126v110" stroke-width="14"></path>
+    <circle cx="624" cy="126" r="16" fill="#f4e7c2" stroke="none"></circle>
+
+    <!-- BL -->
+    <path d="M126 924h110" stroke-width="14"></path>
+    <path d="M126 924v-110" stroke-width="14"></path>
+    <circle cx="126" cy="924" r="16" fill="#f4e7c2" stroke="none"></circle>
+
+    <!-- BR -->
+    <path d="M624 924h-110" stroke-width="14"></path>
+    <path d="M624 924v-110" stroke-width="14"></path>
+    <circle cx="624" cy="924" r="16" fill="#f4e7c2" stroke="none"></circle>
+
+  </g>
+
+  <!-- CENTER SYMBOL -->
+  <g transform="translate(375 525)">
+
+    <!-- OUTER -->
+    <circle r="240" fill="#03241a" opacity=".94" stroke="url(#ivory)" stroke-width="18"></circle>
+
+    <!-- DIAMOND -->
+    <path d="M0-175L175 0L0 175L-175 0Z" fill="#00a874" stroke="url(#ivory)" stroke-width="18" stroke-linejoin="round"></path>
+
+    <!-- INNER HIGHLIGHT -->
+    <path d="M0-145L145 0L0 145L-145 0Z" fill="none" stroke="#f7fff9" stroke-width="4" opacity=".45"></path>
+
+    <!-- CENTER COIN -->
+    <circle r="72" fill="url(#ivory)" stroke="#ffffff" stroke-width="4"></circle>
+
+    <circle r="58" fill="#efe2bb" opacity=".55"></circle>
+
+  </g>
+
 </svg>

@@ -4,6 +4,8 @@ import type { ActionAck, Card, ClientToServerEvents, RoomState, ServerToClientEv
 import "./styles.css";
 import opponentAvatarUrl from "./img/avatar/user-secret.svg";
 import crimsonGoldCardBackUrl from "./img/cartas/crimson-gold.svg";
+import blackCardBackUrl from "./img/cartas/black.svg";
+import grayCardBackUrl from "./img/cartas/gray.svg";
 import ivoryEmeraldCardBackUrl from "./img/cartas/ivory-emerald.svg";
 import midnightPurpleCardBackUrl from "./img/cartas/midnight-purple.svg";
 import royalBlueCardBackUrl from "./img/cartas/royal-blue.svg";
@@ -128,7 +130,9 @@ const cardBacks = {
   "ivory-emerald": { label: "Ivory", url: ivoryEmeraldCardBackUrl },
   "crimson-gold": { label: "Crimson", url: crimsonGoldCardBackUrl },
   "royal-blue": { label: "Royal", url: royalBlueCardBackUrl },
-  "midnight-purple": { label: "Midnight", url: midnightPurpleCardBackUrl }
+  "midnight-purple": { label: "Midnight", url: midnightPurpleCardBackUrl },
+  "black": { label: "Black", url: blackCardBackUrl },
+  "gray": { label: "Gray", url: grayCardBackUrl }
 } as const;
 const defaultCardBack = "ivory-emerald";
 const tableBackgroundStorageKey = "truco-table-background";
@@ -1949,7 +1953,7 @@ this.exitButton.setPosition(
     const opponent = this.roomState.players.find((player) => player.id !== self?.id);
     const isMyTurn = this.roomState.turnPlayerId === self?.id;
 
-    this.opponentNameText.setText(opponent?.name ?? "Oponente");
+    this.opponentNameText.setText((opponent?.name ?? "Oponente").toUpperCase());
     this.updateOpponentAvatar(opponent);
     this.renderFootMarkers();
 
@@ -2048,12 +2052,25 @@ this.exitButton.setPosition(
     const y = boundsY - paddingY;
     const width = boundsRight - boundsX + paddingX * 2;
     const height = boundsBottom - boundsY + paddingY * 2;
+    const radius = 9 * this.uiScale;
 
     this.statusBg.clear();
-    this.statusBg.fillStyle(0x000000, 0.68);
-    this.statusBg.fillRoundedRect(x, y, width, height, 9 * this.uiScale);
-    this.statusBg.lineStyle(1.5 * this.uiScale, 0xffcf5a, 0.42);
-    this.statusBg.strokeRoundedRect(x, y, width, height, 9 * this.uiScale);
+    this.statusBg.fillStyle(0x000000, 0.34);
+    this.statusBg.fillRoundedRect(x + 2 * this.uiScale, y + 3 * this.uiScale, width, height, radius);
+    this.statusBg.fillStyle(0x020403, 0.86);
+    this.statusBg.fillRoundedRect(x, y, width, height, radius);
+    this.statusBg.lineStyle(1.2 * this.uiScale, 0x3d250d, 0.34);
+    this.statusBg.strokeRoundedRect(x, y, width, height, radius);
+    this.statusBg.lineStyle(0.7 * this.uiScale, 0xffe8a8, 0.74);
+    this.statusBg.strokeRoundedRect(x, y, width, height, radius);
+    this.statusBg.lineStyle(0.3 * this.uiScale, 0xfff6d8, 0.42);
+    this.statusBg.strokeRoundedRect(
+      x + 2 * this.uiScale,
+      y + 2 * this.uiScale,
+      width - 4 * this.uiScale,
+      height - 4 * this.uiScale,
+      Math.max(2 * this.uiScale, radius - 3 * this.uiScale)
+    );
   }
 
   private updateHandGroupPosition(): void {
@@ -2974,10 +2991,10 @@ this.exitButton.setPosition(
     const opponent = players.find((player) => player.id !== self?.id) ?? players[1] ?? players[0];
     const availableWidth = Math.min(this.getViewWidth() - 96 * this.uiScale, 620 * this.uiScale);
     const gap = 14 * this.uiScale;
-    const sideWidth = Phaser.Math.Clamp(155 * this.uiScale, 124 * this.uiScale, availableWidth * 0.34);
-    const centerWidth = Math.max(232 * this.uiScale, (availableWidth - sideWidth - gap) * 0.9);
+    const sideWidth = Phaser.Math.Clamp(185 * this.uiScale, 124 * this.uiScale, availableWidth * 0.34);
+    const centerWidth = Math.max(232 * this.uiScale, (availableWidth - sideWidth - gap) * 0.88);
     const sideHeight = 138 * this.uiScale;
-    const centerHeight = 116 * this.uiScale;
+    const centerHeight = 100 * this.uiScale;
     const leftX = -availableWidth / 2 + sideWidth / 2;
     const centerX = leftX + sideWidth / 2 + gap + centerWidth / 2;
     const handValue = this.roomState?.handValue ?? 1;
@@ -2988,7 +3005,7 @@ this.exitButton.setPosition(
     const dotsWidth = Math.min(centerWidth * 0.64, 248 * this.uiScale);
     const dotsHeight = 46 * this.uiScale;
     const footerWidth = Math.min(centerWidth * 0.64, 246 * this.uiScale);
-    const footerHeight = 74 * this.uiScale;
+    const footerHeight = 66 * this.uiScale;
 
     const drawPanel = (
       x: number,
@@ -3068,22 +3085,22 @@ this.exitButton.setPosition(
     };
 
     drawPanel(leftX, mainY- 17 * this.uiScale, sideWidth, sideHeight);
-    drawPanel(centerX, mainY - 27 * this.uiScale, centerWidth, centerHeight, 0.8);
-    drawPanel(centerX, dotsY-34, dotsWidth, dotsHeight, 0.88, 0xb9b1a4, 0xe0d8ca);
-    drawPanel(centerX, footerY-22, footerWidth, footerHeight, 0.86);
+    drawPanel(centerX, mainY - 30 * this.uiScale, centerWidth, centerHeight, 0.8);
+    drawPanel(centerX, dotsY-42, dotsWidth, dotsHeight, 0.88, 0xb9b1a4, 0xe0d8ca);
+    drawPanel(centerX, footerY-35, footerWidth, footerHeight, 0.86);
 
-    addCrownIcon(leftX - 42 * this.uiScale, mainY - 60 * this.uiScale, 26);
-    addLabel(leftX + 8 * this.uiScale, mainY - 60 * this.uiScale, "PLACAR", "#ffcf5a", 16, "normal");
-    addLabel(leftX - sideWidth * 0.25, mainY - 22 * this.uiScale, "NOS", "#42e878", 22, "normal");
-    addLabel(leftX + sideWidth * 0.25, mainY - 22 * this.uiScale, "ELES", "#ff5a50", 22, "normal");
-    addValue(leftX - sideWidth * 0.25, mainY + 12 * this.uiScale, String(self?.games ?? 0), "#f8f1d9", 35);
-    addValue(leftX + sideWidth * 0.25, mainY + 12 * this.uiScale, String(opponent?.games ?? 0), "#ffddd8", 35);
+    addCrownIcon(leftX - 73 * this.uiScale, mainY - 60 * this.uiScale, 26);
+    addLabel(leftX + 13 * this.uiScale, mainY - 60 * this.uiScale, "PLACAR DO JOGO", "#ffcf5a", 16, "normal");
+    addLabel(leftX - sideWidth * 0.25, mainY - 22 * this.uiScale, "NÓS", "#42e878", 17, "normal");
+    addLabel(leftX + sideWidth * 0.25, mainY - 22 * this.uiScale, "ELES", "#ff5a50", 17, "normal");
+    addValue(leftX - sideWidth * 0.25, mainY + 12 * this.uiScale, String(self?.games ?? 0), "#f8f1d9", 44);
+    addValue(leftX + sideWidth * 0.25, mainY + 12 * this.uiScale, String(opponent?.games ?? 0), "#ffddd8", 44);
 
-    addLabel(centerX - centerWidth * 0.34, mainY - 35 * this.uiScale, "NOS", "#42e878", 32, "normal");
-    addValue(centerX - centerWidth * 0.1, mainY - 35 * this.uiScale, String(self?.points ?? 0), "#ffffff", 55);
+    addLabel(centerX - centerWidth * 0.34, mainY - 35 * this.uiScale, "NÓS", "#42e878", 26, "normal");
+    addValue(centerX - centerWidth * 0.1, mainY - 35 * this.uiScale, String(self?.points ?? 0), "#ffffff", 70);
     addLabel(centerX, mainY - 35 * this.uiScale, "X", "#79746d", 24, "normal");
-    addValue(centerX + centerWidth * 0.1, mainY - 35 * this.uiScale, String(opponent?.points ?? 0), "#ffffff", 55);
-    addLabel(centerX + centerWidth * 0.34, mainY - 35 * this.uiScale, "ELES", "#ff5a50", 32, "normal");
+    addValue(centerX + centerWidth * 0.1, mainY - 35 * this.uiScale, String(opponent?.points ?? 0), "#ffffff", 70);
+    addLabel(centerX + centerWidth * 0.34, mainY - 35 * this.uiScale, "ELES", "#ff5a50", 26, "normal");
 
     const trickResults = this.roomState?.trickResults ?? [];
     const getRoundDotColor = (playerId: string | undefined, index: number) => {
@@ -3103,17 +3120,17 @@ this.exitButton.setPosition(
     for (let index = 0; index < 3; index += 1) {
       const x = centerX - 85 * this.uiScale + index * 25 * this.uiScale;
       const color = getRoundDotColor(self?.id, index);
-      addRoundDot(x, dotsY-34, color, color === 0x8f8a82 ? 0.72 : 1);
+      addRoundDot(x, dotsY-42, color, color === 0x8f8a82 ? 0.72 : 1);
     }
-    addLabel(centerX, dotsY-34, "|", "#b9b1a4", 18, "normal");
+    addLabel(centerX, dotsY-42, "|", "#b9b1a4", 18, "normal");
     for (let index = 0; index < 3; index += 1) {
       const x = centerX + 35 * this.uiScale + index * 25 * this.uiScale;
       const color = getRoundDotColor(opponent?.id, index);
-      addRoundDot(x, dotsY-34, color, color === 0x8f8a82 ? 0.72 : 1);
+      addRoundDot(x, dotsY-42, color, color === 0x8f8a82 ? 0.72 : 1);
     }
 
-    addLabel(centerX, footerY - 33 * this.uiScale, `RODADA ${currentRound}/3`, "#f8f1d9", 16);
-    addLabel(centerX, footerY + -6 * this.uiScale, `VALENDO ${handValue} ${handValue === 1 ? "TENTO" : "TENTOS"}`, "#ffcf5a", 16);
+    addLabel(centerX, footerY - 44 * this.uiScale, `RODADA ${currentRound}/3`, "#f8f1d9", 20);
+    addLabel(centerX, footerY + -19 * this.uiScale, `VALENDO ${handValue} ${handValue === 1 ? "TENTO" : "TENTOS"}`, "#ffcf5a", 20);
 
     for (const child of this.scoreboardGroup.list) {
       if (child instanceof Phaser.GameObjects.Text) {
@@ -3550,17 +3567,27 @@ this.exitButton.setPosition(
 
     // caixa do nome
     const nameBox = this.add.graphics();
+    const nameBoxX = -62;
+    const nameBoxY = 89;
+    const nameBoxWidth = 124;
+    const nameBoxHeight = 40;
+    const nameBoxRadius = 10;
 
-    nameBox.fillStyle(0x000000, 0.82);
-    nameBox.fillRoundedRect(-56, 94, 112, 28, 8);
-
-    nameBox.lineStyle(2, 0xffcf5a, 1);
-    nameBox.strokeRoundedRect(-56, 94, 112, 28, 8);
+    nameBox.fillStyle(0x000000, 0.34);
+    nameBox.fillRoundedRect(nameBoxX + 2, nameBoxY + 3, nameBoxWidth, nameBoxHeight, nameBoxRadius);
+    nameBox.fillStyle(0x020403, 0.86);
+    nameBox.fillRoundedRect(nameBoxX, nameBoxY, nameBoxWidth, nameBoxHeight, nameBoxRadius);
+    nameBox.lineStyle(1.2, 0x3d250d, 0.34);
+    nameBox.strokeRoundedRect(nameBoxX, nameBoxY, nameBoxWidth, nameBoxHeight, nameBoxRadius);
+    nameBox.lineStyle(0.7, 0xffe8a8, 0.74);
+    nameBox.strokeRoundedRect(nameBoxX, nameBoxY, nameBoxWidth, nameBoxHeight, nameBoxRadius);
+    nameBox.lineStyle(0.3, 0xfff6d8, 0.42);
+    nameBox.strokeRoundedRect(nameBoxX + 2, nameBoxY + 2, nameBoxWidth - 4, nameBoxHeight - 4, nameBoxRadius - 3);
 
     const name = this.add.text(0, 108, "Oponente", {
       color: "#ffffff",
       fontFamily: "Arial",
-      fontSize: "14px",
+      fontSize: "20px",
       fontStyle: "bold"
     }).setOrigin(0.5);
     this.opponentFootMarker = this.createFootMarker();

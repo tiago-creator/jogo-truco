@@ -1,0 +1,46 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="750" height="1050" viewBox="0 0 750 1050">
+  <defs>
+    <linearGradient id="platinum" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#fffdf4"></stop>
+      <stop offset=".45" stop-color="#d1ccbd"></stop>
+      <stop offset="1" stop-color="#777166"></stop>
+    </linearGradient>
+    <linearGradient id="gray" x1="0" y1="0" x2="1" y2="1">
+      <stop stop-color="#555a5c"></stop>
+      <stop offset=".48" stop-color="#2c3032"></stop>
+      <stop offset="1" stop-color="#111314"></stop>
+    </linearGradient>
+    <radialGradient id="light" cx="50%" cy="40%" r="70%">
+      <stop stop-color="#ffffff" stop-opacity=".16"></stop>
+      <stop offset=".7" stop-color="#000" stop-opacity=".04"></stop>
+      <stop offset="1" stop-color="#000" stop-opacity=".42"></stop>
+    </radialGradient>
+    <pattern id="pattern" width="42" height="42" patternUnits="userSpaceOnUse">
+      <path d="M21 7L27 18L21 29L15 18Z" fill="none" stroke="#ffffff" stroke-width="1.3" opacity=".07"></path>
+    </pattern>
+  </defs>
+  <rect width="750" height="1050" rx="60" fill="#111314"></rect>
+  <rect x="16" y="16" width="718" height="1018" rx="54" fill="url(#platinum)"></rect>
+  <rect x="40" y="40" width="670" height="970" rx="44" fill="#181a1b"></rect>
+  <rect x="60" y="60" width="630" height="930" rx="36" fill="url(#gray)"></rect>
+  <rect x="60" y="60" width="630" height="930" rx="36" fill="url(#pattern)"></rect>
+  <rect x="60" y="60" width="630" height="930" rx="36" fill="url(#light)"></rect>
+  <rect x="86" y="86" width="578" height="878" rx="28" fill="none" stroke="url(#platinum)" stroke-width="14"></rect>
+  <rect x="112" y="112" width="526" height="826" rx="22" fill="none" stroke="#ffffff" stroke-width="4" opacity=".6"></rect>
+  <g stroke="url(#platinum)" stroke-linecap="round" fill="none">
+    <path d="M126 126h110M126 126v110M624 126h-110M624 126v110M126 924h110M126 924v-110M624 924h-110M624 924v-110" stroke-width="14"></path>
+    <g fill="#d1ccbd" stroke="none">
+      <circle cx="126" cy="126" r="16"></circle>
+      <circle cx="624" cy="126" r="16"></circle>
+      <circle cx="126" cy="924" r="16"></circle>
+      <circle cx="624" cy="924" r="16"></circle>
+    </g>
+  </g>
+  <g transform="translate(375 525)">
+    <circle r="240" fill="#202325" opacity=".95" stroke="url(#platinum)" stroke-width="18"></circle>
+    <path d="M0-175L175 0L0 175L-175 0Z" fill="#3f4548" stroke="url(#platinum)" stroke-width="18" stroke-linejoin="round"></path>
+    <path d="M0-145L145 0L0 145L-145 0Z" fill="none" stroke="#ffffff" stroke-width="4" opacity=".36"></path>
+    <circle r="72" fill="url(#platinum)" stroke="#ffffff" stroke-width="4"></circle>
+    <circle r="58" fill="#aaa49a" opacity=".55"></circle>
+  </g>
+</svg>
