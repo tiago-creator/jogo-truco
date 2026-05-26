@@ -441,6 +441,9 @@ class TableScene extends Phaser.Scene {
   private playerName = getCurrentPlayerName();
   private statusBg!: Phaser.GameObjects.Graphics;
   private status!: Phaser.GameObjects.Text;
+  private statusName!: Phaser.GameObjects.Text;
+  private statusCenterX = 0;
+  private statusCenterY = 0;
   private scoreboardGroup!: Phaser.GameObjects.Container;
   private trucoButton!: Phaser.GameObjects.Container;
   private trucoButtonBg!: Phaser.GameObjects.Graphics;
@@ -531,8 +534,16 @@ class TableScene extends Phaser.Scene {
       fontFamily: "Arial",
       fontSize: "16px"
     }).setOrigin(0.5);
+    this.statusName = this.add.text(0, 0, "", {
+      color: "#ffcf5a",
+      fontFamily: "Arial",
+      fontSize: "16px",
+      fontStyle: "bold"
+    }).setOrigin(0.5);
     this.statusBg.setDepth(89);
     this.status.setDepth(90);
+    this.statusName.setDepth(90);
+    this.statusName.setVisible(false);
 
     this.scoreboardGroup = this.add.container(0, 0);
 
@@ -542,7 +553,7 @@ class TableScene extends Phaser.Scene {
     this.trucoButtonSmallText = this.add.text(0, 0, "PEDIR", {
       color: "#5f3900",
       fontFamily: "Arial",
-      fontSize: "13px",
+      fontSize: "17px",
       fontStyle: "900"
     }).setOrigin(0.5);
     this.trucoButtonText = this.add.text(0, 0, "TRUCO", {
@@ -662,7 +673,7 @@ exitButtonHitZone.on("pointerup", () => {
     this.viraGroup.setDepth(10);
     this.deckGroup.setDepth(12);
     this.tableGroup.setDepth(20);
-    this.handGroup.setDepth(40);
+    this.handGroup.setDepth(95);
     this.trucoButton.setDepth(100);
     this.trucoButtonHitZone.setDepth(101);
     this.audioButton.setDepth(100);
@@ -801,7 +812,7 @@ exitButtonHitZone.on("pointerup", () => {
     });
 
     this.socket.on("room:error", ({ message }) => {
-      this.status.setText(message);
+      this.setStatusMessage(message);
 
       if (this.roomState?.status !== "playing") {
         showWaitingRoom(message);
@@ -811,7 +822,7 @@ exitButtonHitZone.on("pointerup", () => {
     this.socket.on("audio:message", ({ playerName, audio }) => {
       this.showOpponentSpeechBubble(`${playerName}: audio`);
       void playIncomingAudio(audio).catch(() => {
-        this.status.setText("Toque uma vez na tela para liberar o audio");
+        this.setStatusMessage("Toque uma vez na tela para liberar o audio");
       });
     });
 
@@ -868,7 +879,7 @@ exitButtonHitZone.on("pointerup", () => {
     const key = this.getReliableActionKey(event, payloadWithId);
 
     if (this.pendingReliableActionKeys.has(key)) {
-      this.status.setText("Enviando acao...");
+      this.setStatusMessage("Enviando acao...");
       return false;
     }
 
@@ -921,7 +932,7 @@ exitButtonHitZone.on("pointerup", () => {
       window.clearTimeout(pendingAction.retryTimer);
 
       if (!response.ok) {
-        this.status.setText(response.message ?? "Acao nao realizada");
+        this.setStatusMessage(response.message ?? "Acao nao realizada");
       }
     });
   }
@@ -1490,7 +1501,7 @@ exitButtonHitZone.on("pointerup", () => {
     }
 
     if (!window.isSecureContext) {
-      this.status.setText("Use HTTPS para liberar o microfone no celular");
+      this.setStatusMessage("Use HTTPS para liberar o microfone no celular");
       return;
     }
 
@@ -1499,7 +1510,7 @@ exitButtonHitZone.on("pointerup", () => {
 
       this.isRecordingAudio = true;
       this.drawAudioButton();
-      this.status.setText("Gravando audio...");
+      this.setStatusMessage("Gravando audio...");
       await this.audioRecorder.start();
 
       if (!this.isRecordingAudio || recordingSession !== this.audioRecordingSession) {
@@ -1513,7 +1524,7 @@ exitButtonHitZone.on("pointerup", () => {
     } catch {
       this.isRecordingAudio = false;
       this.drawAudioButton();
-      this.status.setText("Permita o microfone para enviar audio");
+      this.setStatusMessage("Permita o microfone para enviar audio");
     }
   }
 
@@ -1531,7 +1542,7 @@ exitButtonHitZone.on("pointerup", () => {
     const audio = this.audioRecorder.stop();
 
     if (!audio || audio.byteLength < 2000) {
-      this.status.setText("Audio muito curto");
+      this.setStatusMessage("Audio muito curto");
       return;
     }
 
@@ -1540,7 +1551,7 @@ exitButtonHitZone.on("pointerup", () => {
       audio,
       mimeType: "audio/wav"
     });
-    this.status.setText("Audio enviado");
+    this.setStatusMessage("Audio enviado");
   }
 
   private showOpponentSpeechBubble(message: string): void {
@@ -1882,7 +1893,7 @@ exitButtonHitZone.on("pointerup", () => {
     this.updateOpponentAvatar(opponent);
     this.renderFootMarkers();
 
-    this.status.setText(this.roomState.message);
+    this.setStatusMessage(this.roomState.message);
     this.audioButton.setVisible(this.roomState.status === "playing");
     this.memeButton.setVisible(this.roomState.status === "playing");
     if (this.roomState.status !== "playing") {
@@ -1910,29 +1921,73 @@ exitButtonHitZone.on("pointerup", () => {
     const selfIsFoot = Boolean(selfId && this.roomState?.footPlayerId === selfId);
     const isOpponentTurn = Boolean(selfId && this.roomState?.turnPlayerId && this.roomState.turnPlayerId !== selfId);
     const statusAboveHand = selfIsFoot || isOpponentTurn;
+    const handCount = this.roomState?.self?.hand.length ?? 3;
+    const handScale = this.getHandCardScale(handCount);
 
     if (statusAboveHand) {
-      const handCount = this.roomState?.self?.hand.length ?? 3;
-      const handScale = this.getHandCardScale(handCount);
-
-      this.status.setPosition(width / 2, this.handGroup.y - 77 * handScale);
+      this.statusCenterX = width / 2;
+      this.statusCenterY = this.handGroup.y - 82 * handScale;
     } else {
-      this.status.setPosition(width / 2, safeTop + 106 * this.uiScale);
+      this.statusCenterX = width / 2;
+      this.statusCenterY = this.handGroup.y - 82 * handScale;
     }
+
+    this.layoutStatusText();
+  }
+
+  private setStatusMessage(message: string): void {
+    const turnPrefix = "Vez de ";
+    const playerName = message.startsWith(turnPrefix) ? message.slice(turnPrefix.length).trim() : "";
+
+    if (playerName) {
+      this.status.setText("Vez de");
+      this.statusName.setText(playerName);
+      this.statusName.setVisible(true);
+    } else {
+      this.status.setText(message);
+      this.statusName.setVisible(false);
+    }
+
+    this.layoutStatusText();
+  }
+
+  private layoutStatusText(): void {
+    const width = this.getViewWidth();
 
     this.status.setWordWrapWidth(Math.min(width - 32, 420 * this.uiScale), true);
     this.status.setAlign("center");
+    this.statusName.setWordWrapWidth(Math.min(width - 120, 300 * this.uiScale), true);
+    this.statusName.setAlign("center");
+
+    if (this.statusName.visible) {
+      const gap = 5 * this.uiScale;
+      const statusWidth = this.status.getBounds().width;
+      const nameWidth = this.statusName.getBounds().width;
+      const totalWidth = statusWidth + gap + nameWidth;
+
+      this.status.setPosition(this.statusCenterX - totalWidth / 2 + statusWidth / 2, this.statusCenterY);
+      this.statusName.setPosition(this.statusCenterX + totalWidth / 2 - nameWidth / 2, this.statusCenterY);
+    } else {
+      this.status.setPosition(this.statusCenterX, this.statusCenterY);
+      this.statusName.setPosition(this.statusCenterX, this.statusCenterY);
+    }
+
     this.drawStatusBox();
   }
 
   private drawStatusBox(): void {
     const bounds = this.status.getBounds();
+    const nameBounds = this.statusName.visible ? this.statusName.getBounds() : bounds;
     const paddingX = 14 * this.uiScale;
     const paddingY = 7 * this.uiScale;
-    const x = bounds.x - paddingX;
-    const y = bounds.y - paddingY;
-    const width = bounds.width + paddingX * 2;
-    const height = bounds.height + paddingY * 2;
+    const boundsX = Math.min(bounds.x, nameBounds.x);
+    const boundsY = Math.min(bounds.y, nameBounds.y);
+    const boundsRight = Math.max(bounds.right, nameBounds.right);
+    const boundsBottom = Math.max(bounds.bottom, nameBounds.bottom);
+    const x = boundsX - paddingX;
+    const y = boundsY - paddingY;
+    const width = boundsRight - boundsX + paddingX * 2;
+    const height = boundsBottom - boundsY + paddingY * 2;
 
     this.statusBg.clear();
     this.statusBg.fillStyle(0x000000, 0.68);
@@ -1965,10 +2020,10 @@ exitButtonHitZone.on("pointerup", () => {
     this.opponentFootMarker.setVisible(opponentIsFoot);
 
     if (selfIsFoot) {
-      const handCount = this.roomState?.self?.hand.length ?? 3;
-      const cardScale = this.getHandCardScale(handCount);
-      const spacing = this.getHandCardSpacing(handCount, cardScale);
-      const rightEdgeX = ((handCount - 1) * spacing) / 2 + 42 * cardScale;
+      const fixedHandCount = 3;
+      const cardScale = this.getHandCardScale(fixedHandCount);
+      const spacing = this.getHandCardSpacing(fixedHandCount, cardScale);
+      const rightEdgeX = spacing + 42 * cardScale;
 
       this.selfFootMarker.setPosition(rightEdgeX, -82 * cardScale);
       this.selfFootMarker.setScale(1 / Math.max(0.75, this.uiScale));
@@ -3267,7 +3322,7 @@ exitButtonHitZone.on("pointerup", () => {
         container.setPosition(pointer.worldX - this.handGroup.x, pointer.worldY - this.handGroup.y);
       });
       container.on("dragend", () => {
-        if (hasDragged) {
+        if (hasDragged && this.isHandCardReleasedInPlayZone(container.y)) {
           isAnimatingToTable = true;
           container.disableInteractive();
           this.tweens.killTweensOf(container);
@@ -3312,6 +3367,16 @@ exitButtonHitZone.on("pointerup", () => {
     }
 
     return container;
+  }
+
+  private isHandCardReleasedInPlayZone(cardLocalY: number): boolean {
+    const selfId = this.roomState?.self?.id ?? "";
+    const tableCount = this.roomState?.table.length ?? 0;
+    const targetPosition = this.getTableCardPosition(selfId, tableCount, tableCount + 1);
+    const tableLocalY = this.tableGroup.y + targetPosition.y - this.handGroup.y;
+    const confirmLineY = Math.min(-64 * this.uiScale, tableLocalY / 2);
+
+    return cardLocalY <= confirmLineY;
   }
 
   private suitSymbol(suit: Card["suit"]): string {
