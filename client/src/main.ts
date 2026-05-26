@@ -2953,7 +2953,7 @@ this.exitButton.setPosition(
         const tableEntry = this.previousRoomState?.table.find((entry) => entry.card.id === cardId);
         const isWinningCard = !!lastTrickWinnerId && tableEntry?.playerId === lastTrickWinnerId;
 
-        this.animateCachedTableCardToDeck(cardId, isWinningCard ? 760 : 0);
+        this.animateCachedTableCardToDeck(cardId, isWinningCard ? 760 : 0, isWinningCard);
       }
     }
   }
@@ -3009,7 +3009,7 @@ this.exitButton.setPosition(
     this.tableCardObjects.delete(cardId);
   }
 
-  private animateCachedTableCardToDeck(cardId: string, delay = 0): void {
+  private animateCachedTableCardToDeck(cardId: string, delay = 0, highlightWinner = false): void {
     const cached = this.tableCardObjects.get(cardId);
 
     if (!cached) {
@@ -3024,6 +3024,10 @@ this.exitButton.setPosition(
     const targetY = this.deckGroup.y - this.tableGroup.y;
 
     card.setDepth(80);
+
+    if (highlightWinner) {
+      this.addWinningCardGlow(card);
+    }
 
     this.tweens.add({
       targets: card,
@@ -3063,6 +3067,30 @@ this.exitButton.setPosition(
           }
         });
       }
+    });
+  }
+
+  private addWinningCardGlow(card: Phaser.GameObjects.Container): void {
+    const glow = this.add.graphics();
+
+    glow.fillStyle(0xfff0b0, 0.18);
+    glow.fillRoundedRect(-48, -68, 96, 136, 14);
+    glow.lineStyle(3, 0xffe8a8, 0.82);
+    glow.strokeRoundedRect(-45, -65, 90, 130, 13);
+    glow.lineStyle(1.4, 0xffffff, 0.48);
+    glow.strokeRoundedRect(-39, -59, 78, 118, 10);
+    glow.setDepth(-1);
+    card.addAt(glow, 0);
+
+    this.tweens.add({
+      targets: glow,
+      alpha: { from: 0.45, to: 1 },
+      scaleX: { from: 0.96, to: 1.08 },
+      scaleY: { from: 0.96, to: 1.08 },
+      duration: 260,
+      yoyo: true,
+      repeat: 2,
+      ease: "Sine.easeInOut"
     });
   }
 
