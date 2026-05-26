@@ -585,12 +585,12 @@ class TableScene extends Phaser.Scene {
     this.status = this.add.text(0, 0, "Conectando...", {
       color: "#f8f1d9",
       fontFamily: "Arial",
-      fontSize: "16px"
+      fontSize: "20px"
     }).setOrigin(0.5);
     this.statusName = this.add.text(0, 0, "", {
       color: "#ffcf5a",
       fontFamily: "Arial",
-      fontSize: "16px",
+      fontSize: "20px",
       fontStyle: "bold"
     }).setOrigin(0.5);
     this.statusBg.setDepth(89);
@@ -1211,19 +1211,19 @@ exitButtonHitZone.on("pointerup", () => {
 
   private createMemePopup(): Phaser.GameObjects.Container {
     const popup = this.add.container(0, 0);
-    const width = 430;
-    const rowHeight = 70;
+    const width = 520;
+    const rowHeight = 112;
     const visibleRows = Math.min(memeAudios.length, 6);
-    const height = 86 + visibleRows * rowHeight;
-    const listTop = -height / 2 + 70;
+    const height = 61 + visibleRows * rowHeight;
+    const listTop = -height / 2 + 86;
     const maxStartIndex = Math.max(0, memeAudios.length - visibleRows);
     const bg = this.add.graphics();
     const outsideCloseZone = this.add.zone(0, 0, this.getViewWidth(), this.getViewHeight());
-    const title = this.add.text(0, -height / 2 + 26, "Memes", {
-      color: "#fff3a3",
-      fontFamily: "Arial Black",
-      fontSize: "24px",
-      fontStyle: "900"
+    const title = this.add.text(0, -height / 2 + 30, "Áudios", {
+      color: "#ffffff",
+      fontFamily: "Arial",
+      fontSize: "20px",
+      fontStyle: "bold"
     }).setOrigin(0.5);
 
     outsideCloseZone.setInteractive({ useHandCursor: false });
@@ -1244,10 +1244,16 @@ exitButtonHitZone.on("pointerup", () => {
       popup.setVisible(false);
     });
     outsideCloseZone.setDepth(-1);
-    bg.fillStyle(0x06130f, 0.95);
+    bg.fillStyle(0x000000, 0.34);
+    bg.fillRoundedRect(-width / 2 + 2, -height / 2 + 3, width, height, 14);
+    bg.fillStyle(0x020403, 0.95);
     bg.fillRoundedRect(-width / 2, -height / 2, width, height, 14);
-    bg.lineStyle(3, 0xffcf5a, 1);
+    bg.lineStyle(1.2, 0x3d250d, 0.34);
     bg.strokeRoundedRect(-width / 2, -height / 2, width, height, 14);
+    bg.lineStyle(0.7, 0xffe8a8, 0.74);
+    bg.strokeRoundedRect(-width / 2, -height / 2, width, height, 14);
+    bg.lineStyle(0.3, 0xfff6d8, 0.42);
+    bg.strokeRoundedRect(-width / 2 + 2, -height / 2 + 2, width - 4, height - 4, 11);
     popup.add([outsideCloseZone, bg, title]);
 
     const rows = this.add.container(0, 0);
@@ -1305,10 +1311,10 @@ exitButtonHitZone.on("pointerup", () => {
         }).setOrigin(0, 0.5);
         const hitZone = this.add.zone(0, y, width - 26, rowHeight - 6);
 
-        rowBg.fillStyle((startIndex + index) % 2 === 0 ? 0x10281f : 0x163428, 0.9);
-        rowBg.fillRoundedRect(-width / 2 + 13, y - rowHeight / 2 + 4, width - 26, rowHeight - 8, 12);
-        rowBg.lineStyle(2, 0xffcf5a, 0.34);
-        rowBg.strokeRoundedRect(-width / 2 + 13, y - rowHeight / 2 + 4, width - 26, rowHeight - 8, 12);
+        if (index > 0) {
+          rowBg.lineStyle(1, 0xb9b1a4, 0.42);
+          rowBg.lineBetween(-width / 2 + 22, y - rowHeight / 2, width / 2 - 32, y - rowHeight / 2);
+        }
         hitZone.setInteractive({ useHandCursor: true });
         hitZone.on("wheel", (_pointer: Phaser.Input.Pointer, _dx: number, dy: number) => {
           setScrollIndex(startIndex + Math.sign(dy));
@@ -1373,10 +1379,16 @@ exitButtonHitZone.on("pointerup", () => {
   private createTrucoResponseGroup(): Phaser.GameObjects.Container {
     const bg = this.add.graphics();
 
-    bg.fillStyle(0x06130f, 0.92);
+    bg.fillStyle(0x000000, 0.34);
+    bg.fillRoundedRect(-284, -119, 572, 244, 24);
+    bg.fillStyle(0x020403, 0.86);
     bg.fillRoundedRect(-286, -122, 572, 244, 24);
-    bg.lineStyle(3, 0xffcf5a, 1);
+    bg.lineStyle(1.2, 0x3d250d, 0.34);
     bg.strokeRoundedRect(-286, -122, 572, 244, 24);
+    bg.lineStyle(0.7, 0xffe8a8, 0.74);
+    bg.strokeRoundedRect(-286, -122, 572, 244, 24);
+    bg.lineStyle(0.3, 0xfff6d8, 0.42);
+    bg.strokeRoundedRect(-284, -120, 568, 240, 21);
 
     const title = this.add.text(0, -78, "Pedido de truco", {
       color: "#fff3a3",
@@ -1539,10 +1551,14 @@ exitButtonHitZone.on("pointerup", () => {
     hitZone.setInteractive({ useHandCursor: true });
     hitZone.on("pointerup", () => {
       this.playButtonClickSound();
-      this.sendReliableAction("truco:respond", {
+      const didSend = this.sendReliableAction("truco:respond", {
         roomId: this.roomId,
         action
       });
+
+      if (didSend) {
+        this.trucoResponseGroup.setVisible(false);
+      }
     });
 
     return { container: button, text };
@@ -1646,19 +1662,17 @@ exitButtonHitZone.on("pointerup", () => {
 
     const maxBubbleWidth = Math.min(260, Math.max(156, this.getViewWidth() - 42));
     const text = this.add.text(0, 0, message, {
-      color: "#083f32",
-      fontFamily: "Arial Black",
+      color: "#1f1408",
+      fontFamily: "Arial",
       fontSize: "22px",
-      fontStyle: "900",
-      stroke: "#ffffff",
-      strokeThickness: 2,
+      fontStyle: "normal",
       align: "center",
       wordWrap: { width: maxBubbleWidth - 30, useAdvancedWrap: true }
     }).setOrigin(0.5);
 
     const textBounds = text.getBounds();
     const bubbleWidth = Math.min(maxBubbleWidth, Math.max(156, textBounds.width + 34));
-    const bubbleHeight = Math.max(50, textBounds.height + 26);
+    const bubbleHeight = Math.max(66, textBounds.height + 50);
     const bubbleTop = -bubbleHeight / 2;
     const bubbleLeft = -bubbleWidth / 2;
     const tailTop = bubbleHeight / 2 - 4;
@@ -1666,17 +1680,23 @@ exitButtonHitZone.on("pointerup", () => {
 
     text.setPosition(0, -2);
     bg.clear();
-    bg.fillStyle(0x000000, 0.35);
-    bg.fillRoundedRect(bubbleLeft + 4, bubbleTop + 4, bubbleWidth, bubbleHeight, 14);
-    bg.fillStyle(0xfffbef, 1);
-    bg.fillRoundedRect(bubbleLeft, bubbleTop, bubbleWidth, bubbleHeight, 14);
-    bg.lineStyle(3, 0xffcf5a, 1);
-    bg.strokeRoundedRect(bubbleLeft, bubbleTop, bubbleWidth, bubbleHeight, 14);
-    bg.fillStyle(0xfffbef, 1);
-    bg.fillTriangle(-12, tailTop, 8, tailTop, -2, tailBottom);
-    bg.lineStyle(3, 0xffcf5a, 1);
-    bg.lineBetween(-12, tailTop, -2, tailBottom);
-    bg.lineBetween(8, tailTop, -2, tailBottom);
+    const bubbleBorderColor = 0x5a3714;
+    const bubbleFillBottom = 0xffedbd;
+
+    bg.fillStyle(0x000000, 0.22);
+    bg.fillRoundedRect(bubbleLeft + 5, bubbleTop + 6, bubbleWidth, bubbleHeight, 24);
+    bg.fillTriangle(-12 + 5, tailTop + 6, 8 + 5, tailTop + 6, -2 + 5, tailBottom + 6);
+    bg.fillGradientStyle(0xfff8df, 0xfff8df, bubbleFillBottom, bubbleFillBottom, 1);
+    bg.fillRoundedRect(bubbleLeft, bubbleTop, bubbleWidth, bubbleHeight, 24);
+    bg.lineStyle(3, bubbleBorderColor, 1);
+    bg.strokeRoundedRect(bubbleLeft, bubbleTop, bubbleWidth, bubbleHeight, 24);
+    bg.fillStyle(bubbleFillBottom, 1);
+    bg.fillTriangle(-14, tailTop - 2, 10, tailTop - 2, -2, tailBottom);
+    bg.lineStyle(3, bubbleBorderColor, 1);
+    bg.lineBetween(-12, tailTop+5, -2, tailBottom);
+    bg.lineBetween(8, tailTop+3, -2, tailBottom);
+    bg.lineStyle(1, 0xffffff, 0.58);
+    bg.lineBetween(bubbleLeft + 22, bubbleTop + 5, bubbleLeft + bubbleWidth - 22, bubbleTop + 5);
 
     bubble.add([bg, text]);
 
@@ -3470,10 +3490,10 @@ this.exitButton.setPosition(
       .setAlpha(0.72);
 
     const text = this.add.text(0, 28, "ARRASTE PARA JOGAR", {
-      color: "#f8f1d9",
-      fontFamily: "Arial Black",
-      fontSize: "13px",
-      fontStyle: "900",
+      color: "#ffffff",
+      fontFamily: "Arial",
+      fontSize: "20px",
+      fontStyle: "bold",
       stroke: "#000000",
       strokeThickness: 3
     }).setOrigin(0.5);
