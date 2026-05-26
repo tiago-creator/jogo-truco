@@ -2881,7 +2881,7 @@ this.exitButton.setPosition(
     }
 
     addLabel(centerX, footerY - 33 * this.uiScale, `RODADA ${currentRound}/3`, "#f8f1d9", 16);
-    addLabel(centerX, footerY + -6 * this.uiScale, `VALENDO ${handValue} ${handValue === 1 ? "PONTO" : "PONTOS"}`, "#ffcf5a", 16);
+    addLabel(centerX, footerY + -6 * this.uiScale, `VALENDO ${handValue} ${handValue === 1 ? "TENTO" : "TENTOS"}`, "#ffcf5a", 16);
 
     for (const child of this.scoreboardGroup.list) {
       if (child instanceof Phaser.GameObjects.Text) {
@@ -2946,9 +2946,14 @@ this.exitButton.setPosition(
       card.setScale(this.tableCardScale * this.uiScale);
     });
 
+    const lastTrickWinnerId = this.roomState?.trickResults.at(-1)?.winnerPlayerId;
+
     for (const cardId of Array.from(this.tableCardObjects.keys())) {
       if (!activeCardIds.has(cardId)) {
-        this.destroyCachedTableCard(cardId);
+        const tableEntry = this.previousRoomState?.table.find((entry) => entry.card.id === cardId);
+        const isWinningCard = !!lastTrickWinnerId && tableEntry?.playerId === lastTrickWinnerId;
+
+        this.animateCachedTableCardToDeck(cardId, isWinningCard ? 760 : 0);
       }
     }
   }
@@ -3002,6 +3007,63 @@ this.exitButton.setPosition(
 
     cached.container.destroy();
     this.tableCardObjects.delete(cardId);
+  }
+
+  private animateCachedTableCardToDeck(cardId: string, delay = 0): void {
+    const cached = this.tableCardObjects.get(cardId);
+
+    if (!cached) {
+      return;
+    }
+
+    this.tableCardObjects.delete(cardId);
+
+    const card = cached.container;
+    const startScale = card.scaleX || this.tableCardScale * this.uiScale;
+    const targetX = this.deckGroup.x - this.tableGroup.x;
+    const targetY = this.deckGroup.y - this.tableGroup.y;
+
+    card.setDepth(80);
+
+    this.tweens.add({
+      targets: card,
+      scaleX: 0.04,
+      duration: 130,
+      delay,
+      ease: "Sine.easeIn",
+      onComplete: () => {
+        const back = this.createCardBack();
+
+        back.setPosition(card.x, card.y);
+        back.setScale(0.04, startScale);
+        back.setRotation(card.rotation);
+        back.setDepth(80);
+        this.tableGroup.add(back);
+        card.destroy();
+
+        this.tweens.add({
+          targets: back,
+          scaleX: startScale,
+          duration: 130,
+          ease: "Sine.easeOut",
+          onComplete: () => {
+            this.tweens.add({
+              targets: back,
+              x: targetX,
+              y: targetY,
+              scale: this.deckCardScale * this.uiScale,
+              rotation: Phaser.Math.DegToRad(7),
+              alpha: 0.18,
+              duration: 620,
+              ease: "Cubic.easeIn",
+              onComplete: () => {
+                back.destroy();
+              }
+            });
+          }
+        });
+      }
+    });
   }
 
   private getHandCardTarget(cards: Card[], index: number): { x: number; y: number; scale: number; rotation: number } {
