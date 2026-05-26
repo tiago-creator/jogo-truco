@@ -474,6 +474,7 @@ class TableScene extends Phaser.Scene {
   private visibleTrucoResponseKey: string | null = null;
   private trucoResponseDelayTimer: Phaser.Time.TimerEvent | null = null;
   private lastCelebratedGameWinnerKey: string | null = null;
+  private activeDealAnimationKey: string | null = null;
   private lastShownTrucoResponseKey: string | null = null;
   private exitButton!: Phaser.GameObjects.Container;
   private exitButtonBg!: Phaser.GameObjects.Graphics;
@@ -2542,12 +2543,32 @@ this.exitButton.setPosition(
       return;
     }
 
-    this.playGameSound("cards-deal", 0.72);
+    const expectedHandSequence = this.roomState.handSequence;
+    const dealAnimationKey = `${expectedHandSequence}:${cardsToAnimate.map((item) => item.card.id).join(",")}`;
+
+    if (this.activeDealAnimationKey === dealAnimationKey) {
+      return;
+    }
+
+    this.activeDealAnimationKey = dealAnimationKey;
 
     for (const item of cardsToAnimate) {
       this.animatingHandCardIds.add(item.card.id);
     }
 
+    this.time.delayedCall(0, () => {
+      this.playDeckShuffleAnimation(() => {
+        if (this.activeDealAnimationKey !== dealAnimationKey || this.roomState?.handSequence !== expectedHandSequence) {
+          return;
+        }
+
+        this.playGameSound("cards-deal", 0.72);
+        this.animateDealtCards(cardsToAnimate);
+      });
+    });
+  }
+
+  private animateDealtCards(cardsToAnimate: Array<{ card: Card; owner: "self" | "opponent"; hand: Card[] }>): void {
     cardsToAnimate.forEach((item, index) => {
       const handIndex = item.hand.findIndex((card) => card.id === item.card.id);
       const fromX = this.deckGroup.x;
@@ -2581,6 +2602,135 @@ this.exitButton.setPosition(
         }
       });
     });
+  }
+
+  private playDeckShuffleAnimation(onComplete: () => void): void {
+    if (this.deckGroup.list.length === 0) {
+      this.renderDeck();
+    }
+
+    const deckCards = this.deckGroup.list.filter((child): child is Phaser.GameObjects.Container =>
+      child instanceof Phaser.GameObjects.Container
+    );
+
+    if (deckCards.length === 0) {
+      onComplete();
+      return;
+    }
+
+    const basePositions = deckCards.map((card) => ({
+      x: card.x,
+      y: card.y,
+      rotation: card.rotation,
+      scaleX: card.scaleX,
+      scaleY: card.scaleY
+    }));
+    let topDepth = 80;
+    let pass = 0;
+    const passes = 8;
+    let deckOrder = [...deckCards];
+
+    deckCards.forEach((card, index) => {
+      this.deckGroup.moveTo(card, index);
+    });
+
+    const playPass = () => {
+      const card = deckOrder[0];
+      const base = basePositions[0];
+      const side = pass % 2 === 0 ? -1 : 1;
+      const nextOrder = [...deckOrder.slice(1), card];
+      let finishedTweens = 0;
+
+      const finishPassTween = () => {
+        finishedTweens += 1;
+
+        if (finishedTweens < deckOrder.length) {
+          return;
+        }
+
+        deckOrder = nextOrder;
+
+        deckOrder.forEach((deckCard, deckIndex) => {
+          this.deckGroup.moveTo(deckCard, deckIndex);
+        });
+
+        pass += 1;
+
+        if (pass < passes) {
+          playPass();
+          return;
+        }
+
+        deckOrder.forEach((deckCard, deckIndex) => {
+          const target = basePositions[deckIndex];
+
+          this.deckGroup.moveTo(deckCard, deckIndex);
+          this.tweens.add({
+            targets: deckCard,
+            x: target.x,
+            y: target.y,
+            rotation: target.rotation,
+            scaleX: target.scaleX,
+            scaleY: target.scaleY,
+            duration: 220,
+            ease: "Back.easeOut",
+            onComplete: deckIndex === deckOrder.length - 1 ? onComplete : undefined
+          });
+        });
+      };
+
+      this.tweens.add({
+        targets: card,
+        x: base.x + side * 76 * this.uiScale,
+        y: base.y + 8 * this.uiScale,
+        rotation: base.rotation + Phaser.Math.DegToRad(side * 8),
+        duration: 260,
+        ease: "Sine.easeOut",
+        onComplete: () => {
+          this.deckGroup.bringToTop(card);
+          card.setDepth(topDepth);
+          topDepth += 1;
+
+          deckOrder.slice(1).forEach((deckCard, deckIndex) => {
+            const target = basePositions[deckIndex];
+
+            this.tweens.add({
+              targets: deckCard,
+              x: target.x,
+              y: target.y,
+              rotation: target.rotation,
+              duration: 190,
+              ease: "Sine.easeInOut",
+              onComplete: finishPassTween
+            });
+          });
+
+          this.tweens.add({
+            targets: card,
+            x: basePositions[basePositions.length - 1].x - side * 8 * this.uiScale,
+            y: basePositions[basePositions.length - 1].y - 18 * this.uiScale,
+            rotation: basePositions[basePositions.length - 1].rotation + Phaser.Math.DegToRad(-side * 7),
+            duration: 240,
+            ease: "Cubic.easeInOut",
+            onComplete: () => {
+              this.tweens.add({
+                targets: card,
+                x: basePositions[basePositions.length - 1].x,
+                y: basePositions[basePositions.length - 1].y,
+                rotation: basePositions[basePositions.length - 1].rotation,
+                scaleX: basePositions[basePositions.length - 1].scaleX,
+                scaleY: basePositions[basePositions.length - 1].scaleY,
+                duration: 150,
+                ease: "Back.easeOut",
+                onComplete: finishPassTween
+              });
+            }
+          });
+        }
+      });
+    };
+
+    playPass();
   }
 
   private revealDealtCard(
