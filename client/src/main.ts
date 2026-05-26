@@ -593,10 +593,10 @@ class TableScene extends Phaser.Scene {
     //#region Exit Button
 this.exitButtonBg = this.add.graphics();
 
-this.exitButtonText = this.add.text(0, 0, "X", {
-  color: "#ffffff",
+this.exitButtonText = this.add.text(0, 0, "SAIR", {
+  color: "#ffcf5a",
   fontFamily: "Arial Black",
-  fontSize: "38px",
+  fontSize: "13px",
   fontStyle: "900"
 }).setOrigin(0.5);
 
@@ -607,10 +607,10 @@ this.exitButton = this.add.container(0, 0, [
 
 this.drawExitButton();
 
-const exitButtonHitZone = this.add.zone(0, 0, 84, 84);
+const exitButtonHitZone = this.add.zone(0, 0, 68, 46);
 
 this.exitButton.add(exitButtonHitZone);
-this.exitButton.setSize(84, 84);
+this.exitButton.setSize(68, 46);
 
 exitButtonHitZone.setInteractive({ useHandCursor: true });
 exitButtonHitZone.on("pointerup", () => {
@@ -1037,17 +1037,17 @@ exitButtonHitZone.on("pointerup", () => {
 
     g.clear();
 
-    g.fillStyle(0x000000, 0.35);
-    g.fillCircle(5, 7, 39);
+    g.fillStyle(0x000000, 0.32);
+    g.fillRoundedRect(-30, -17, 64, 42, 7);
 
-    g.fillStyle(0x8b1e1e, 1);
-    g.fillCircle(0, 0, 39);
+    g.fillStyle(0x020403, 0.88);
+    g.fillRoundedRect(-34, -23, 64, 42, 7);
 
-    g.lineStyle(3, 0xffcf5a, 1);
-    g.strokeCircle(0, 0, 39);
+    g.lineStyle(1.6, 0xffcf5a, 0.72);
+    g.strokeRoundedRect(-34, -23, 64, 42, 7);
 
-    g.fillStyle(0xffffff, 0.12);
-    g.fillCircle(-11, -14, 12);
+    g.fillStyle(0xffffff, 0.08);
+    g.fillRoundedRect(-27, -18, 50, 9, 5);
   }
 
   leaveTable(): void {
@@ -1842,8 +1842,8 @@ exitButtonHitZone.on("pointerup", () => {
     this.cameras.main.setZoom(1);
     this.tableBackground.setPosition(width / 2, height / 2);
     this.tableBackground.setScale(backgroundScale);
-    const scoreboardWidth = Math.min(width - 24, 500 * this.uiScale);
-    this.scoreboardGroup.setPosition(12 + scoreboardWidth / 2, safeTop + 45 * this.uiScale);
+    const topScoreWidth = Math.min(width - 96 * this.uiScale, 520 * this.uiScale);
+    this.scoreboardGroup.setPosition(8 * this.uiScale + topScoreWidth / 2, safeTop + 50 * this.uiScale);
     this.actionBottom = Math.max(58, 78 * this.actionButtonScale);
 
     this.trucoButton.setPosition(width - 98 * this.actionButtonScale, height - this.actionBottom-30);
@@ -1866,8 +1866,8 @@ exitButtonHitZone.on("pointerup", () => {
       memeOutsideCloseZone.setSize(width / this.memePopup.scaleX, height / this.memePopup.scaleY);
     }
     this.exitButton.setPosition(
-  width - 54 * this.uiScale,
-  60 * this.uiScale
+  width - 42 * this.uiScale,
+  safeTop + 21 * this.uiScale
 );
     this.opponentHandGroup.setPosition(width / 2, safeTop + 198 * this.uiScale);
     this.opponentAvatarGroup.setPosition(width / 2, safeTop + 240 * this.uiScale);
@@ -2728,46 +2728,85 @@ exitButtonHitZone.on("pointerup", () => {
   private renderScoreboard(): void {
     this.scoreboardGroup.removeAll(true);
 
-    const width = Math.min(this.getViewWidth() - 24, 500 * this.uiScale);
-    const bg = this.add.rectangle(0, 0, width, 86 * this.uiScale, 0x0b261c, 0.82).setStrokeStyle(2, 0xf8f1d9, 0.35);
-    const headers = ["Rodada", "Pontos", "Valendo", "Jogos"];
     const players = this.roomState?.players ?? [];
-    const left = -width / 2 + 12;
-    const columnStart = left + Math.min(200 * this.uiScale, width * 0.4);
-    const columnGap = (width - (columnStart - left) - 12) / headers.length;
+    const self = this.roomState?.self ?? players[0];
+    const opponent = players.find((player) => player.id !== self?.id) ?? players[1] ?? players[0];
+    const availableWidth = Math.min(this.getViewWidth() - 96 * this.uiScale, 520 * this.uiScale);
+    const gap = 10 * this.uiScale;
+    const sideWidth = Phaser.Math.Clamp(86 * this.uiScale, 68 * this.uiScale, availableWidth * 0.22);
+    const centerWidth = Math.max(168 * this.uiScale, availableWidth - sideWidth * 2 - gap * 2);
+    const sideHeight = 70 * this.uiScale;
+    const centerHeight = 58 * this.uiScale;
+    const leftX = -availableWidth / 2 + sideWidth / 2;
+    const roundX = leftX + sideWidth + gap;
+    const centerX = roundX + sideWidth / 2 + gap + centerWidth / 2;
+    const handValue = this.roomState?.handValue ?? 1;
+    const mainY = -8 * this.uiScale;
+    const footerY = 40 * this.uiScale;
+    const footerWidth = Math.min(centerWidth * 0.82, 202 * this.uiScale);
+    const footerHeight = 36 * this.uiScale;
 
-    this.scoreboardGroup.add(bg);
+    const drawPanel = (x: number, y: number, width: number, height: number, alpha = 0.72) => {
+      const panel = this.add.graphics();
 
-    headers.forEach((header, index) => {
-      this.scoreboardGroup.add(this.add.text(columnStart + index * columnGap, -28 * this.uiScale, header, {
-        color: "#f8f1d9",
+      panel.fillStyle(0x020403, alpha);
+      panel.fillRoundedRect(x - width / 2, y - height / 2, width, height, 5 * this.uiScale);
+      panel.lineStyle(1.3 * this.uiScale, 0xffcf5a, 0.42);
+      panel.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 5 * this.uiScale);
+      this.scoreboardGroup.add(panel);
+    };
+
+    const addLabel = (x: number, y: number, text: string, color = "#f8f1d9", size = 9, style = "bold") => {
+      this.scoreboardGroup.add(this.add.text(x, y, text, {
+        color,
         fontFamily: "Arial",
-        fontSize: `${18 * this.uiScale}px`,
-        fontStyle: "bold"
+        fontSize: `${size * this.uiScale}px`,
+        fontStyle: style
       }).setOrigin(0.5));
-    });
+    };
 
-    players.forEach((player, rowIndex) => {
-      const y = -4 + rowIndex * 24 * this.uiScale;
-      const isSelf = player.id === this.roomState?.self?.id;
-      const name = `${isSelf ? "Voce" : player.name}`.slice(0, 14);
-      const values = [player.roundWins, player.points, this.roomState?.handValue ?? 1, player.games];
+    const addValue = (x: number, y: number, text: string, color = "#f8f1d9", size = 20) => {
+      this.scoreboardGroup.add(this.add.text(x, y, text, {
+        color,
+        fontFamily: "Arial Black",
+        fontSize: `${size * this.uiScale}px`,
+        fontStyle: "900"
+      }).setOrigin(0.5));
+    };
 
-      this.scoreboardGroup.add(this.add.text(left, y, name, {
-        color: isSelf ? "#ffcf5a" : "#f8f1d9",
-        fontFamily: "Arial",
-        fontSize: `${22 * this.uiScale}px`,
-        fontStyle: isSelf ? "bold" : "normal"
-      }).setOrigin(0, 0.5));
+    drawPanel(leftX, mainY, sideWidth, sideHeight);
+    drawPanel(centerX, mainY - 3 * this.uiScale, centerWidth, centerHeight, 0.8);
+    drawPanel(roundX, mainY, sideWidth, sideHeight);
+    drawPanel(centerX, footerY, footerWidth, footerHeight, 0.86);
 
-      values.forEach((value, index) => {
-        this.scoreboardGroup.add(this.add.text(columnStart + index * columnGap, y, String(value), {
-          color: "#f8f1d9",
-          fontFamily: "Arial",
-          fontSize: `${22 * this.uiScale}px`
-        }).setOrigin(0.5));
-      });
-    });
+    addLabel(leftX, mainY - 27 * this.uiScale, "PLACAR", "#ffcf5a", 7.5);
+    addLabel(leftX - sideWidth * 0.23, mainY - 10 * this.uiScale, "NOS", "#42e878", 9.5);
+    addLabel(leftX + sideWidth * 0.23, mainY - 10 * this.uiScale, "ELES", "#ff5a50", 9.5);
+    addValue(leftX - sideWidth * 0.23, mainY + 12 * this.uiScale, String(self?.games ?? 0), "#f8f1d9", 21);
+    addValue(leftX + sideWidth * 0.23, mainY + 12 * this.uiScale, String(opponent?.games ?? 0), "#ffddd8", 21);
+    addLabel(leftX, mainY + 29 * this.uiScale, "JOGOS", "#f8f1d9", 8);
+
+    addLabel(centerX - centerWidth * 0.34, mainY - 4 * this.uiScale, "NOS", "#42e878", 14);
+    addValue(centerX - centerWidth * 0.1, mainY - 4 * this.uiScale, String(self?.points ?? 0), "#ffffff", 37);
+    addLabel(centerX, mainY - 4 * this.uiScale, "x", "#f8f1d9", 16, "normal");
+    addValue(centerX + centerWidth * 0.1, mainY - 4 * this.uiScale, String(opponent?.points ?? 0), "#ffffff", 37);
+    addLabel(centerX + centerWidth * 0.34, mainY - 4 * this.uiScale, "ELES", "#ff5a50", 14);
+    addLabel(centerX, mainY + 22 * this.uiScale, "MELHOR DE 3", "#ffcf5a", 8);
+    addLabel(centerX, footerY - 7 * this.uiScale, `VALENDO ${handValue}`, "#f8f1d9", 9);
+    addLabel(centerX, footerY + 7 * this.uiScale, handValue === 1 ? "PONTO" : "PONTOS", "#ffcf5a", 9);
+
+    addLabel(roundX, mainY - 27 * this.uiScale, "RODADA", "#ffcf5a", 7.5);
+    addLabel(roundX - sideWidth * 0.23, mainY - 10 * this.uiScale, "NOS", "#42e878", 9.5);
+    addLabel(roundX + sideWidth * 0.23, mainY - 10 * this.uiScale, "ELES", "#ff5a50", 9.5);
+    addValue(roundX - sideWidth * 0.23, mainY + 12 * this.uiScale, String(self?.roundWins ?? 0), "#f8f1d9", 21);
+    addValue(roundX + sideWidth * 0.23, mainY + 12 * this.uiScale, String(opponent?.roundWins ?? 0), "#ffddd8", 21);
+    addLabel(roundX, mainY + 29 * this.uiScale, "MAOS", "#f8f1d9", 8);
+
+    for (const child of this.scoreboardGroup.list) {
+      if (child instanceof Phaser.GameObjects.Text) {
+        this.sharpenText(child);
+      }
+    }
   }
 
   private renderVira(): void {
