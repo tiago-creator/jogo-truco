@@ -458,6 +458,7 @@ class TableScene extends Phaser.Scene {
   private handHintGroup!: Phaser.GameObjects.Container;
   private opponentHandGroup!: Phaser.GameObjects.Container;
   private opponentAvatarGroup!: Phaser.GameObjects.Container;
+  private opponentNameGroup!: Phaser.GameObjects.Container;
   private opponentAvatarImage!: Phaser.GameObjects.Image;
   private opponentAvatarMaskShape!: Phaser.GameObjects.Graphics;
   private opponentNameText!: Phaser.GameObjects.Text;
@@ -669,7 +670,8 @@ exitButtonHitZone.on("pointerup", () => {
     this.deckGroup = this.add.container(0, 0);
     this.viraGroup = this.add.container(0, 0);
     this.tableGroup = this.add.container(0, 0);
-    this.opponentHandGroup.setDepth(8);
+    this.opponentHandGroup.setDepth(9);
+    this.opponentNameGroup.setDepth(10);
     this.viraGroup.setDepth(10);
     this.deckGroup.setDepth(12);
     this.tableGroup.setDepth(20);
@@ -1842,8 +1844,8 @@ exitButtonHitZone.on("pointerup", () => {
     this.cameras.main.setZoom(1);
     this.tableBackground.setPosition(width / 2, height / 2);
     this.tableBackground.setScale(backgroundScale);
-    const topScoreWidth = Math.min(width - 96 * this.uiScale, 520 * this.uiScale);
-    this.scoreboardGroup.setPosition(8 * this.uiScale + topScoreWidth / 2, safeTop + 50 * this.uiScale);
+    const topScoreWidth = Math.min(width - 92 * this.uiScale, 620 * this.uiScale);
+    this.scoreboardGroup.setPosition(8 * this.uiScale + topScoreWidth / 2, safeTop + 86 * this.uiScale);
     this.actionBottom = Math.max(58, 78 * this.actionButtonScale);
 
     this.trucoButton.setPosition(width - 98 * this.actionButtonScale, height - this.actionBottom-30);
@@ -1869,8 +1871,9 @@ exitButtonHitZone.on("pointerup", () => {
   width - 42 * this.uiScale,
   safeTop + 21 * this.uiScale
 );
-    this.opponentHandGroup.setPosition(width / 2, safeTop + 198 * this.uiScale);
-    this.opponentAvatarGroup.setPosition(width / 2, safeTop + 240 * this.uiScale);
+    this.opponentHandGroup.setPosition(width / 2, safeTop + 336 * this.uiScale);
+    this.opponentAvatarGroup.setPosition(width / 2, safeTop + 276 * this.uiScale);
+    this.opponentNameGroup.setPosition(width / 2, safeTop + 276 * this.uiScale);
     this.updateOpponentAvatarMaskPosition();
     this.viraGroup.setPosition(width / 2, height / 2 + 10 * this.uiScale);
     this.deckGroup.setPosition(width / 2 + 30 * this.uiScale, height / 2 + 12 * this.uiScale);
@@ -2731,28 +2734,31 @@ exitButtonHitZone.on("pointerup", () => {
     const players = this.roomState?.players ?? [];
     const self = this.roomState?.self ?? players[0];
     const opponent = players.find((player) => player.id !== self?.id) ?? players[1] ?? players[0];
-    const availableWidth = Math.min(this.getViewWidth() - 96 * this.uiScale, 520 * this.uiScale);
-    const gap = 10 * this.uiScale;
-    const sideWidth = Phaser.Math.Clamp(86 * this.uiScale, 68 * this.uiScale, availableWidth * 0.22);
-    const centerWidth = Math.max(168 * this.uiScale, availableWidth - sideWidth * 2 - gap * 2);
-    const sideHeight = 70 * this.uiScale;
-    const centerHeight = 58 * this.uiScale;
+    const availableWidth = Math.min(this.getViewWidth() - 96 * this.uiScale, 620 * this.uiScale);
+    const gap = 14 * this.uiScale;
+    const sideWidth = Phaser.Math.Clamp(155 * this.uiScale, 124 * this.uiScale, availableWidth * 0.34);
+    const centerWidth = Math.max(232 * this.uiScale, (availableWidth - sideWidth - gap) * 0.9);
+    const sideHeight = 138 * this.uiScale;
+    const centerHeight = 116 * this.uiScale;
     const leftX = -availableWidth / 2 + sideWidth / 2;
-    const roundX = leftX + sideWidth + gap;
-    const centerX = roundX + sideWidth / 2 + gap + centerWidth / 2;
+    const centerX = leftX + sideWidth / 2 + gap + centerWidth / 2;
     const handValue = this.roomState?.handValue ?? 1;
-    const mainY = -8 * this.uiScale;
-    const footerY = 40 * this.uiScale;
-    const footerWidth = Math.min(centerWidth * 0.82, 202 * this.uiScale);
-    const footerHeight = 36 * this.uiScale;
+    const currentRound = Phaser.Math.Clamp((self?.roundWins ?? 0) + (opponent?.roundWins ?? 0) + 1, 1, 3);
+    const mainY = -2 * this.uiScale;
+    const dotsY = 58 * this.uiScale;
+    const footerY = 116 * this.uiScale;
+    const dotsWidth = Math.min(centerWidth * 0.64, 248 * this.uiScale);
+    const dotsHeight = 46 * this.uiScale;
+    const footerWidth = Math.min(centerWidth * 0.64, 246 * this.uiScale);
+    const footerHeight = 74 * this.uiScale;
 
     const drawPanel = (x: number, y: number, width: number, height: number, alpha = 0.72) => {
       const panel = this.add.graphics();
 
       panel.fillStyle(0x020403, alpha);
-      panel.fillRoundedRect(x - width / 2, y - height / 2, width, height, 5 * this.uiScale);
+      panel.fillRoundedRect(x - width / 2, y - height / 2, width, height, 18 * this.uiScale);
       panel.lineStyle(1.3 * this.uiScale, 0xffcf5a, 0.42);
-      panel.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 5 * this.uiScale);
+      panel.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 18 * this.uiScale);
       this.scoreboardGroup.add(panel);
     };
 
@@ -2768,39 +2774,68 @@ exitButtonHitZone.on("pointerup", () => {
     const addValue = (x: number, y: number, text: string, color = "#f8f1d9", size = 20) => {
       this.scoreboardGroup.add(this.add.text(x, y, text, {
         color,
-        fontFamily: "Arial Black",
+        fontFamily: "Arial",
         fontSize: `${size * this.uiScale}px`,
-        fontStyle: "900"
+        fontStyle: "bold"
       }).setOrigin(0.5));
     };
 
-    drawPanel(leftX, mainY, sideWidth, sideHeight);
-    drawPanel(centerX, mainY - 3 * this.uiScale, centerWidth, centerHeight, 0.8);
-    drawPanel(roundX, mainY, sideWidth, sideHeight);
-    drawPanel(centerX, footerY, footerWidth, footerHeight, 0.86);
+    const addRoundDot = (x: number, y: number, color: number, alpha: number, strokeColor = 0xffcf5a) => {
+      this.scoreboardGroup.add(this.add.circle(x, y, 8.2 * this.uiScale, color, alpha)
+        .setStrokeStyle(1.1 * this.uiScale, strokeColor, 0.56));
+    };
 
-    addLabel(leftX, mainY - 27 * this.uiScale, "PLACAR", "#ffcf5a", 7.5);
-    addLabel(leftX - sideWidth * 0.23, mainY - 10 * this.uiScale, "NOS", "#42e878", 9.5);
-    addLabel(leftX + sideWidth * 0.23, mainY - 10 * this.uiScale, "ELES", "#ff5a50", 9.5);
-    addValue(leftX - sideWidth * 0.23, mainY + 12 * this.uiScale, String(self?.games ?? 0), "#f8f1d9", 21);
-    addValue(leftX + sideWidth * 0.23, mainY + 12 * this.uiScale, String(opponent?.games ?? 0), "#ffddd8", 21);
-    addLabel(leftX, mainY + 29 * this.uiScale, "JOGOS", "#f8f1d9", 8);
+    const addCrownIcon = (x: number, y: number, size: number, color = 0xffcf5a) => {
+      const scale = (size * this.uiScale) / 24;
+      const left = x - 12 * scale;
+      const top = y - 14 * scale;
+      const point = (px: number, py: number) => new Phaser.Math.Vector2(left + px * scale, top + py * scale);
+      const crown = this.add.graphics();
 
-    addLabel(centerX - centerWidth * 0.34, mainY - 4 * this.uiScale, "NOS", "#42e878", 14);
-    addValue(centerX - centerWidth * 0.1, mainY - 4 * this.uiScale, String(self?.points ?? 0), "#ffffff", 37);
-    addLabel(centerX, mainY - 4 * this.uiScale, "x", "#f8f1d9", 16, "normal");
-    addValue(centerX + centerWidth * 0.1, mainY - 4 * this.uiScale, String(opponent?.points ?? 0), "#ffffff", 37);
-    addLabel(centerX + centerWidth * 0.34, mainY - 4 * this.uiScale, "ELES", "#ff5a50", 14);
-    addLabel(centerX, mainY + 22 * this.uiScale, "MELHOR DE 3", "#ffcf5a", 8);
-    addLabel(centerX, footerY - 7 * this.uiScale, `VALENDO ${handValue}`, "#f8f1d9", 9);
-    addLabel(centerX, footerY + 7 * this.uiScale, handValue === 1 ? "PONTO" : "PONTOS", "#ffcf5a", 9);
+      crown.fillStyle(color, 1);
+      crown.fillPoints([
+        point(5, 16),
+        point(3, 5),
+        point(8.5, 10),
+        point(12, 4),
+        point(15.5, 10),
+        point(21, 5),
+        point(19, 16)
+      ], true);
+      crown.fillRoundedRect(left + 5 * scale, top + 18 * scale, 14 * scale, 2 * scale, 1 * scale);
+      this.scoreboardGroup.add(crown);
+    };
 
-    addLabel(roundX, mainY - 27 * this.uiScale, "RODADA", "#ffcf5a", 7.5);
-    addLabel(roundX - sideWidth * 0.23, mainY - 10 * this.uiScale, "NOS", "#42e878", 9.5);
-    addLabel(roundX + sideWidth * 0.23, mainY - 10 * this.uiScale, "ELES", "#ff5a50", 9.5);
-    addValue(roundX - sideWidth * 0.23, mainY + 12 * this.uiScale, String(self?.roundWins ?? 0), "#f8f1d9", 21);
-    addValue(roundX + sideWidth * 0.23, mainY + 12 * this.uiScale, String(opponent?.roundWins ?? 0), "#ffddd8", 21);
-    addLabel(roundX, mainY + 29 * this.uiScale, "MAOS", "#f8f1d9", 8);
+    drawPanel(leftX, mainY- 17 * this.uiScale, sideWidth, sideHeight);
+    drawPanel(centerX, mainY - 27 * this.uiScale, centerWidth, centerHeight, 0.8);
+    drawPanel(centerX, dotsY-34, dotsWidth, dotsHeight, 0.88);
+    drawPanel(centerX, footerY-22, footerWidth, footerHeight, 0.86);
+
+    addCrownIcon(leftX - 42 * this.uiScale, mainY - 60 * this.uiScale, 26);
+    addLabel(leftX + 8 * this.uiScale, mainY - 60 * this.uiScale, "PLACAR", "#ffcf5a", 16, "normal");
+    addLabel(leftX - sideWidth * 0.25, mainY - 22 * this.uiScale, "NOS", "#42e878", 22, "normal");
+    addLabel(leftX + sideWidth * 0.25, mainY - 22 * this.uiScale, "ELES", "#ff5a50", 22, "normal");
+    addValue(leftX - sideWidth * 0.25, mainY + 12 * this.uiScale, String(self?.games ?? 0), "#f8f1d9", 35);
+    addValue(leftX + sideWidth * 0.25, mainY + 12 * this.uiScale, String(opponent?.games ?? 0), "#ffddd8", 35);
+
+    addLabel(centerX - centerWidth * 0.34, mainY - 35 * this.uiScale, "NOS", "#42e878", 32, "normal");
+    addValue(centerX - centerWidth * 0.1, mainY - 35 * this.uiScale, String(self?.points ?? 0), "#ffffff", 55);
+    addLabel(centerX, mainY - 35 * this.uiScale, "x", "#f8f1d9", 20, "normal");
+    addValue(centerX + centerWidth * 0.1, mainY - 35 * this.uiScale, String(opponent?.points ?? 0), "#ffffff", 55);
+    addLabel(centerX + centerWidth * 0.34, mainY - 35 * this.uiScale, "ELES", "#ff5a50", 32, "normal");
+
+    for (let index = 0; index < 3; index += 1) {
+      const x = centerX - 85 * this.uiScale + index * 25 * this.uiScale;
+      addRoundDot(x, dotsY-34, index < (self?.roundWins ?? 0) ? 0x42e878 : 0x050505, index < (self?.roundWins ?? 0) ? 1 : 0.95);
+    }
+    addLabel(centerX, dotsY-34, "|", "#f8f1d9", 18, "normal");
+    for (let index = 0; index < 3; index += 1) {
+      const x = centerX + 35 * this.uiScale + index * 25 * this.uiScale;
+      addRoundDot(x, dotsY-34, index < (opponent?.roundWins ?? 0) ? 0xff5a50 : 0x050505, index < (opponent?.roundWins ?? 0) ? 1 : 0.95);
+    }
+
+    addLabel(centerX, footerY - 33 * this.uiScale, `RODADA ${currentRound}/3`, "#f8f1d9", 16);
+    addLabel(centerX, footerY + -6 * this.uiScale, `VALENDO ${handValue} ${handValue === 1 ? "PONTO" : "PONTOS"}`, "#ffcf5a", 16);
 
     for (const child of this.scoreboardGroup.list) {
       if (child instanceof Phaser.GameObjects.Text) {
@@ -3131,6 +3166,7 @@ exitButtonHitZone.on("pointerup", () => {
 
   private createOpponentAvatar(): Phaser.GameObjects.Container {
     const container = this.add.container(0, 0);
+    this.opponentNameGroup = this.add.container(0, 0);
 
     const bg = this.add.circle(0, 0, 50, 0xffffff, 1)
       .setStrokeStyle(2, 0xffcf5a, 0.9);
@@ -3149,12 +3185,12 @@ exitButtonHitZone.on("pointerup", () => {
     const nameBox = this.add.graphics();
 
     nameBox.fillStyle(0x000000, 0.82);
-    nameBox.fillRoundedRect(-56, 64, 112, 28, 8);
+    nameBox.fillRoundedRect(-56, 94, 112, 28, 8);
 
     nameBox.lineStyle(2, 0xffcf5a, 1);
-    nameBox.strokeRoundedRect(-56, 64, 112, 28, 8);
+    nameBox.strokeRoundedRect(-56, 94, 112, 28, 8);
 
-    const name = this.add.text(0, 78, "Oponente", {
+    const name = this.add.text(0, 108, "Oponente", {
       color: "#ffffff",
       fontFamily: "Arial",
       fontSize: "14px",
@@ -3163,13 +3199,12 @@ exitButtonHitZone.on("pointerup", () => {
     this.opponentFootMarker = this.createFootMarker();
     this.opponentFootMarker.setPosition(37, -39);
     this.opponentNameText = name;
+    this.opponentNameGroup.add([nameBox, name]);
 
     container.add([
       bg,
       avatar,
-      this.opponentFootMarker,
-      nameBox,
-      name
+      this.opponentFootMarker
     ]);
 
     container.setDepth(8);
