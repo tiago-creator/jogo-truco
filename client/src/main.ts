@@ -477,7 +477,6 @@ class TableScene extends Phaser.Scene {
   private lastShownTrucoResponseKey: string | null = null;
   private exitButton!: Phaser.GameObjects.Container;
   private exitButtonBg!: Phaser.GameObjects.Graphics;
-  private exitButtonText!: Phaser.GameObjects.Text;
   private audioButton!: Phaser.GameObjects.Container;
   private audioButtonBg!: Phaser.GameObjects.Graphics;
   private audioButtonText!: Phaser.GameObjects.Text;
@@ -594,24 +593,16 @@ class TableScene extends Phaser.Scene {
     //#region Exit Button
 this.exitButtonBg = this.add.graphics();
 
-this.exitButtonText = this.add.text(0, 0, "SAIR", {
-  color: "#ffcf5a",
-  fontFamily: "Arial Black",
-  fontSize: "13px",
-  fontStyle: "900"
-}).setOrigin(0.5);
-
 this.exitButton = this.add.container(0, 0, [
-  this.exitButtonBg,
-  this.exitButtonText
+  this.exitButtonBg
 ]);
 
 this.drawExitButton();
 
-const exitButtonHitZone = this.add.zone(0, 0, 68, 46);
+const exitButtonHitZone = this.add.zone(0, 0, 86, 86);
 
 this.exitButton.add(exitButtonHitZone);
-this.exitButton.setSize(68, 46);
+this.exitButton.setSize(86, 86);
 
 exitButtonHitZone.setInteractive({ useHandCursor: true });
 exitButtonHitZone.on("pointerup", () => {
@@ -1039,17 +1030,31 @@ exitButtonHitZone.on("pointerup", () => {
 
     g.clear();
 
-    g.fillStyle(0x000000, 0.32);
-    g.fillRoundedRect(-30, -17, 64, 42, 7);
+    const width = 82;
+    const height = 82;
+    const left = -width / 2;
+    const top = -height / 2;
+    const radius = 14;
 
+    g.fillStyle(0x000000, 0.34);
+    g.fillRoundedRect(left + 2, top + 3, width, height, radius);
     g.fillStyle(0x020403, 0.88);
-    g.fillRoundedRect(-34, -23, 64, 42, 7);
+    g.fillRoundedRect(left, top, width, height, radius);
+    g.lineStyle(1.2, 0x3d250d, 0.34);
+    g.strokeRoundedRect(left, top, width, height, radius);
+    g.lineStyle(0.7, 0xffe8a8, 0.74);
+    g.strokeRoundedRect(left, top, width, height, radius);
+    g.lineStyle(0.3, 0xfff6d8, 0.42);
+    g.strokeRoundedRect(left + 2, top + 2, width - 4, height - 4, radius - 3);
 
-    g.lineStyle(1.6, 0xffcf5a, 0.72);
-    g.strokeRoundedRect(-34, -23, 64, 42, 7);
-
-    g.fillStyle(0xffffff, 0.08);
-    g.fillRoundedRect(-27, -18, 50, 9, 5);
+    g.lineStyle(6.2, 0xd8c89d, 0.95);
+    g.lineBetween(-12, -12, 12, 12);
+    g.lineBetween(12, -12, -12, 12);
+    g.fillStyle(0xd8c89d, 0.95);
+    g.fillCircle(-12, -12, 3.1);
+    g.fillCircle(12, 12, 3.1);
+    g.fillCircle(12, -12, 3.1);
+    g.fillCircle(-12, 12, 3.1);
   }
 
   leaveTable(): void {
@@ -1867,10 +1872,11 @@ exitButtonHitZone.on("pointerup", () => {
     if (memeOutsideCloseZone instanceof Phaser.GameObjects.Zone) {
       memeOutsideCloseZone.setSize(width / this.memePopup.scaleX, height / this.memePopup.scaleY);
     }
-    this.exitButton.setPosition(
-  width - 42 * this.uiScale,
-  safeTop + 21 * this.uiScale
+this.exitButton.setPosition(
+  width - 50 * this.uiScale,
+  safeTop + 39 * this.uiScale
 );
+    this.exitButton.setScale(this.uiScale);
     this.opponentHandGroup.setPosition(width / 2, safeTop + 336 * this.uiScale);
     this.opponentAvatarGroup.setPosition(width / 2, safeTop + 276 * this.uiScale);
     this.opponentNameGroup.setPosition(width / 2, safeTop + 276 * this.uiScale);
@@ -2752,13 +2758,36 @@ exitButtonHitZone.on("pointerup", () => {
     const footerWidth = Math.min(centerWidth * 0.64, 246 * this.uiScale);
     const footerHeight = 74 * this.uiScale;
 
-    const drawPanel = (x: number, y: number, width: number, height: number, alpha = 0.72) => {
+    const drawPanel = (
+      x: number,
+      y: number,
+      width: number,
+      height: number,
+      alpha = 0.72,
+      borderColor = 0xffe8a8,
+      innerBorderColor = 0xfff6d8
+    ) => {
       const panel = this.add.graphics();
+      const left = x - width / 2;
+      const top = y - height / 2;
+      const radius = 18 * this.uiScale;
 
+      panel.fillStyle(0x000000, 0.34);
+      panel.fillRoundedRect(left + 2 * this.uiScale, top + 3 * this.uiScale, width, height, radius);
       panel.fillStyle(0x020403, alpha);
-      panel.fillRoundedRect(x - width / 2, y - height / 2, width, height, 18 * this.uiScale);
-      panel.lineStyle(3.4 * this.uiScale, 0xffcf5a, 0.42);
-      panel.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 18 * this.uiScale);
+      panel.fillRoundedRect(left, top, width, height, radius);
+      panel.lineStyle(1.2 * this.uiScale, 0x3d250d, 0.34);
+      panel.strokeRoundedRect(left, top, width, height, radius);
+      panel.lineStyle(0.7 * this.uiScale, borderColor, 0.74);
+      panel.strokeRoundedRect(left, top, width, height, radius);
+      panel.lineStyle(0.3 * this.uiScale, innerBorderColor, 0.42);
+      panel.strokeRoundedRect(
+        left + 2 * this.uiScale,
+        top + 2 * this.uiScale,
+        width - 4 * this.uiScale,
+        height - 4 * this.uiScale,
+        Math.max(2 * this.uiScale, radius - 3 * this.uiScale)
+      );
       this.scoreboardGroup.add(panel);
     };
 
@@ -2780,9 +2809,9 @@ exitButtonHitZone.on("pointerup", () => {
       }).setOrigin(0.5));
     };
 
-    const addRoundDot = (x: number, y: number, color: number, alpha: number, strokeColor = 0xffcf5a) => {
+    const addRoundDot = (x: number, y: number, color: number, alpha: number, strokeColor = 0xb9b1a4) => {
       this.scoreboardGroup.add(this.add.circle(x, y, 8.2 * this.uiScale, color, alpha)
-        .setStrokeStyle(1.1 * this.uiScale, strokeColor, 0.56));
+        .setStrokeStyle(1.7 * this.uiScale, strokeColor, 0.56));
     };
 
     const addCrownIcon = (x: number, y: number, size: number, color = 0xffcf5a) => {
@@ -2808,7 +2837,7 @@ exitButtonHitZone.on("pointerup", () => {
 
     drawPanel(leftX, mainY- 17 * this.uiScale, sideWidth, sideHeight);
     drawPanel(centerX, mainY - 27 * this.uiScale, centerWidth, centerHeight, 0.8);
-    drawPanel(centerX, dotsY-34, dotsWidth, dotsHeight, 0.88);
+    drawPanel(centerX, dotsY-34, dotsWidth, dotsHeight, 0.88, 0xb9b1a4, 0xe0d8ca);
     drawPanel(centerX, footerY-22, footerWidth, footerHeight, 0.86);
 
     addCrownIcon(leftX - 42 * this.uiScale, mainY - 60 * this.uiScale, 26);
@@ -2820,7 +2849,7 @@ exitButtonHitZone.on("pointerup", () => {
 
     addLabel(centerX - centerWidth * 0.34, mainY - 35 * this.uiScale, "NOS", "#42e878", 32, "normal");
     addValue(centerX - centerWidth * 0.1, mainY - 35 * this.uiScale, String(self?.points ?? 0), "#ffffff", 55);
-    addLabel(centerX, mainY - 35 * this.uiScale, "x", "#f8f1d9", 20, "normal");
+    addLabel(centerX, mainY - 35 * this.uiScale, "X", "#79746d", 24, "normal");
     addValue(centerX + centerWidth * 0.1, mainY - 35 * this.uiScale, String(opponent?.points ?? 0), "#ffffff", 55);
     addLabel(centerX + centerWidth * 0.34, mainY - 35 * this.uiScale, "ELES", "#ff5a50", 32, "normal");
 
@@ -2829,7 +2858,7 @@ exitButtonHitZone.on("pointerup", () => {
       const winnerPlayerId = trickResults[index]?.winnerPlayerId;
 
       if (!winnerPlayerId || !playerId) {
-        return 0x050505;
+        return 0x8f8a82;
       }
 
       if (winnerPlayerId === playerId) {
@@ -2842,13 +2871,13 @@ exitButtonHitZone.on("pointerup", () => {
     for (let index = 0; index < 3; index += 1) {
       const x = centerX - 85 * this.uiScale + index * 25 * this.uiScale;
       const color = getRoundDotColor(self?.id, index);
-      addRoundDot(x, dotsY-34, color, color === 0x050505 ? 0.95 : 1);
+      addRoundDot(x, dotsY-34, color, color === 0x8f8a82 ? 0.72 : 1);
     }
-    addLabel(centerX, dotsY-34, "|", "#f8f1d9", 18, "normal");
+    addLabel(centerX, dotsY-34, "|", "#b9b1a4", 18, "normal");
     for (let index = 0; index < 3; index += 1) {
       const x = centerX + 35 * this.uiScale + index * 25 * this.uiScale;
       const color = getRoundDotColor(opponent?.id, index);
-      addRoundDot(x, dotsY-34, color, color === 0x050505 ? 0.95 : 1);
+      addRoundDot(x, dotsY-34, color, color === 0x8f8a82 ? 0.72 : 1);
     }
 
     addLabel(centerX, footerY - 33 * this.uiScale, `RODADA ${currentRound}/3`, "#f8f1d9", 16);

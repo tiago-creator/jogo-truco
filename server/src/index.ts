@@ -196,6 +196,7 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 const rooms = new Map<string, Room>();
 const closedRoomIds = new Set<string>();
 const trickRevealDelayMs = 1200;
+const nextHandDelayMs = 1600;
 let nextAutoRoomNumber = 1;
 
 function toPublicPlayer(player: PlayerState): PublicPlayer {
@@ -747,7 +748,7 @@ function startMatch(room: Room): void {
 }
 
 function finishHand(room: Room, winner: PlayerState): void {
-  awardHand(room, winner, room.handValue);
+  awardHand(room, winner, room.handValue, false);
 }
 
 export function getHandOutcome(trickResults: TrickResult[]): HandOutcome {
@@ -784,7 +785,7 @@ export function getHandOutcome(trickResults: TrickResult[]): HandOutcome {
     : { type: "winner", winnerPlayerId: third };
 }
 
-function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue"]): void {
+function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue"], dealNextHandImmediately = true): void {
   const loser = room.players.find((player) => player.id !== winner.id);
   const matchId = room.dbMatchId;
   const winnerSnapshot = {
@@ -854,37 +855,56 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
     }
   }
 
-  dealHand(room, true);
+  const dealNextHand = () => {
+    dealHand(room, true);
 
-  if (finishedGame) {
-    room.lastGameWinnerId = winnerSnapshot.id;
-    room.lastGameWinnerName = winnerSnapshot.name;
-    room.lastGameWinnerSequence = (room.lastGameWinnerSequence ?? 0) + 1;
-    if (!winnerSnapshot.isCpu) {
-      runDatabaseTask(async () => {
-        await recordRankingGameResult({
-          winner: {
-            token: winnerSnapshot.token,
-            name: winnerSnapshot.name,
-            avatarUrl: winnerSnapshot.avatarUrl
-          },
-          loser: loserSnapshot && !loserSnapshot.isCpu
-            ? {
-              token: loserSnapshot.token,
-              name: loserSnapshot.name,
-              avatarUrl: loserSnapshot.avatarUrl
-            }
-            : undefined,
-          winnerHandsWon,
-          loserHandsWon,
-          winnerFinalPoints: winnerPointsAfter,
-          loserFinalPoints: loserPointsAfter
+    if (finishedGame) {
+      room.lastGameWinnerId = winnerSnapshot.id;
+      room.lastGameWinnerName = winnerSnapshot.name;
+      room.lastGameWinnerSequence = (room.lastGameWinnerSequence ?? 0) + 1;
+      if (!winnerSnapshot.isCpu) {
+        runDatabaseTask(async () => {
+          await recordRankingGameResult({
+            winner: {
+              token: winnerSnapshot.token,
+              name: winnerSnapshot.name,
+              avatarUrl: winnerSnapshot.avatarUrl
+            },
+            loser: loserSnapshot && !loserSnapshot.isCpu
+              ? {
+                token: loserSnapshot.token,
+                name: loserSnapshot.name,
+                avatarUrl: loserSnapshot.avatarUrl
+              }
+              : undefined,
+            winnerHandsWon,
+            loserHandsWon,
+            winnerFinalPoints: winnerPointsAfter,
+            loserFinalPoints: loserPointsAfter
+          });
         });
-      });
+      }
+      room.dbMatchId = undefined;
+      startPersistentMatch(room);
     }
-    room.dbMatchId = undefined;
-    startPersistentMatch(room);
+  };
+
+  if (dealNextHandImmediately) {
+    dealNextHand();
+    return;
   }
+
+  const expectedHandSequence = room.handSequence;
+  room.turnPlayerId = null;
+
+  setTimeout(() => {
+    if (closedRoomIds.has(room.id) || room.handSequence !== expectedHandSequence) {
+      return;
+    }
+
+    dealNextHand();
+    broadcastState(room);
+  }, nextHandDelayMs);
 }
 
 function finishTrickIfReady(room: Room, expectedHandSequence = room.handSequence): void {
