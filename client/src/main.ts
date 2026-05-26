@@ -433,6 +433,7 @@ class TableScene extends Phaser.Scene {
   private suppressNextStateEffects = false;
   private animatingTableCardIds = new Set<string>();
   private animatingHandCardIds = new Set<string>();
+  private revealedDealCardIds = new Set<string>();
   private faceDownHandCardIds = new Set<string>();
   private pendingFaceDownTableCardIds = new Set<string>();
   private pendingReliableActions = new Map<string, PendingReliableAction>();
@@ -2054,6 +2055,7 @@ this.exitButton.setPosition(
 
     if (hand.length === 3 && previousHandLength !== 3) {
       this.faceDownHandCardIds.clear();
+      this.revealedDealCardIds.clear();
       return;
     }
 
@@ -2640,6 +2642,13 @@ this.exitButton.setPosition(
         },
         onComplete: () => {
           if (item.owner === "self" && !this.roomState?.isIronHand) {
+            if (this.revealedDealCardIds.has(item.card.id)) {
+              animatedCard.destroy();
+              this.finishDealAnimation(item.card.id);
+              return;
+            }
+
+            this.revealedDealCardIds.add(item.card.id);
             this.revealDealtCard(animatedCard, item.card, target);
             return;
           }
@@ -2787,33 +2796,14 @@ this.exitButton.setPosition(
     card: Card,
     target: { x: number; y: number; scale: number; rotation: number }
   ): void {
-    this.tweens.add({
-      targets: cardBack,
-      scaleX: 0,
-      duration: 120,
-      ease: "Sine.In",
-      onComplete: () => {
-        cardBack.destroy();
-        this.playGameSound("card-flip", 0.68);
+    this.playGameSound("card-flip", 0.56);
+    this.animatingHandCardIds.delete(card.id);
+    this.renderState();
+    cardBack.destroy();
 
-        const cardFace = this.createCard(card, false);
-        cardFace.setPosition(target.x, target.y);
-        cardFace.setRotation(target.rotation);
-        cardFace.setScale(0, target.scale);
-        cardFace.setDepth(70);
-
-        this.tweens.add({
-          targets: cardFace,
-          scaleX: target.scale,
-          duration: 140,
-          ease: "Sine.Out",
-          onComplete: () => {
-            cardFace.destroy();
-            this.finishDealAnimation(card.id);
-          }
-        });
-      }
-    });
+    if (this.animatingHandCardIds.size === 0) {
+      this.activeDealAnimationKey = null;
+    }
   }
 
   private finishDealAnimation(cardId: string): void {
