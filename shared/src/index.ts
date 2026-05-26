@@ -48,6 +48,10 @@ export type TrucoResponseNotice = {
   requestedValue: 3 | 6 | 9 | 12;
 };
 
+export type TrickResult = {
+  winnerPlayerId: string | null;
+};
+
 export type ActionAck = {
   ok: boolean;
   message?: string;
@@ -65,6 +69,7 @@ export type RoomState = {
   vira?: Card;
   handSequence: number;
   handValue: 1 | 3 | 6 | 9 | 12;
+  trickResults: TrickResult[];
   turnPlayerId: string | null;
   footPlayerId?: string;
   status: "waiting" | "playing" | "finished";

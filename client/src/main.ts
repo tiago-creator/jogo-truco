@@ -105,8 +105,8 @@ type PendingReliableAction = {
   retryTimer?: number;
 };
 
-const opponentAvatarPhotoSize = 106;
-const opponentAvatarMaskRadius = 49;
+const opponentAvatarPhotoSize = 122;
+const opponentAvatarMaskRadius = 57;
 
 const serverUrl = import.meta.env.VITE_SERVER_URL ?? "https://app-truco-9ddcf4b48235.herokuapp.com";
 const tableBackgrounds = {
@@ -2757,7 +2757,7 @@ exitButtonHitZone.on("pointerup", () => {
 
       panel.fillStyle(0x020403, alpha);
       panel.fillRoundedRect(x - width / 2, y - height / 2, width, height, 18 * this.uiScale);
-      panel.lineStyle(1.3 * this.uiScale, 0xffcf5a, 0.42);
+      panel.lineStyle(1.9 * this.uiScale, 0xffcf5a, 0.42);
       panel.strokeRoundedRect(x - width / 2, y - height / 2, width, height, 18 * this.uiScale);
       this.scoreboardGroup.add(panel);
     };
@@ -2824,14 +2824,31 @@ exitButtonHitZone.on("pointerup", () => {
     addValue(centerX + centerWidth * 0.1, mainY - 35 * this.uiScale, String(opponent?.points ?? 0), "#ffffff", 55);
     addLabel(centerX + centerWidth * 0.34, mainY - 35 * this.uiScale, "ELES", "#ff5a50", 32, "normal");
 
+    const trickResults = this.roomState?.trickResults ?? [];
+    const getRoundDotColor = (playerId: string | undefined, index: number) => {
+      const winnerPlayerId = trickResults[index]?.winnerPlayerId;
+
+      if (!winnerPlayerId || !playerId) {
+        return 0x050505;
+      }
+
+      if (winnerPlayerId === playerId) {
+        return 0x42e878;
+      }
+
+      return 0xff5a50;
+    };
+
     for (let index = 0; index < 3; index += 1) {
       const x = centerX - 85 * this.uiScale + index * 25 * this.uiScale;
-      addRoundDot(x, dotsY-34, index < (self?.roundWins ?? 0) ? 0x42e878 : 0x050505, index < (self?.roundWins ?? 0) ? 1 : 0.95);
+      const color = getRoundDotColor(self?.id, index);
+      addRoundDot(x, dotsY-34, color, color === 0x050505 ? 0.95 : 1);
     }
     addLabel(centerX, dotsY-34, "|", "#f8f1d9", 18, "normal");
     for (let index = 0; index < 3; index += 1) {
       const x = centerX + 35 * this.uiScale + index * 25 * this.uiScale;
-      addRoundDot(x, dotsY-34, index < (opponent?.roundWins ?? 0) ? 0xff5a50 : 0x050505, index < (opponent?.roundWins ?? 0) ? 1 : 0.95);
+      const color = getRoundDotColor(opponent?.id, index);
+      addRoundDot(x, dotsY-34, color, color === 0x050505 ? 0.95 : 1);
     }
 
     addLabel(centerX, footerY - 33 * this.uiScale, `RODADA ${currentRound}/3`, "#f8f1d9", 16);
@@ -3168,7 +3185,7 @@ exitButtonHitZone.on("pointerup", () => {
     const container = this.add.container(0, 0);
     this.opponentNameGroup = this.add.container(0, 0);
 
-    const bg = this.add.circle(0, 0, 50, 0xffffff, 1)
+    const bg = this.add.circle(0, 0, 58, 0xffffff, 1)
       .setStrokeStyle(2, 0xffcf5a, 0.9);
 
     const avatar = this.add.image(0, 0, "opponent-avatar")

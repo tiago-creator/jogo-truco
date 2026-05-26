@@ -10,6 +10,7 @@ import {
   createDeck,
   type PublicPlayer,
   type RoomState,
+  type TrickResult,
   type ServerToClientEvents,
   type TableCard,
   type TrucoRequest,
@@ -45,10 +46,6 @@ type PlayerState = {
   points: number;
   games: number;
   token: string;
-};
-
-type TrickResult = {
-  winnerPlayerId: string | null;
 };
 
 type HandOutcome =
@@ -468,6 +465,7 @@ function buildState(room: Room, viewerId: string): RoomState {
     vira: room.vira,
     handSequence: room.handSequence,
     handValue: room.handValue,
+    trickResults: room.trickResults,
     turnPlayerId: room.turnPlayerId,
     footPlayerId: room.footPlayerId,
     status: room.status,
