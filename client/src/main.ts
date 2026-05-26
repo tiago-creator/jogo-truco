@@ -16,6 +16,7 @@ import feltTealUrl from "./img/table-backgrounds/felt-teal.png";
 import buttonClickAudioUrl from "./audio/clique-botao.mp3";
 import placingCardAudioUrl from "./audio/colocando-carta-na-mesa.mp3";
 import dealingCardsAudioUrl from "./audio/distribuindo-cartas-na-mesa.mp3";
+import shufflingCardsAudioUrl from "./audio/embaralhar-carta.mp3";
 import flipCardAudioUrl from "./audio/flip-carta.mp3";
 import removingCardAudioUrl from "./audio/tirando-carta-da-mesa.mp3";
 import meme67Url from "./audio/memes/67.mp3";
@@ -509,6 +510,7 @@ class TableScene extends Phaser.Scene {
     this.load.audio("button-click", buttonClickAudioUrl);
     this.load.audio("card-place", placingCardAudioUrl);
     this.load.audio("cards-deal", dealingCardsAudioUrl);
+    this.load.audio("cards-shuffle", shufflingCardsAudioUrl);
     this.load.audio("card-flip", flipCardAudioUrl);
     this.load.audio("card-remove", removingCardAudioUrl);
     for (const meme of memeAudios) {
@@ -2579,7 +2581,7 @@ this.exitButton.setPosition(
       const animatedCard = this.createCardBack();
 
       animatedCard.setPosition(fromX, fromY);
-      animatedCard.setScale(0.68 * this.uiScale);
+      animatedCard.setScale(this.deckCardScale * this.uiScale);
       animatedCard.setDepth(60 + index);
 
       this.tweens.add({
@@ -2609,6 +2611,8 @@ this.exitButton.setPosition(
       this.renderDeck();
     }
 
+    this.playGameSound("cards-shuffle", 0.72);
+
     const deckCards = this.deckGroup.list.filter((child): child is Phaser.GameObjects.Container =>
       child instanceof Phaser.GameObjects.Container
     );
@@ -2627,7 +2631,7 @@ this.exitButton.setPosition(
     }));
     let topDepth = 80;
     let pass = 0;
-    const passes = 8;
+    const passes = 6;
     let deckOrder = [...deckCards];
 
     deckCards.forEach((card, index) => {
@@ -2684,7 +2688,7 @@ this.exitButton.setPosition(
         x: base.x + side * 76 * this.uiScale,
         y: base.y + 8 * this.uiScale,
         rotation: base.rotation + Phaser.Math.DegToRad(side * 8),
-        duration: 260,
+        duration: 130,
         ease: "Sine.easeOut",
         onComplete: () => {
           this.deckGroup.bringToTop(card);
@@ -2699,7 +2703,7 @@ this.exitButton.setPosition(
               x: target.x,
               y: target.y,
               rotation: target.rotation,
-              duration: 190,
+              duration: 100,
               ease: "Sine.easeInOut",
               onComplete: finishPassTween
             });
@@ -2710,7 +2714,7 @@ this.exitButton.setPosition(
             x: basePositions[basePositions.length - 1].x - side * 8 * this.uiScale,
             y: basePositions[basePositions.length - 1].y - 18 * this.uiScale,
             rotation: basePositions[basePositions.length - 1].rotation + Phaser.Math.DegToRad(-side * 7),
-            duration: 240,
+            duration: 110,
             ease: "Cubic.easeInOut",
             onComplete: () => {
               this.tweens.add({
@@ -2720,7 +2724,7 @@ this.exitButton.setPosition(
                 rotation: basePositions[basePositions.length - 1].rotation,
                 scaleX: basePositions[basePositions.length - 1].scaleX,
                 scaleY: basePositions[basePositions.length - 1].scaleY,
-                duration: 150,
+                duration: 40,
                 ease: "Back.easeOut",
                 onComplete: finishPassTween
               });
