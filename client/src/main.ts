@@ -476,6 +476,7 @@ class TableScene extends Phaser.Scene {
   private trucoResponseDelayTimer: Phaser.Time.TimerEvent | null = null;
   private lastCelebratedGameWinnerKey: string | null = null;
   private activeDealAnimationKey: string | null = null;
+  private animatingViraHandSequence: number | null = null;
   private lastShownTrucoResponseKey: string | null = null;
   private exitButton!: Phaser.GameObjects.Container;
   private exitButtonBg!: Phaser.GameObjects.Graphics;
@@ -666,7 +667,7 @@ exitButtonHitZone.on("pointerup", () => {
     this.tableGroup = this.add.container(0, 0);
     this.opponentHandGroup.setDepth(9);
     this.opponentNameGroup.setDepth(10);
-    this.viraGroup.setDepth(10);
+    this.viraGroup.setDepth(8);
     this.deckGroup.setDepth(12);
     this.tableGroup.setDepth(20);
     this.handGroup.setDepth(95);
@@ -2553,6 +2554,9 @@ this.exitButton.setPosition(
     }
 
     this.activeDealAnimationKey = dealAnimationKey;
+    if (isNewHand && this.roomState.vira) {
+      this.animatingViraHandSequence = expectedHandSequence;
+    }
 
     for (const item of cardsToAnimate) {
       this.animatingHandCardIds.add(item.card.id);
@@ -2565,8 +2569,41 @@ this.exitButton.setPosition(
         }
 
         this.playGameSound("cards-deal", 0.72);
-        this.animateDealtCards(cardsToAnimate);
+        this.animateViraAfterShuffleIfNeeded(expectedHandSequence, () => {
+          this.animateDealtCards(cardsToAnimate);
+        });
       });
+    });
+  }
+
+  private animateViraAfterShuffleIfNeeded(expectedHandSequence: number, onComplete: () => void): void {
+    const vira = this.roomState?.vira;
+
+    if (!vira || this.animatingViraHandSequence !== expectedHandSequence) {
+      onComplete();
+      return;
+    }
+
+    const animatedVira = this.createCard(vira, false);
+
+    animatedVira.setPosition(this.deckGroup.x, this.deckGroup.y);
+    animatedVira.setScale(this.deckCardScale * this.uiScale);
+    animatedVira.setRotation(Phaser.Math.DegToRad(6));
+    animatedVira.setDepth(11);
+
+    this.tweens.add({
+      targets: animatedVira,
+      x: this.viraGroup.x,
+      y: this.viraGroup.y,
+      rotation: 0,
+      duration: 360,
+      ease: "Cubic.Out",
+      onComplete: () => {
+        animatedVira.destroy();
+        this.animatingViraHandSequence = null;
+        this.renderVira();
+        onComplete();
+      }
     });
   }
 
@@ -2775,6 +2812,7 @@ this.exitButton.setPosition(
     this.animatingHandCardIds.delete(cardId);
 
     if (this.animatingHandCardIds.size === 0) {
+      this.activeDealAnimationKey = null;
       this.renderState();
     }
   }
@@ -3047,7 +3085,7 @@ this.exitButton.setPosition(
   private renderVira(): void {
     this.viraGroup.removeAll(true);
 
-    if (!this.roomState?.vira) {
+    if (!this.roomState?.vira || this.animatingViraHandSequence === this.roomState.handSequence) {
       return;
     }
 
@@ -3073,7 +3111,7 @@ this.exitButton.setPosition(
       this.deckGroup.add(card);
     }
 
-    this.viraGroup.setDepth(10);
+    this.viraGroup.setDepth(8);
     this.deckGroup.setDepth(12);
   }
 
