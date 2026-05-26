@@ -655,8 +655,8 @@ exitButtonHitZone.on("pointerup", () => {
     this.viraGroup = this.add.container(0, 0);
     this.tableGroup = this.add.container(0, 0);
     this.opponentHandGroup.setDepth(8);
-    this.deckGroup.setDepth(10);
-    this.viraGroup.setDepth(12);
+    this.viraGroup.setDepth(10);
+    this.deckGroup.setDepth(12);
     this.tableGroup.setDepth(20);
     this.handGroup.setDepth(40);
     this.trucoButton.setDepth(100);
@@ -1629,7 +1629,7 @@ exitButtonHitZone.on("pointerup", () => {
   private getTrucoResponseMessage(action: "accept" | "reject" | "raise"): string {
     return {
       accept: "ACEITOU!",
-      reject: "CORREU!",
+      reject: "TO FORA!",
       raise: "AUMENTOU!"
     }[action];
   }
@@ -2646,6 +2646,7 @@ exitButtonHitZone.on("pointerup", () => {
       this.deckGroup.add(card);
     }
 
+    this.viraGroup.setDepth(10);
     this.deckGroup.setDepth(12);
   }
 

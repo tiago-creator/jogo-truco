@@ -663,6 +663,7 @@ function logElevenHandCpuDecision(room: Room, cpu: PlayerState, action: "play" |
 }
 
 function dealHand(room: Room, rotateFootPlayerBeforeDeal = false): void {
+  const previousTrucoResponse = room.lastTrucoResponse;
   const deck = shuffle(createDeck());
   const footPlayerId = rotateFootPlayerBeforeDeal ? rotateFootPlayer(room) : ensureFootPlayer(room);
   const firstPlayerId = getOpponentPlayerId(room, footPlayerId) ?? room.players[0]?.id;
@@ -691,7 +692,7 @@ function dealHand(room: Room, rotateFootPlayerBeforeDeal = false): void {
   room.trucoRequest = undefined;
   room.lastTrucoRequesterId = undefined;
   room.lastTrucoRaise = undefined;
-  room.lastTrucoResponse = undefined;
+  room.lastTrucoResponse = previousTrucoResponse;
   room.lastGameWinnerId = undefined;
   room.lastGameWinnerName = undefined;
   logHandDeal(room);
