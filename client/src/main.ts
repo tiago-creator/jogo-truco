@@ -439,6 +439,7 @@ class TableScene extends Phaser.Scene {
   private tableCardObjects = new Map<string, { container: Phaser.GameObjects.Container; signature: string }>();
   private roomId = "";
   private playerName = getCurrentPlayerName();
+  private statusBg!: Phaser.GameObjects.Graphics;
   private status!: Phaser.GameObjects.Text;
   private scoreboardGroup!: Phaser.GameObjects.Container;
   private trucoButton!: Phaser.GameObjects.Container;
@@ -524,11 +525,14 @@ class TableScene extends Phaser.Scene {
     });
     this.input.dragDistanceThreshold = 6;
 
+    this.statusBg = this.add.graphics();
     this.status = this.add.text(0, 0, "Conectando...", {
       color: "#f8f1d9",
       fontFamily: "Arial",
       fontSize: "16px"
     }).setOrigin(0.5);
+    this.statusBg.setDepth(89);
+    this.status.setDepth(90);
 
     this.scoreboardGroup = this.add.container(0, 0);
 
@@ -811,9 +815,14 @@ exitButtonHitZone.on("pointerup", () => {
       });
     });
 
-    this.socket.on("meme:play", ({ playerName, memeId }) => {
-      this.playMeme(memeId);
-      this.showOpponentSpeechBubble(`${playerName}: meme`);
+    this.socket.on("meme:play", ({ memeId }, ack) => {
+      const didPlay = this.playMeme(memeId);
+
+      this.showOpponentSpeechBubble("audio meme...");
+      ack?.({
+        ok: didPlay,
+        message: didPlay ? undefined : "Audio meme indisponivel"
+      });
     });
 
     this.scale.on("resize", () => this.layout());
@@ -966,9 +975,9 @@ exitButtonHitZone.on("pointerup", () => {
     }
   }
 
-  private playGameSound(key: string, volume = 0.8): void {
+  private playGameSound(key: string, volume = 0.8): boolean {
     if (!this.sound.get(key) && !this.cache.audio.exists(key)) {
-      return;
+      return false;
     }
 
     try {
@@ -981,12 +990,14 @@ exitButtonHitZone.on("pointerup", () => {
             this.sound.play(key, { volume });
           })
           .catch(() => undefined);
-        return;
+        return true;
       }
 
       this.sound.play(key, { volume });
+      return true;
     } catch {
       // Audio playback can still be blocked until the first user interaction.
+      return false;
     }
   }
 
@@ -1127,27 +1138,36 @@ exitButtonHitZone.on("pointerup", () => {
 
   private createMemePopup(): Phaser.GameObjects.Container {
     const popup = this.add.container(0, 0);
-    const width = 380;
-    const rowHeight = 52;
-    const visibleRows = Math.min(memeAudios.length, 7);
-    const height = 74 + visibleRows * rowHeight;
-    const listTop = -height / 2 + 58;
+    const width = 430;
+    const rowHeight = 70;
+    const visibleRows = Math.min(memeAudios.length, 6);
+    const height = 86 + visibleRows * rowHeight;
+    const listTop = -height / 2 + 70;
     const maxStartIndex = Math.max(0, memeAudios.length - visibleRows);
     const bg = this.add.graphics();
     const outsideCloseZone = this.add.zone(0, 0, this.getViewWidth(), this.getViewHeight());
     const title = this.add.text(0, -height / 2 + 26, "Memes", {
       color: "#fff3a3",
       fontFamily: "Arial Black",
-      fontSize: "20px",
+      fontSize: "24px",
       fontStyle: "900"
     }).setOrigin(0.5);
 
     outsideCloseZone.setInteractive({ useHandCursor: false });
-    outsideCloseZone.on("pointerup", () => {
+    outsideCloseZone.on("pointerdown", (pointer: Phaser.Input.Pointer) => {
+      pointerStartedInsidePopup = isPointerInsidePopup(pointer);
+    });
+    outsideCloseZone.on("pointerup", (pointer: Phaser.Input.Pointer) => {
       if (this.time.now < this.memePopupIgnoreClicksUntil) {
         return;
       }
 
+      if (pointerStartedInsidePopup || isPointerInsidePopup(pointer)) {
+        pointerStartedInsidePopup = false;
+        return;
+      }
+
+      pointerStartedInsidePopup = false;
       popup.setVisible(false);
     });
     outsideCloseZone.setDepth(-1);
@@ -1164,6 +1184,17 @@ exitButtonHitZone.on("pointerup", () => {
     let dragStartY = 0;
     let dragStartIndex = 0;
     let dragDistance = 0;
+    let pointerStartedInsidePopup = false;
+
+    const isPointerInsidePopup = (pointer: Phaser.Input.Pointer): boolean => {
+      const localX = (pointer.worldX - popup.x) / popup.scaleX;
+      const localY = (pointer.worldY - popup.y) / popup.scaleY;
+
+      return localX >= -width / 2 &&
+        localX <= width / 2 &&
+        localY >= -height / 2 &&
+        localY <= height / 2;
+    };
 
     popup.add([rows, scrollTrack, scrollThumb]);
 
@@ -1196,15 +1227,15 @@ exitButtonHitZone.on("pointerup", () => {
         const text = this.add.text(-width / 2 + 22, y, meme.name, {
           color: "#ffffff",
           fontFamily: "Arial",
-          fontSize: "17px",
+          fontSize: "22px",
           fontStyle: "bold"
         }).setOrigin(0, 0.5);
-        const hitZone = this.add.zone(0, y, width - 26, rowHeight - 4);
+        const hitZone = this.add.zone(0, y, width - 26, rowHeight - 6);
 
         rowBg.fillStyle((startIndex + index) % 2 === 0 ? 0x10281f : 0x163428, 0.9);
-        rowBg.fillRoundedRect(-width / 2 + 13, y - rowHeight / 2 + 3, width - 26, rowHeight - 6, 10);
-        rowBg.lineStyle(1, 0xffcf5a, 0.32);
-        rowBg.strokeRoundedRect(-width / 2 + 13, y - rowHeight / 2 + 3, width - 26, rowHeight - 6, 10);
+        rowBg.fillRoundedRect(-width / 2 + 13, y - rowHeight / 2 + 4, width - 26, rowHeight - 8, 12);
+        rowBg.lineStyle(2, 0xffcf5a, 0.34);
+        rowBg.strokeRoundedRect(-width / 2 + 13, y - rowHeight / 2 + 4, width - 26, rowHeight - 8, 12);
         hitZone.setInteractive({ useHandCursor: true });
         hitZone.on("wheel", (_pointer: Phaser.Input.Pointer, _dx: number, dy: number) => {
           setScrollIndex(startIndex + Math.sign(dy));
@@ -1256,14 +1287,14 @@ exitButtonHitZone.on("pointerup", () => {
     return popup;
   }
 
-  private playMeme(memeId: string): void {
+  private playMeme(memeId: string): boolean {
     const meme = memeAudios.find((item) => item.id === memeId);
 
     if (!meme) {
-      return;
+      return false;
     }
 
-    this.playGameSound(meme.key, 0.9);
+    return this.playGameSound(meme.key, 0.9);
   }
 
   private createTrucoResponseGroup(): Phaser.GameObjects.Container {
@@ -1540,14 +1571,39 @@ exitButtonHitZone.on("pointerup", () => {
     bg.lineBetween(-12, 10, -2, 28);
     bg.lineBetween(8, 10, -2, 28);
 
-    const text = this.add.text(-4, -13, message, {
+    const maxBubbleWidth = Math.min(260, Math.max(156, this.getViewWidth() - 42));
+    const text = this.add.text(0, 0, message, {
       color: "#083f32",
       fontFamily: "Arial Black",
       fontSize: "22px",
       fontStyle: "900",
       stroke: "#ffffff",
-      strokeThickness: 2
+      strokeThickness: 2,
+      align: "center",
+      wordWrap: { width: maxBubbleWidth - 30, useAdvancedWrap: true }
     }).setOrigin(0.5);
+
+    const textBounds = text.getBounds();
+    const bubbleWidth = Math.min(maxBubbleWidth, Math.max(156, textBounds.width + 34));
+    const bubbleHeight = Math.max(50, textBounds.height + 26);
+    const bubbleTop = -bubbleHeight / 2;
+    const bubbleLeft = -bubbleWidth / 2;
+    const tailTop = bubbleHeight / 2 - 4;
+    const tailBottom = bubbleHeight / 2 + 18;
+
+    text.setPosition(0, -2);
+    bg.clear();
+    bg.fillStyle(0x000000, 0.35);
+    bg.fillRoundedRect(bubbleLeft + 4, bubbleTop + 4, bubbleWidth, bubbleHeight, 14);
+    bg.fillStyle(0xfffbef, 1);
+    bg.fillRoundedRect(bubbleLeft, bubbleTop, bubbleWidth, bubbleHeight, 14);
+    bg.lineStyle(3, 0xffcf5a, 1);
+    bg.strokeRoundedRect(bubbleLeft, bubbleTop, bubbleWidth, bubbleHeight, 14);
+    bg.fillStyle(0xfffbef, 1);
+    bg.fillTriangle(-12, tailTop, 8, tailTop, -2, tailBottom);
+    bg.lineStyle(3, 0xffcf5a, 1);
+    bg.lineBetween(-12, tailTop, -2, tailBottom);
+    bg.lineBetween(8, tailTop, -2, tailBottom);
 
     bubble.add([bg, text]);
 
@@ -1777,7 +1833,6 @@ exitButtonHitZone.on("pointerup", () => {
     this.tableBackground.setScale(backgroundScale);
     const scoreboardWidth = Math.min(width - 24, 500 * this.uiScale);
     this.scoreboardGroup.setPosition(12 + scoreboardWidth / 2, safeTop + 45 * this.uiScale);
-    this.status.setPosition(width / 2, safeTop + 106 * this.uiScale);
     this.actionBottom = Math.max(58, 78 * this.actionButtonScale);
 
     this.trucoButton.setPosition(width - 98 * this.actionButtonScale, height - this.actionBottom-30);
@@ -1793,7 +1848,7 @@ exitButtonHitZone.on("pointerup", () => {
     this.audioButton.setPosition(130 * this.actionButtonScale, height - this.actionBottom);
     this.memeButton.setScale(this.actionButtonScale * 2.18);
     this.memeButton.setPosition(320 * this.actionButtonScale, height - this.actionBottom);
-    this.memePopup.setScale(Math.min(this.uiScale, (width - 24) / 380));
+    this.memePopup.setScale(Math.min(this.uiScale, (width - 24) / 430));
     this.memePopup.setPosition(width / 2, height / 2);
     const memeOutsideCloseZone = this.memePopup.list[0];
     if (memeOutsideCloseZone instanceof Phaser.GameObjects.Zone) {
@@ -1810,6 +1865,7 @@ exitButtonHitZone.on("pointerup", () => {
     this.deckGroup.setPosition(width / 2 + 30 * this.uiScale, height / 2 + 12 * this.uiScale);
     this.tableGroup.setPosition(width / 2, height / 2 - 20 * this.uiScale);
     this.updateHandGroupPosition();
+    this.updateStatusPosition(safeTop);
     this.renderState();
   }
 
@@ -1842,8 +1898,47 @@ exitButtonHitZone.on("pointerup", () => {
     this.renderTable();
     this.renderOpponentHand(opponent?.hand ?? []);
     this.updateHandGroupPosition();
+    this.updateStatusPosition(12 * this.uiScale);
+    this.drawStatusBox();
     this.renderHand(self?.hand ?? [], isMyTurn && !this.roomState.trucoRequest && !this.roomState.elevenHandDecision);
     this.sharpenExistingTexts();
+  }
+
+  private updateStatusPosition(safeTop = 12 * this.uiScale): void {
+    const width = this.getViewWidth();
+    const selfId = this.roomState?.self?.id;
+    const selfIsFoot = Boolean(selfId && this.roomState?.footPlayerId === selfId);
+    const isOpponentTurn = Boolean(selfId && this.roomState?.turnPlayerId && this.roomState.turnPlayerId !== selfId);
+    const statusAboveHand = selfIsFoot || isOpponentTurn;
+
+    if (statusAboveHand) {
+      const handCount = this.roomState?.self?.hand.length ?? 3;
+      const handScale = this.getHandCardScale(handCount);
+
+      this.status.setPosition(width / 2, this.handGroup.y - 77 * handScale);
+    } else {
+      this.status.setPosition(width / 2, safeTop + 106 * this.uiScale);
+    }
+
+    this.status.setWordWrapWidth(Math.min(width - 32, 420 * this.uiScale), true);
+    this.status.setAlign("center");
+    this.drawStatusBox();
+  }
+
+  private drawStatusBox(): void {
+    const bounds = this.status.getBounds();
+    const paddingX = 14 * this.uiScale;
+    const paddingY = 7 * this.uiScale;
+    const x = bounds.x - paddingX;
+    const y = bounds.y - paddingY;
+    const width = bounds.width + paddingX * 2;
+    const height = bounds.height + paddingY * 2;
+
+    this.statusBg.clear();
+    this.statusBg.fillStyle(0x000000, 0.68);
+    this.statusBg.fillRoundedRect(x, y, width, height, 9 * this.uiScale);
+    this.statusBg.lineStyle(1.5 * this.uiScale, 0xffcf5a, 0.42);
+    this.statusBg.strokeRoundedRect(x, y, width, height, 9 * this.uiScale);
   }
 
   private updateHandGroupPosition(): void {
@@ -1872,7 +1967,10 @@ exitButtonHitZone.on("pointerup", () => {
     if (selfIsFoot) {
       const handCount = this.roomState?.self?.hand.length ?? 3;
       const cardScale = this.getHandCardScale(handCount);
-      this.selfFootMarker.setPosition(0, -82 * cardScale);
+      const spacing = this.getHandCardSpacing(handCount, cardScale);
+      const rightEdgeX = ((handCount - 1) * spacing) / 2 + 42 * cardScale;
+
+      this.selfFootMarker.setPosition(rightEdgeX, -82 * cardScale);
       this.selfFootMarker.setScale(1 / Math.max(0.75, this.uiScale));
     }
   }

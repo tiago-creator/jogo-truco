@@ -502,7 +502,13 @@ function buildMessage(room: Room, viewerId: string): string {
       : "Aguardando decisao da mao de 11";
   }
 
-  return room.turnPlayerId === viewerId ? "Sua vez de jogar" : "Vez do oponente";
+  if (room.turnPlayerId === viewerId) {
+    return "Sua vez de jogar";
+  }
+
+  const turnPlayer = room.players.find((player) => player.id === room.turnPlayerId);
+
+  return turnPlayer ? `Vez de ${turnPlayer.name}` : "Aguardando jogada";
 }
 
 function broadcastState(room: Room): void {
@@ -526,6 +532,36 @@ function failAction(socket: TrucoServerSocket, ack: ((response: ActionAck) => vo
 
 function acknowledgeAction(ack?: (response: ActionAck) => void): void {
   ack?.({ ok: true });
+}
+
+function acknowledgeMemeDelivery(
+  opponentId: string,
+  payload: { playerId: string; playerName: string; memeId: string },
+  onDelivered: () => void,
+  ack?: (response: ActionAck) => void
+): void {
+  const timeoutEmitter = io.to(opponentId).timeout(2500) as unknown as {
+    emit: (
+      event: "meme:play",
+      payload: { playerId: string; playerName: string; memeId: string },
+      callback: (error: Error | null, responses?: ActionAck[]) => void
+    ) => void;
+  };
+
+  timeoutEmitter.emit("meme:play", payload, (error, responses) => {
+    const response = responses?.[0];
+
+    if (error || !response?.ok) {
+      ack?.({
+        ok: false,
+        message: response?.message ?? "O audio meme nao tocou para o oponente"
+      });
+      return;
+    }
+
+    onDelivered();
+    acknowledgeAction(ack);
+  });
 }
 
 function wasActionProcessed(room: Room, actionId?: string): boolean {
@@ -1653,14 +1689,21 @@ socket.on("room:leave", ({ roomId }) => {
       return;
     }
 
-    markActionProcessed(room, actionId);
-    socket.to(room.id).emit("meme:play", {
+    const opponent = room.players.find((item) => item.id !== socket.id && !item.isCpu);
+
+    if (!opponent || !io.sockets.sockets.has(opponent.id)) {
+      failAction(socket, ack, "Oponente desconectado. Tente novamente.");
+      return;
+    }
+
+    acknowledgeMemeDelivery(opponent.id, {
       playerId: player.id,
       playerName: player.name,
       memeId: cleanMemeId
-    });
-    persistRoom(room);
-    acknowledgeAction(ack);
+    }, () => {
+      markActionProcessed(room, actionId);
+      persistRoom(room);
+    }, ack);
   });
 
   socket.on("disconnect", () => {

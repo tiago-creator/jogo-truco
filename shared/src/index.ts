@@ -98,7 +98,7 @@ export type ServerToClientEvents = {
   "room:state": (state: RoomState) => void;
   "room:error": (payload: { message: string }) => void;
   "audio:message": (payload: { playerId: string; playerName: string; audio: ArrayBuffer; mimeType: string }) => void;
-  "meme:play": (payload: { playerId: string; playerName: string; memeId: string }) => void;
+  "meme:play": (payload: { playerId: string; playerName: string; memeId: string }, ack?: (response: ActionAck) => void) => void;
 };
 
 export const ranks: Rank[] = ["4", "5", "6", "7", "Q", "J", "K", "A", "2", "3"];
