@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { io, type Socket } from "socket.io-client";
-import type { ActionAck, Card, ClientToServerEvents, RoomState, ServerToClientEvents } from "@truco/shared";
+import { compareCards, compareCardsWithVira, type ActionAck, type Card, type ClientToServerEvents, type RoomState, type ServerToClientEvents } from "@truco/shared";
 import "./styles.css";
 import opponentAvatarUrl from "./img/avatar/user-secret.svg";
 import crimsonGoldCardBackUrl from "./img/cartas/crimson-gold.svg";
@@ -489,6 +489,8 @@ class TableScene extends Phaser.Scene {
   private statusBg!: Phaser.GameObjects.Graphics;
   private status!: Phaser.GameObjects.Text;
   private statusName!: Phaser.GameObjects.Text;
+  private turnProgress!: Phaser.GameObjects.Graphics;
+  private statusBoxRect = { x: 0, y: 0, width: 0, height: 0 };
   private statusCenterX = 0;
   private statusCenterY = 0;
   private scoreboardGroup!: Phaser.GameObjects.Container;
@@ -508,7 +510,9 @@ class TableScene extends Phaser.Scene {
   private opponentNameGroup!: Phaser.GameObjects.Container;
   private opponentAvatarImage!: Phaser.GameObjects.Image;
   private opponentAvatarMaskShape!: Phaser.GameObjects.Graphics;
+  private opponentNameBox!: Phaser.GameObjects.Graphics;
   private opponentNameText!: Phaser.GameObjects.Text;
+  private opponentTurnProgress!: Phaser.GameObjects.Graphics;
   private opponentFootMarker!: Phaser.GameObjects.Container;
   private selfFootMarker!: Phaser.GameObjects.Container;
   private currentOpponentAvatarUrl: string | null = null;
@@ -538,6 +542,10 @@ class TableScene extends Phaser.Scene {
   private isRecordingAudio = false;
   private audioRecordingSession = 0;
   private audioStopTimer: Phaser.Time.TimerEvent | null = null;
+  private readonly turnTimeoutMs = 30000;
+  private turnTimerKey: string | null = null;
+  private turnTimerStartedAt = 0;
+  private autoPlayTriggeredForKey: string | null = null;
   constructor() {
     super("table");
   }
@@ -582,6 +590,7 @@ class TableScene extends Phaser.Scene {
     this.input.dragDistanceThreshold = 6;
 
     this.statusBg = this.add.graphics();
+    this.turnProgress = this.add.graphics();
     this.status = this.add.text(0, 0, "Conectando...", {
       color: "#f8f1d9",
       fontFamily: "Arial",
@@ -594,6 +603,7 @@ class TableScene extends Phaser.Scene {
       fontStyle: "bold"
     }).setOrigin(0.5);
     this.statusBg.setDepth(89);
+    this.turnProgress.setDepth(89.5);
     this.status.setDepth(90);
     this.statusName.setDepth(90);
     this.statusName.setVisible(false);
@@ -856,6 +866,7 @@ exitButtonHitZone.on("pointerup", () => {
         this.animateOpponentPlayIfNeeded();
       }
       this.renderState();
+      this.syncTurnTimer();
       this.flushPendingReliableActions();
     });
 
@@ -885,6 +896,8 @@ exitButtonHitZone.on("pointerup", () => {
     });
 
     this.scale.on("resize", () => this.layout());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.clearTurnTimer());
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.clearTurnTimer());
     this.sharpenExistingTexts();
     this.layout();
   }
@@ -1964,6 +1977,10 @@ this.exitButton.setPosition(
     this.renderState();
   }
 
+  update(): void {
+    this.updateTurnProgress();
+  }
+
   private renderState(): void {
     if (!this.roomState) {
       return;
@@ -1974,6 +1991,7 @@ this.exitButton.setPosition(
     const isMyTurn = this.roomState.turnPlayerId === self?.id;
 
     this.opponentNameText.setText((opponent?.name ?? "Oponente").toUpperCase());
+    this.drawOpponentNameBox(this.hasOpponentTurnProgress());
     this.updateOpponentAvatar(opponent);
     this.renderFootMarkers();
 
@@ -1996,6 +2014,7 @@ this.exitButton.setPosition(
     this.updateStatusPosition(12 * this.uiScale);
     this.drawStatusBox();
     this.renderHand(self?.hand ?? [], isMyTurn && !this.roomState.trucoRequest && !this.roomState.elevenHandDecision);
+    this.syncTurnTimer();
     this.sharpenExistingTexts();
   }
 
@@ -2064,6 +2083,12 @@ this.exitButton.setPosition(
     const nameBounds = this.statusName.visible ? this.statusName.getBounds() : bounds;
     const paddingX = 14 * this.uiScale;
     const paddingY = 7 * this.uiScale;
+    const hasStatusProgress = Boolean(
+      this.getTurnTimerKey() &&
+      this.roomState?.self?.id &&
+      this.roomState.turnPlayerId === this.roomState.self.id
+    );
+    const progressLaneHeight = hasStatusProgress ? 10 * this.uiScale : 0;
     const boundsX = Math.min(bounds.x, nameBounds.x);
     const boundsY = Math.min(bounds.y, nameBounds.y);
     const boundsRight = Math.max(bounds.right, nameBounds.right);
@@ -2071,7 +2096,7 @@ this.exitButton.setPosition(
     const x = boundsX - paddingX;
     const y = boundsY - paddingY;
     const width = boundsRight - boundsX + paddingX * 2;
-    const height = boundsBottom - boundsY + paddingY * 2;
+    const height = boundsBottom - boundsY + paddingY * 2 + progressLaneHeight;
     const radius = 9 * this.uiScale;
 
     this.statusBg.clear();
@@ -2091,6 +2116,9 @@ this.exitButton.setPosition(
       height - 4 * this.uiScale,
       Math.max(2 * this.uiScale, radius - 3 * this.uiScale)
     );
+
+    this.statusBoxRect = { x, y, width, height };
+    this.drawTurnProgress();
   }
 
   private updateHandGroupPosition(): void {
@@ -2159,6 +2187,205 @@ this.exitButton.setPosition(
     if (previousTableCount >= 2 && state.table.length === 0 && state.status === "playing") {
       this.playGameSound("card-remove", 0.78);
     }
+  }
+
+  private getTurnTimerKey(): string | null {
+    const state = this.roomState;
+
+    if (!state || state.status !== "playing" || !state.turnPlayerId || state.trucoRequest || state.elevenHandDecision) {
+      return null;
+    }
+
+    const tableKey = state.table.map((entry) => entry.card.id).join(",");
+
+    return `${state.roomId}:${state.handSequence}:${state.turnPlayerId}:${tableKey}`;
+  }
+
+  private syncTurnTimer(): void {
+    const nextKey = this.getTurnTimerKey();
+
+    if (!nextKey) {
+      this.clearTurnTimer();
+      return;
+    }
+
+    if (this.turnTimerKey !== nextKey) {
+      this.turnTimerKey = nextKey;
+      this.turnTimerStartedAt = Date.now();
+      this.autoPlayTriggeredForKey = null;
+    }
+
+    this.drawTurnProgress();
+  }
+
+  private clearTurnTimer(): void {
+    this.turnTimerKey = null;
+    this.turnTimerStartedAt = 0;
+    this.autoPlayTriggeredForKey = null;
+    this.turnProgress?.clear();
+    this.opponentTurnProgress?.clear();
+    this.drawOpponentNameBox(false);
+  }
+
+  private updateTurnProgress(): void {
+    if (!this.turnTimerKey) {
+      return;
+    }
+
+    this.drawTurnProgress();
+
+    if (Date.now() - this.turnTimerStartedAt >= this.turnTimeoutMs) {
+      this.autoPlayCurrentTurnCard();
+    }
+  }
+
+  private getTurnProgressRatio(): number {
+    if (!this.turnTimerKey || !this.turnTimerStartedAt) {
+      return 0;
+    }
+
+    return Phaser.Math.Clamp((Date.now() - this.turnTimerStartedAt) / this.turnTimeoutMs, 0, 1);
+  }
+
+  private drawTurnProgress(): void {
+    this.turnProgress.clear();
+    this.opponentTurnProgress?.clear();
+
+    const state = this.roomState;
+    const selfId = state?.self?.id;
+
+    if (!state || !selfId || !this.turnTimerKey) {
+      return;
+    }
+
+    const ratio = this.getTurnProgressRatio();
+
+    if (state.turnPlayerId === selfId) {
+      this.drawStatusTurnProgress(ratio);
+      return;
+    }
+
+    this.drawOpponentTurnProgress(ratio);
+  }
+
+  private drawStatusTurnProgress(ratio: number): void {
+    const { x, y, width, height } = this.statusBoxRect;
+
+    if (!width || !height) {
+      return;
+    }
+
+    const padding = 5 * this.uiScale;
+    const progressTopPadding = 6 * this.uiScale;
+    const progressHeight = 4 * this.uiScale;
+    const progressX = x + padding;
+    const progressY = y + height - padding - progressHeight;
+    const progressWidth = width - padding * 2;
+
+    if (height < padding * 2 + progressHeight + progressTopPadding) {
+      return;
+    }
+
+    this.turnProgress.fillStyle(0xffffff, 0.16);
+    this.turnProgress.fillRoundedRect(progressX, progressY, progressWidth, progressHeight, progressHeight / 2);
+    this.turnProgress.fillStyle(0x42e878, 0.92);
+    this.turnProgress.fillRoundedRect(progressX, progressY, progressWidth * ratio, progressHeight, progressHeight / 2);
+  }
+
+  private drawOpponentTurnProgress(ratio: number): void {
+    if (!this.opponentTurnProgress) {
+      return;
+    }
+
+    const progressX = -54;
+    const progressY = 128;
+    const progressWidth = 108;
+    const progressHeight = 4;
+
+    this.drawOpponentNameBox(true);
+    this.opponentTurnProgress.fillStyle(0xffffff, 0.16);
+    this.opponentTurnProgress.fillRoundedRect(progressX, progressY, progressWidth, progressHeight, progressHeight / 2);
+    this.opponentTurnProgress.fillStyle(0xffcf5a, 0.94);
+    this.opponentTurnProgress.fillRoundedRect(progressX, progressY, progressWidth * ratio, progressHeight, progressHeight / 2);
+  }
+
+  private hasOpponentTurnProgress(): boolean {
+    const state = this.roomState;
+    const selfId = state?.self?.id;
+
+    return Boolean(this.getTurnTimerKey() && selfId && state?.turnPlayerId && state.turnPlayerId !== selfId);
+  }
+
+  private drawOpponentNameBox(hasProgress: boolean): void {
+    if (!this.opponentNameBox) {
+      return;
+    }
+
+    const nameBoxX = -62;
+    const nameBoxY = 89;
+    const nameBoxWidth = 124;
+    const nameBoxHeight = hasProgress ? 48 : 40;
+    const nameBoxRadius = 10;
+
+    this.opponentNameBox.clear();
+    this.opponentNameBox.fillStyle(0x000000, 0.34);
+    this.opponentNameBox.fillRoundedRect(nameBoxX + 2, nameBoxY + 3, nameBoxWidth, nameBoxHeight, nameBoxRadius);
+    this.opponentNameBox.fillStyle(0x020403, 0.86);
+    this.opponentNameBox.fillRoundedRect(nameBoxX, nameBoxY, nameBoxWidth, nameBoxHeight, nameBoxRadius);
+    this.opponentNameBox.lineStyle(1.2, 0x3d250d, 0.34);
+    this.opponentNameBox.strokeRoundedRect(nameBoxX, nameBoxY, nameBoxWidth, nameBoxHeight, nameBoxRadius);
+    this.opponentNameBox.lineStyle(0.7, 0xffe8a8, 0.74);
+    this.opponentNameBox.strokeRoundedRect(nameBoxX, nameBoxY, nameBoxWidth, nameBoxHeight, nameBoxRadius);
+    this.opponentNameBox.lineStyle(0.3, 0xfff6d8, 0.42);
+    this.opponentNameBox.strokeRoundedRect(nameBoxX + 2, nameBoxY + 2, nameBoxWidth - 4, nameBoxHeight - 4, nameBoxRadius - 3);
+  }
+
+  private autoPlayCurrentTurnCard(): void {
+    const state = this.roomState;
+    const self = state?.self;
+    const timerKey = this.turnTimerKey;
+
+    if (!state || !self || !timerKey || this.autoPlayTriggeredForKey === timerKey || state.turnPlayerId !== self.id) {
+      return;
+    }
+
+    const card = this.chooseAutoPlayCard();
+
+    if (!card) {
+      return;
+    }
+
+    this.autoPlayTriggeredForKey = timerKey;
+    this.faceDownHandCardIds.delete(card.id);
+    this.playGameSound("card-place", 0.78);
+    this.sendReliableAction("card:play", {
+      roomId: this.roomId,
+      cardId: card.id,
+      faceDown: false
+    });
+  }
+
+  private chooseAutoPlayCard(): Card | null {
+    const state = this.roomState;
+    const cards = state?.self?.hand ?? [];
+
+    if (cards.length === 0) {
+      return null;
+    }
+
+    const compareAutoPlayCards = (left: Card, right: Card) => state?.vira
+      ? compareCardsWithVira(left, right, state.vira)
+      : compareCards(left, right);
+    const sortedCards = [...cards].sort(compareAutoPlayCards);
+    const tableCard = state?.table.length === 1 ? state.table[0].card : null;
+
+    if (!tableCard) {
+      return sortedCards[sortedCards.length - 1] ?? null;
+    }
+
+    const winningCards = sortedCards.filter((card) => compareAutoPlayCards(card, tableCard) > 0);
+
+    return winningCards[0] ?? sortedCards[0] ?? null;
   }
 
   private canToggleFaceDownCard(): boolean {
@@ -3587,22 +3814,9 @@ this.exitButton.setPosition(
 
     // caixa do nome
     const nameBox = this.add.graphics();
-    const nameBoxX = -62;
-    const nameBoxY = 89;
-    const nameBoxWidth = 124;
-    const nameBoxHeight = 40;
-    const nameBoxRadius = 10;
-
-    nameBox.fillStyle(0x000000, 0.34);
-    nameBox.fillRoundedRect(nameBoxX + 2, nameBoxY + 3, nameBoxWidth, nameBoxHeight, nameBoxRadius);
-    nameBox.fillStyle(0x020403, 0.86);
-    nameBox.fillRoundedRect(nameBoxX, nameBoxY, nameBoxWidth, nameBoxHeight, nameBoxRadius);
-    nameBox.lineStyle(1.2, 0x3d250d, 0.34);
-    nameBox.strokeRoundedRect(nameBoxX, nameBoxY, nameBoxWidth, nameBoxHeight, nameBoxRadius);
-    nameBox.lineStyle(0.7, 0xffe8a8, 0.74);
-    nameBox.strokeRoundedRect(nameBoxX, nameBoxY, nameBoxWidth, nameBoxHeight, nameBoxRadius);
-    nameBox.lineStyle(0.3, 0xfff6d8, 0.42);
-    nameBox.strokeRoundedRect(nameBoxX + 2, nameBoxY + 2, nameBoxWidth - 4, nameBoxHeight - 4, nameBoxRadius - 3);
+    this.opponentNameBox = nameBox;
+    this.opponentTurnProgress = this.add.graphics();
+    this.drawOpponentNameBox(false);
 
     const name = this.add.text(0, 108, "Oponente", {
       color: "#ffffff",
@@ -3613,7 +3827,7 @@ this.exitButton.setPosition(
     this.opponentFootMarker = this.createFootMarker();
     this.opponentFootMarker.setPosition(37, -39);
     this.opponentNameText = name;
-    this.opponentNameGroup.add([nameBox, name]);
+    this.opponentNameGroup.add([nameBox, this.opponentTurnProgress, name]);
 
     container.add([
       bg,
