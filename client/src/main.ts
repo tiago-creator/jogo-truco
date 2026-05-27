@@ -537,6 +537,10 @@ class TableScene extends Phaser.Scene {
   private audioButtonHint!: Phaser.GameObjects.Text;
   private memeButton!: Phaser.GameObjects.Container;
   private memeButtonBg!: Phaser.GameObjects.Graphics;
+  private quickActionButton!: Phaser.GameObjects.Container;
+  private quickActionButtonBg!: Phaser.GameObjects.Graphics;
+  private quickActionMenu!: Phaser.GameObjects.Container;
+  private quickActionMenuBg!: Phaser.GameObjects.Graphics;
   private memePopup!: Phaser.GameObjects.Container;
   private memePopupIgnoreClicksUntil = 0;
   private audioRecorder = new WavAudioRecorder();
@@ -682,16 +686,16 @@ exitButtonHitZone.on("pointerup", () => {
 
     //#region Audio Button
     this.audioButtonBg = this.add.graphics();
-    this.audioButtonHint = this.add.text(-31, 0, "🎙", {
+    this.audioButtonHint = this.add.text(-92, 0, "🎙", {
       color: "#ffffff",
       fontFamily: "Arial",
-      fontSize: "26px"
+      fontSize: "34px"
     }).setOrigin(0.5);
-    this.audioButtonText = this.add.text(16, 0, "ENVIAR\nAUDIO", {
+    this.audioButtonText = this.add.text(30, 0, "ENVIAR AUDIO", {
       align: "center",
       color: "#ffffff",
       fontFamily: "Arial",
-      fontSize: "11px",
+      fontSize: "17px",
       fontStyle: "bold",
       lineSpacing: 2
     }).setOrigin(0.5);
@@ -700,10 +704,10 @@ exitButtonHitZone.on("pointerup", () => {
       this.audioButtonHint,
       this.audioButtonText
     ]);
-    const audioButtonHitZone = this.add.zone(0, 0, 116, 64);
+    const audioButtonHitZone = this.add.zone(0, 0, 268, 92);
 
     this.audioButton.add(audioButtonHitZone);
-    this.audioButton.setSize(110, 58);
+    this.audioButton.setSize(260, 82);
     audioButtonHitZone.setInteractive({ useHandCursor: true });
     audioButtonHitZone.on("pointerdown", () => {
       this.playButtonClickSound();
@@ -719,6 +723,8 @@ exitButtonHitZone.on("pointerup", () => {
     //#endregion
 
     this.memeButton = this.createMemeButton();
+    this.quickActionMenu = this.createQuickActionMenu();
+    this.quickActionButton = this.createQuickActionButton();
     this.memePopup = this.createMemePopup();
 
     this.handGroup = this.add.container(0, 0);
@@ -741,6 +747,8 @@ exitButtonHitZone.on("pointerup", () => {
     this.trucoButtonHitZone.setDepth(101);
     this.audioButton.setDepth(100);
     this.memeButton.setDepth(100);
+    this.quickActionMenu.setDepth(118);
+    this.quickActionButton.setDepth(119);
     this.memePopup.setDepth(240);
     this.exitButton.setDepth(100);
 
@@ -1166,14 +1174,8 @@ exitButtonHitZone.on("pointerup", () => {
     const g = this.audioButtonBg;
     const recording = this.isRecordingAudio;
 
-    this.drawQuickActionButton(
-      g,
-      recording
-        ? { topLeft: 0x7a1717, topRight: 0x491010, bottomLeft: 0x140506, bottomRight: 0x060203, border: 0xffb2a8, fill: 0x5a1515 }
-        : { topLeft: 0x174c2a, topRight: 0x0b3926, bottomLeft: 0x04170d, bottomRight: 0x020805, border: 0x55d46f, fill: 0x0b3926 },
-      110
-    );
-    this.audioButtonText.setText(recording ? "SOLTE\nAUDIO" : "ENVIAR\nAUDIO");
+    this.drawFlatQuickActionButton(g, recording ? 0x5a1515 : 0x050505, 260, 82);
+    this.audioButtonText.setText(recording ? "SOLTE AUDIO" : "ENVIAR AUDIO");
     this.audioButtonHint.setText(recording ? "●" : "🎙");
     this.audioButtonHint.setColor(recording ? "#ffddd8" : "#ffffff");
   }
@@ -1188,12 +1190,12 @@ exitButtonHitZone.on("pointerup", () => {
       border: number;
       fill: number;
     },
-    width = 126
+    width = 126,
+    height = 58
   ): void {
-    const height = 58;
     const x = -width / 2;
     const y = -height / 2;
-    const radius = 12;
+    const radius = height <= 36 ? 7 : 12;
 
     g.clear();
     g.fillStyle(colors.bottomLeft, 1);
@@ -1241,25 +1243,25 @@ exitButtonHitZone.on("pointerup", () => {
 
   private createMemeButton(): Phaser.GameObjects.Container {
     const bg = this.add.graphics();
-    const icon = this.add.text(-28, 0, "😄", {
+    const icon = this.add.text(-92, 0, "😄", {
       color: "#ffffff",
       fontFamily: "Arial",
-      fontSize: "25px"
+      fontSize: "33px"
     }).setOrigin(0.5);
-    const title = this.add.text(16, 0, "ENVIAR\nMEME", {
+    const title = this.add.text(30, 0, "ENVIAR MEME", {
       align: "center",
       color: "#ffffff",
       fontFamily: "Arial",
-      fontSize: "11px",
+      fontSize: "17px",
       fontStyle: "bold",
       lineSpacing: 2
     }).setOrigin(0.5);
-    const hitZone = this.add.zone(0, 0, 116, 64);
+    const hitZone = this.add.zone(0, 0, 268, 92);
     const button = this.add.container(0, 0, [bg, icon, title, hitZone]);
 
     this.memeButtonBg = bg;
     this.drawMemeButton();
-    button.setSize(126, 58);
+    button.setSize(260, 82);
     hitZone.setInteractive({ useHandCursor: true });
     hitZone.on("pointerup", () => {
       this.playButtonClickSound();
@@ -1269,23 +1271,113 @@ exitButtonHitZone.on("pointerup", () => {
         this.memePopupIgnoreClicksUntil = this.time.now + 220;
       }
 
+      this.setQuickActionMenuVisible(false);
       this.memePopup.setVisible(shouldOpen);
     });
 
     return button;
   }
 
+  private drawFlatQuickActionButton(
+    g: Phaser.GameObjects.Graphics,
+    fill: number,
+    width: number,
+    height: number
+  ): void {
+    const radius = 8;
+
+    g.clear();
+    g.fillStyle(fill, 0.96);
+    g.fillRoundedRect(-width / 2, -height / 2, width, height, radius);
+  }
+
+  private createQuickActionMenu(): Phaser.GameObjects.Container {
+    this.quickActionMenuBg = this.add.graphics();
+    this.audioButton.setPosition(0, -43);
+    this.memeButton.setPosition(0, 43);
+    const menu = this.add.container(0, 0, [
+      this.quickActionMenuBg,
+      this.audioButton,
+      this.memeButton
+    ]);
+
+    menu.setVisible(false);
+    this.drawQuickActionMenu();
+
+    return menu;
+  }
+
+  private drawQuickActionMenu(): void {
+    const g = this.quickActionMenuBg;
+
+    g.clear();
+    g.fillStyle(0x000000, 0.34);
+    g.fillRoundedRect(-133, -94, 266, 188, 13);
+    g.fillStyle(0x050505, 0.92);
+    g.fillRoundedRect(-135, -96, 266, 188, 13);
+    g.lineStyle(1.1, 0xffcf5a, 0.72);
+    g.strokeRoundedRect(-135, -96, 266, 188, 13);
+    g.lineStyle(0.8, 0xffffff, 0.12);
+    g.lineBetween(-120, 0, 120, 0);
+  }
+
+  private createQuickActionButton(): Phaser.GameObjects.Container {
+    this.quickActionButtonBg = this.add.graphics();
+    const hitZone = this.add.zone(0, 0, 96, 96);
+    const button = this.add.container(0, 0, [this.quickActionButtonBg, hitZone]);
+
+    this.drawQuickActionToggleButton(false);
+    button.setSize(94, 94);
+    hitZone.setInteractive({ useHandCursor: true });
+    hitZone.on("pointerup", () => {
+      this.playButtonClickSound();
+      this.setQuickActionMenuVisible(!this.quickActionMenu.visible);
+    });
+
+    return button;
+  }
+
+  private setQuickActionMenuVisible(visible: boolean): void {
+    this.quickActionMenu.setVisible(visible);
+    this.drawQuickActionToggleButton(visible);
+  }
+
+  private drawQuickActionToggleButton(active: boolean): void {
+    const g = this.quickActionButtonBg;
+
+    g.clear();
+    if (active) {
+      g.fillStyle(0xffcf5a, 0.26);
+      g.fillCircle(0, 0, 47);
+    }
+    g.fillStyle(0x050505, 0.94);
+    g.fillCircle(0, 0, 38);
+    if (active) {
+      g.lineStyle(3.5, 0xffcf5a, 0.95);
+      g.strokeCircle(0, 0, 38);
+      g.lineStyle(1, 0xffffff, 0.18);
+      g.strokeCircle(0, 0, 30);
+    } else {
+      g.lineStyle(1.2, 0x3d250d, 0.34);
+      g.strokeCircle(0, 0, 38);
+      g.lineStyle(0.7, 0xffe8a8, 0.74);
+      g.strokeCircle(0, 0, 38);
+      g.lineStyle(0.3, 0xfff6d8, 0.42);
+      g.strokeCircle(0, 0, 32);
+    }
+    g.fillStyle(0xffffff, 1);
+    g.fillRoundedRect(-19, -13, 38, 25, 10);
+    g.fillTriangle(-9, 11, -17, 21, 4, 13);
+    g.fillStyle(0x050505, 0.92);
+    g.fillCircle(-9, 0, 2.4);
+    g.fillCircle(0, 0, 2.4);
+    g.fillCircle(9, 0, 2.4);
+  }
+
   private drawMemeButton(): void {
     const g = this.memeButtonBg;
 
-    this.drawQuickActionButton(g, {
-      topLeft: 0x44205f,
-      topRight: 0x24153f,
-      bottomLeft: 0x12081f,
-      bottomRight: 0x06030c,
-      border: 0x8d64ff,
-      fill: 0x24153f
-    }, 110);
+    this.drawFlatQuickActionButton(g, 0x050505, 260, 82);
   }
 
   private createMemePopup(): Phaser.GameObjects.Container {
@@ -2130,10 +2222,13 @@ exitButtonHitZone.on("pointerup", () => {
     this.elevenHandGroup.setScale(Math.min(this.uiScale, (width - 24) / 420));
     const quickActionX = 130 * this.actionButtonScale;
     const quickActionY = height - this.actionBottom;
-    this.audioButton.setScale(this.actionButtonScale * 2.18);
-    this.audioButton.setPosition(quickActionX, quickActionY - 166 * this.actionButtonScale);
-    this.memeButton.setScale(this.actionButtonScale * 2.18);
-    this.memeButton.setPosition(quickActionX, quickActionY);
+    const quickActionScale = this.actionButtonScale * 1.55;
+    this.audioButton.setScale(1);
+    this.memeButton.setScale(1);
+    this.quickActionMenu.setScale(quickActionScale);
+    this.quickActionMenu.setPosition(quickActionX + 92 * quickActionScale, quickActionY - 148 * quickActionScale);
+    this.quickActionButton.setScale(quickActionScale);
+    this.quickActionButton.setPosition(quickActionX, quickActionY);
     this.memePopup.setScale(Math.min(this.uiScale, (width - 24) / 430));
     this.memePopup.setPosition(width / 2, height / 2);
     const memeOutsideCloseZone = this.memePopup.list[0];
@@ -2177,10 +2272,12 @@ this.exitButton.setPosition(
     this.renderFootMarkers();
 
     this.setStatusMessage(this.roomState.message);
-    this.audioButton.setVisible(this.roomState.status === "playing");
-    this.memeButton.setVisible(this.roomState.status === "playing");
+    this.quickActionButton.setVisible(this.roomState.status === "playing");
+    this.quickActionMenu.setVisible(this.roomState.status === "playing" && this.quickActionMenu.visible);
+    this.drawQuickActionToggleButton(this.quickActionMenu.visible);
     if (this.roomState.status !== "playing") {
       this.memePopup.setVisible(false);
+      this.setQuickActionMenuVisible(false);
     }
     this.renderTrucoResponse();
     this.renderElevenHandDecision();
