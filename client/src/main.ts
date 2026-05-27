@@ -13,6 +13,7 @@ import arrowUpActionIconUrl from "./img/icons/arrow-up-action.svg";
 import checkActionIconUrl from "./img/icons/check-action.svg";
 import chevronUpHintIconUrl from "./img/icons/chevron-up-hint.svg";
 import runningPlayerIconUrl from "./img/icons/running-player.svg";
+import trucoRibbonUrl from "./img/faixa.svg";
 import feltBurgundyUrl from "./img/table-backgrounds/felt-burgundy.png";
 import feltCharcoalUrl from "./img/table-backgrounds/felt-charcoal.png";
 import feltDefaultUrl from "./img/table-backgrounds/felt-default.png";
@@ -499,6 +500,8 @@ class TableScene extends Phaser.Scene {
   private trucoButtonText!: Phaser.GameObjects.Text;
   private trucoButtonSmallText!: Phaser.GameObjects.Text;
   private trucoButtonHitZone!: Phaser.GameObjects.Zone;
+  private trucoButtonIsShown = false;
+  private trucoButtonVisibilityTween: Phaser.Tweens.Tween | null = null;
   private trucoResponseGroup!: Phaser.GameObjects.Container;
   private trucoResponseTitle!: Phaser.GameObjects.Text;
   private trucoResponsePlayerName!: Phaser.GameObjects.Text;
@@ -576,6 +579,7 @@ class TableScene extends Phaser.Scene {
     this.load.image("check-action-icon", checkActionIconUrl);
     this.load.image("chevron-up-hint-icon", chevronUpHintIconUrl);
     this.load.image("running-player-icon", runningPlayerIconUrl);
+    this.load.image("truco-ribbon", trucoRibbonUrl);
     this.load.audio("button-click", buttonClickAudioUrl);
     this.load.audio("card-place", placingCardAudioUrl);
     this.load.audio("cards-deal", dealingCardsAudioUrl);
@@ -642,6 +646,9 @@ class TableScene extends Phaser.Scene {
       this.trucoButtonSmallText,
       this.trucoButtonText
     ]);
+    this.trucoButton.setVisible(false);
+    this.trucoButton.setAlpha(0);
+    this.trucoButton.setScale(0.82);
     this.trucoButtonHitZone.on("pointerup", () => {
       const state = this.roomState;
 
@@ -850,7 +857,7 @@ exitButtonHitZone.on("pointerup", () => {
         this.lastAnimatedTrucoValue = state.lastTrucoRaise.value;
 
         this.playGameSound("truco-alert", 0.82);
-        this.playTrucoRaiseAnimation(
+        const trucoAnimationDuration = this.playTrucoRaiseAnimation(
           state.lastTrucoRaise.playerName,
           {
             1: "TRUCO",
@@ -871,7 +878,7 @@ exitButtonHitZone.on("pointerup", () => {
 );
 
         if (pendingTrucoResponseKey) {
-          this.delayTrucoResponseOptions(pendingTrucoResponseKey);
+          this.delayTrucoResponseOptions(pendingTrucoResponseKey, trucoAnimationDuration);
         }
       }
 
@@ -1760,6 +1767,7 @@ exitButtonHitZone.on("pointerup", () => {
   }
 
   private respondToTrucoRequest(action: "accept" | "reject" | "raise"): boolean {
+    const request = this.roomState?.trucoRequest;
     const didSend = this.sendReliableAction("truco:respond", {
       roomId: this.roomId,
       action
@@ -1768,6 +1776,18 @@ exitButtonHitZone.on("pointerup", () => {
     if (didSend) {
       this.clearTrucoResponseTimer();
       this.trucoResponseGroup.setVisible(false);
+
+      if (action === "raise" && request) {
+        const raisedValue = {
+          3: "SEIS",
+          6: "NOVE",
+          9: "DOZE",
+          12: "DOZE"
+        }[request.requestedValue] ?? "SEIS";
+
+        this.playGameSound("truco-alert", 0.82);
+        this.playTrucoRaiseAnimation(this.roomState?.self?.name ?? "Jogador", raisedValue);
+      }
     }
 
     return didSend;
@@ -2002,11 +2022,11 @@ exitButtonHitZone.on("pointerup", () => {
     }[action];
   }
 
-  private delayTrucoResponseOptions(key: string): void {
+  private delayTrucoResponseOptions(key: string, delayMs = 2300): void {
     this.delayedTrucoResponseKey = key;
     this.visibleTrucoResponseKey = null;
     this.trucoResponseDelayTimer?.remove(false);
-    this.trucoResponseDelayTimer = this.time.delayedCall(1800, () => {
+    this.trucoResponseDelayTimer = this.time.delayedCall(delayMs, () => {
       if (!this.roomState || this.delayedTrucoResponseKey !== key || this.getTrucoResponseKey(this.roomState) !== key) {
         return;
       }
@@ -2056,8 +2076,8 @@ exitButtonHitZone.on("pointerup", () => {
     ];
 
     if (enabled) {
-      this.fillPolygonVerticalGradient(g, points, 0x174c2a, 0x04170d, buttonY, buttonHeight, 96, scale);
-      g.fillStyle(0x0b3926, 0.18);
+      this.fillPolygonVerticalGradient(g, points, 0x28d85b, 0x020d06, buttonY, buttonHeight, 220, scale);
+      g.fillStyle(0x0f7a2d, 0.12);
       g.fillPoints(points, true);
     } else {
       g.fillStyle(0x444444, 1);
@@ -2116,7 +2136,6 @@ exitButtonHitZone.on("pointerup", () => {
     this.trucoButton.add(this.trucoButtonSmallText);
     this.trucoButton.add(this.trucoButtonText);
 
-    this.trucoButton.setScale(1.0);
     this.trucoButton.setSize(buttonWidth, buttonHeight);
   }
 
@@ -2795,153 +2814,273 @@ this.exitButton.setPosition(
     return container;
   }
 
-  private playTrucoRaiseAnimation(playerName: string, value: string): void {
-    const { width, height } = this.scale;
+  private playTrucoRaiseAnimation(playerName: string, value: string): number {
+    const animationDurationMs = 2300;
+    const width = this.getViewWidth();
+    const height = this.getViewHeight();
     const valueUpper = value.toUpperCase();
-    const animationScale = 2;
+    const scale = Phaser.Math.Clamp(Math.min(width / 820, height / 920), 0.72, 1.08);
+    const container = this.add.container(width / 2, height / 2 + 34 * scale);
 
-    const container = this.add.container(width / 2, height / 2);
     container.setDepth(20000);
     container.setAlpha(0);
-    container.setScale(0.35 * animationScale);
+    container.setScale(0.42);
 
-    const bg = this.add.graphics();
+    const glow = this.add.graphics();
 
-    // sombra externa
-    bg.fillStyle(0x000000, 0.45);
-    bg.fillRoundedRect(-165, -82, 330, 164, 28);
+    glow.fillStyle(0xffcf5a, 0.14);
+    glow.fillCircle(0, 0, 280 * scale);
+    glow.fillStyle(0x42e878, 0.1);
+    glow.fillCircle(0, 18 * scale, 220 * scale);
+    glow.fillStyle(0xffffff, 0.07);
+    glow.fillCircle(0, -8 * scale, 150 * scale);
 
-    // raios dourados atrás
-    for (let i = 0; i < 18; i++) {
-      const angle = Phaser.Math.DegToRad(i * 20);
-      const x1 = Math.cos(angle) * 70;
-      const y1 = Math.sin(angle) * 38;
-      const x2 = Math.cos(angle) * 162;
-      const y2 = Math.sin(angle) * 92;
+    const burst = this.add.graphics();
 
-      bg.lineStyle(3, 0xffcf5a, 0.22);
-      bg.lineBetween(x1, y1, x2, y2);
+    for (let index = 0; index < 46; index += 1) {
+      const angle = Phaser.Math.DegToRad(index * (360 / 46));
+      const inner = (42 + (index % 3) * 18) * scale;
+      const outer = (220 + (index % 4) * 34) * scale;
+      const color = index % 4 === 0 ? 0xffffff : index % 3 === 0 ? 0x42e878 : 0xffcf5a;
+
+      burst.lineStyle(index % 4 === 0 ? 2.4 * scale : 3.4 * scale, color, index % 4 === 0 ? 0.45 : 0.64);
+      burst.lineBetween(
+        Math.cos(angle) * inner,
+        Math.sin(angle) * inner,
+        Math.cos(angle) * outer,
+        Math.sin(angle) * outer
+      );
     }
 
-    // fundo principal
-    bg.fillStyle(0x063629, 1);
-    bg.fillRoundedRect(-145, -62, 290, 124, 24);
+    const ribbonY = 84 * scale;
+    const ribbon = this.add.image(0, ribbonY, "truco-ribbon")
+      .setDisplaySize(620 * scale, 160 * scale);
 
-    // borda grossa
-    bg.lineStyle(6, 0xffcf5a, 1);
-    bg.strokeRoundedRect(-145, -62, 290, 124, 24);
-
-    // borda interna clara
-    bg.lineStyle(2, 0xfff3a3, 0.95);
-    bg.strokeRoundedRect(-134, -51, 268, 102, 18);
-
-
-
-    const starsLayout: Record<string, { top: number; bottom: number }> = {
-      TRUCO: { top: 3, bottom: 0 },
-      SEIS: { top: 3, bottom: 3 },
-      NOVE: { top: 5, bottom: 4 },
-      DOZE: { top: 6, bottom: 6 }
-    };
-
-    const layout = starsLayout[valueUpper] ?? starsLayout.TRUCO;
-
-    const topStars = this.createCurvedStars(
-      layout.top,
-      0,
-      -78,
-      layout.top >= 5 ? 118 : 86,
-      "top"
-    );
-
-    const bottomStars = layout.bottom > 0
-      ? this.createCurvedStars(
-        layout.bottom,
-        0,
-        78,
-        layout.bottom >= 5 ? 118 : 86,
-        "bottom"
-      )
-      : null;
-
-    const title = this.add.text(0, -34, `${playerName} pediu`, {
-      color: "#fff3a3",
-      fontFamily: "Arial",
-      fontSize: "21px",
-      fontStyle: "bold",
-      stroke: "#000000",
-      strokeThickness: 3
-    }).setOrigin(0.5);
-
-    const textGlow = this.add.text(0, 8, valueUpper, {
+    const raiseTitleFont = "Impact, Arial Black, Arial";
+    const titleGlow = this.add.text(0, 0, `${valueUpper}!`, {
       color: "#ffcf5a",
-      fontFamily: "Arial Black",
-      fontSize: valueUpper === "TRUCO" ? "58px" : "62px",
+      fontFamily: raiseTitleFont,
+      fontSize: `${128 * scale}px`,
       fontStyle: "900",
-      stroke: "#000000",
-      strokeThickness: 10
-    }).setOrigin(0.5);
-
-    textGlow.setAlpha(0.38);
-
-    const text = this.add.text(0, 8, valueUpper, {
-      color: "#ffffff",
-      fontFamily: "Arial Black",
-      fontSize: valueUpper === "TRUCO" ? "50px" : "54px",
-      fontStyle: "900",
-      stroke: "#7a3500",
-      strokeThickness: 7,
+      stroke: "#3b1700",
+      strokeThickness: 24 * scale,
       shadow: {
         offsetX: 0,
-        offsetY: 4,
+        offsetY: 10 * scale,
         color: "#000000",
-        blur: 8,
+        blur: 14 * scale,
+        stroke: true,
+        fill: true
+      }
+    }).setOrigin(0.5);
+
+    titleGlow.setAlpha(0.42);
+
+    const title = this.add.text(0, 0, `${valueUpper}!`, {
+      color: "#fff7d7",
+      fontFamily: raiseTitleFont,
+      fontSize: `${120 * scale}px`,
+      fontStyle: "900",
+      stroke: "#9c4b00",
+      strokeThickness: 13 * scale,
+      shadow: {
+        offsetX: 0,
+        offsetY: 6 * scale,
+        color: "#4f2100",
+        blur: 0,
         stroke: true,
         fill: true
       }
     }).setOrigin(0.5);
 
     const shine = this.add.graphics();
-    shine.fillStyle(0xffffff, 0.18);
-    shine.fillEllipse(-42, 8, 90, 18);
-    shine.setRotation(-0.22);
 
-    container.add(
-      bottomStars
-        ? [bg, topStars, bottomStars, title, textGlow, text]
-        : [bg, topStars, title, textGlow, text]
-    );
+    shine.fillStyle(0xffffff, 0.26);
+    shine.fillEllipse(-52 * scale, -34 * scale, 170 * scale, 30 * scale);
+    shine.setRotation(-0.14);
+
+    const captionY = 184 * scale;
+    const captionBg = this.add.graphics();
+
+    captionBg.fillStyle(0x000000, 0.68);
+    captionBg.fillRoundedRect(-92 * scale, captionY - 17 * scale, 184 * scale, 34 * scale, 8 * scale);
+    captionBg.lineStyle(1 * scale, 0xffcf5a, 0.72);
+    captionBg.strokeRoundedRect(-92 * scale, captionY - 17 * scale, 184 * scale, 34 * scale, 8 * scale);
+
+    const captionName = this.add.text(0, captionY, `${playerName} pediu `, {
+      color: "#f8f1d9",
+      fontFamily: "Arial",
+      fontSize: `${18 * scale}px`
+    }).setOrigin(1, 0.5);
+    const captionValue = this.add.text(0, captionY, valueUpper.toLowerCase(), {
+      color: "#ffcf5a",
+      fontFamily: "Arial",
+      fontSize: `${18 * scale}px`,
+      fontStyle: "bold"
+    }).setOrigin(0, 0.5);
+
+    const makeStar = (x: number, y: number, size: number): Phaser.GameObjects.Container => {
+      const star = this.add.container(x, y);
+      const g = this.add.graphics();
+      const points: Phaser.Math.Vector2[] = [];
+
+      for (let index = 0; index < 10; index += 1) {
+        const radius = (index % 2 === 0 ? size : size * 0.45) * scale;
+        const angle = Phaser.Math.DegToRad(-90 + index * 36);
+
+        points.push(new Phaser.Math.Vector2(Math.cos(angle) * radius, Math.sin(angle) * radius));
+      }
+
+      g.fillStyle(0xfff3a3, 1);
+      g.fillPoints(points, true);
+      g.lineStyle(2 * scale, 0xd98008, 0.95);
+      g.strokePoints(points, true, true);
+      star.add(g);
+      return star;
+    };
+    const stars: Phaser.GameObjects.Container[] = [];
+
+    [
+      [-250, -70, 16],
+      [-188, 98, 24],
+      [-52, 128, 18],
+      [82, -118, 16],
+      [214, 112, 22],
+      [268, -40, 15]
+    ].forEach(([x, y, size]) => {
+      stars.push(makeStar(x * scale, y * scale, size));
+    });
+
+    const confetti: Phaser.GameObjects.Graphics[] = [];
+
+    for (let index = 0; index < 22; index += 1) {
+      const g = this.add.graphics();
+      const color = index % 3 === 0 ? 0xffcf5a : index % 3 === 1 ? 0x42e878 : 0xffffff;
+
+      g.fillStyle(color, 0.92);
+      g.fillRoundedRect(-4 * scale, -9 * scale, 8 * scale, 18 * scale, 2 * scale);
+      g.setPosition(Phaser.Math.Between(-310, 310) * scale, Phaser.Math.Between(-145, 135) * scale);
+      g.setRotation(Phaser.Math.FloatBetween(-1.2, 1.2));
+      confetti.push(g);
+    }
+
+    const flyingCards = [
+      { x: -260 * scale, y: -54 * scale, rotation: -0.42, card: { id: "anim-6-clubs", rank: "6", suit: "clubs" } as Card },
+      { x: 262 * scale, y: -62 * scale, rotation: 0.34, card: { id: "anim-6-diamonds", rank: "6", suit: "diamonds" } as Card },
+      { x: -302 * scale, y: 78 * scale, rotation: -0.2, card: null },
+      { x: 318 * scale, y: 70 * scale, rotation: 0.28, card: null }
+    ].map((item) => {
+      const card = item.card ? this.createCard(item.card, false) : this.createCardBack();
+
+      card.setPosition(item.x, item.y);
+      card.setScale(0.78 * scale);
+      card.setRotation(item.rotation);
+      card.setAlpha(0);
+      return card;
+    });
+
+    container.add([
+      glow,
+      burst,
+      ...confetti,
+      ...stars,
+      ...flyingCards,
+      ribbon,
+      titleGlow,
+      title,
+      shine,
+      captionBg,
+      captionName,
+      captionValue
+    ]);
+
+    stars.forEach((star, index) => {
+      star.setAlpha(0);
+      star.setScale(0.35);
+      this.tweens.add({
+        targets: star,
+        alpha: 1,
+        scale: { from: 0.35, to: 1 },
+        angle: index % 2 === 0 ? 18 : -18,
+        delay: 110 + index * 42,
+        duration: 360,
+        ease: "Back.Out",
+        yoyo: true,
+        repeat: 1
+      });
+    });
+
+    confetti.forEach((piece, index) => {
+      piece.setAlpha(0);
+      this.tweens.add({
+        targets: piece,
+        alpha: { from: 0, to: 1 },
+        y: piece.y + Phaser.Math.Between(24, 70) * scale,
+        x: piece.x + Phaser.Math.Between(-28, 28) * scale,
+        rotation: piece.rotation + Phaser.Math.FloatBetween(-1.6, 1.6),
+        delay: 80 + index * 18,
+        duration: 800,
+        ease: "Cubic.Out"
+      });
+    });
+
+    flyingCards.forEach((card, index) => {
+      const targetY = card.y;
+
+      card.setY(card.y + (index < 2 ? -170 : 150) * scale);
+      this.tweens.add({
+        targets: card,
+        alpha: 1,
+        y: targetY,
+        rotation: card.rotation + (index % 2 === 0 ? -0.16 : 0.16),
+        delay: 130 + index * 80,
+        duration: 560,
+        ease: "Back.Out"
+      });
+    });
+
+    this.tweens.add({
+      targets: burst,
+      alpha: { from: 0.28, to: 0.8 },
+      scale: { from: 0.62, to: 1.06 },
+      duration: 520,
+      ease: "Cubic.Out"
+    });
 
     this.tweens.add({
       targets: container,
       alpha: 1,
-      scale: 1.12 * animationScale,
-      duration: 280,
+      scale: 1,
+      duration: 320,
       ease: "Back.Out",
       onComplete: () => {
         this.tweens.add({
-          targets: container,
-          scale: animationScale,
-          duration: 130,
+          targets: [title, titleGlow],
+          scaleX: 1.04,
+          scaleY: 1.04,
+          yoyo: true,
+          repeat: 2,
+          duration: 170,
           ease: "Sine.Out"
         });
 
         this.tweens.add({
-          targets: [topStars, bottomStars].filter(Boolean),
+          targets: glow,
+          alpha: 0.68,
           scale: 1.08,
           yoyo: true,
-          repeat: 2,
-          duration: 180,
+          repeat: 3,
+          duration: 260,
           ease: "Sine.InOut"
         });
 
-        this.time.delayedCall(1000, () => {
+        this.time.delayedCall(1450, () => {
           this.tweens.add({
             targets: container,
             alpha: 0,
-            y: container.y - 70,
-            scale: 0.82 * animationScale,
-            duration: 340,
+            y: container.y - 92 * scale,
+            scale: 0.76,
+            duration: 420,
             ease: "Cubic.In",
             onComplete: () => container.destroy()
           });
@@ -2949,10 +3088,315 @@ this.exitButton.setPosition(
       }
     });
 
-    this.cameras.main.shake(180, 0.006);
+    this.cameras.main.shake(240, 0.007);
+    return animationDurationMs;
+  }
+
+  private playGameWinTrucoStyleAnimation(): void {
+    const width = this.getViewWidth();
+    const height = this.getViewHeight();
+    const scale = Phaser.Math.Clamp(Math.min(width / 860, height / 920), 0.72, 1.08);
+    const container = this.add.container(width / 2, height / 2 + 30 * scale);
+
+    container.setDepth(50000);
+    container.setAlpha(0);
+    container.setScale(0.42);
+
+    const glow = this.add.graphics();
+
+    glow.fillStyle(0xffcf5a, 0.18);
+    glow.fillCircle(0, 0, 300 * scale);
+    glow.fillStyle(0x42e878, 0.1);
+    glow.fillCircle(0, 18 * scale, 230 * scale);
+    glow.fillStyle(0xffffff, 0.08);
+    glow.fillCircle(0, -10 * scale, 165 * scale);
+
+    const burst = this.add.graphics();
+
+    for (let index = 0; index < 52; index += 1) {
+      const angle = Phaser.Math.DegToRad(index * (360 / 52));
+      const inner = (44 + (index % 3) * 18) * scale;
+      const outer = (220 + (index % 4) * 38) * scale;
+      const color = index % 4 === 0 ? 0xffffff : index % 3 === 0 ? 0x42e878 : 0xffcf5a;
+
+      burst.lineStyle(index % 4 === 0 ? 2.4 * scale : 3.6 * scale, color, index % 4 === 0 ? 0.45 : 0.66);
+      burst.lineBetween(
+        Math.cos(angle) * inner,
+        Math.sin(angle) * inner,
+        Math.cos(angle) * outer,
+        Math.sin(angle) * outer
+      );
+    }
+
+    const ribbonY = 88 * scale;
+    const ribbon = this.add.image(0, ribbonY, "truco-ribbon")
+      .setDisplaySize(640 * scale, 164 * scale);
+
+    const crown = this.add.container(0, -168 * scale);
+    const crownGraphic = this.add.graphics();
+    const crownScale = (130 * scale) / 24;
+    const crownLeft = -12 * crownScale;
+    const crownTop = -14 * crownScale;
+    const crownPoint = (px: number, py: number) => new Phaser.Math.Vector2(crownLeft + px * crownScale, crownTop + py * crownScale);
+
+    crownGraphic.fillStyle(0xffcf5a, 1);
+    crownGraphic.fillPoints([
+      crownPoint(5, 16),
+      crownPoint(3, 5),
+      crownPoint(8.5, 10),
+      crownPoint(12, 4),
+      crownPoint(15.5, 10),
+      crownPoint(21, 5),
+      crownPoint(19, 16)
+    ], true);
+    crownGraphic.fillRoundedRect(crownLeft + 5 * crownScale, crownTop + 18 * crownScale, 14 * crownScale, 2 * crownScale, crownScale);
+    crown.add(crownGraphic);
+
+    const winTitleFont = "Impact, Arial Black, Arial";
+    const titleGlow = this.add.text(0, 0, "VITORIA!", {
+      color: "#ffcf5a",
+      fontFamily: winTitleFont,
+      fontSize: `${126 * scale}px`,
+      fontStyle: "900",
+      stroke: "#3b1700",
+      strokeThickness: 24 * scale,
+      shadow: {
+        offsetX: 0,
+        offsetY: 10 * scale,
+        color: "#000000",
+        blur: 14 * scale,
+        stroke: true,
+        fill: true
+      }
+    }).setOrigin(0.5);
+
+    titleGlow.setAlpha(0.45);
+
+    const title = this.add.text(0, 0, "VITORIA!", {
+      color: "#fff7d7",
+      fontFamily: winTitleFont,
+      fontSize: `${118 * scale}px`,
+      fontStyle: "900",
+      stroke: "#9c4b00",
+      strokeThickness: 13 * scale,
+      shadow: {
+        offsetX: 0,
+        offsetY: 6 * scale,
+        color: "#4f2100",
+        blur: 0,
+        stroke: true,
+        fill: true
+      }
+    }).setOrigin(0.5);
+
+    const shine = this.add.graphics();
+
+    shine.fillStyle(0xffffff, 0.25);
+    shine.fillEllipse(-50 * scale, -34 * scale, 170 * scale, 30 * scale);
+    shine.setRotation(-0.14);
+
+    const captionY = 186 * scale;
+    const captionBg = this.add.graphics();
+
+    captionBg.fillStyle(0x000000, 0.7);
+    captionBg.fillRoundedRect(-112 * scale, captionY - 17 * scale, 224 * scale, 34 * scale, 8 * scale);
+    captionBg.lineStyle(1 * scale, 0xffcf5a, 0.72);
+    captionBg.strokeRoundedRect(-112 * scale, captionY - 17 * scale, 224 * scale, 34 * scale, 8 * scale);
+
+    const caption = this.add.text(0, captionY, "voce ganhou o jogo", {
+      color: "#fff3c0",
+      fontFamily: "Arial",
+      fontSize: `${18 * scale}px`,
+      fontStyle: "bold"
+    }).setOrigin(0.5);
+
+    const makeStar = (x: number, y: number, size: number): Phaser.GameObjects.Container => {
+      const star = this.add.container(x, y);
+      const g = this.add.graphics();
+      const points: Phaser.Math.Vector2[] = [];
+
+      for (let index = 0; index < 10; index += 1) {
+        const radius = (index % 2 === 0 ? size : size * 0.45) * scale;
+        const angle = Phaser.Math.DegToRad(-90 + index * 36);
+
+        points.push(new Phaser.Math.Vector2(Math.cos(angle) * radius, Math.sin(angle) * radius));
+      }
+
+      g.fillStyle(0xfff3a3, 1);
+      g.fillPoints(points, true);
+      g.lineStyle(2 * scale, 0xd98008, 0.95);
+      g.strokePoints(points, true, true);
+      star.add(g);
+      return star;
+    };
+    const stars: Phaser.GameObjects.Container[] = [];
+
+    [
+      [-268, -68, 18],
+      [-206, 98, 24],
+      [-60, 132, 18],
+      [78, -128, 16],
+      [214, 116, 23],
+      [282, -42, 16]
+    ].forEach(([x, y, size]) => {
+      stars.push(makeStar(x * scale, y * scale, size));
+    });
+
+    const confetti: Phaser.GameObjects.Graphics[] = [];
+
+    for (let index = 0; index < 32; index += 1) {
+      const piece = this.add.graphics();
+      const color = [0xffcf5a, 0xffffff, 0x42e878, 0x38bdf8, 0xf97316][index % 5];
+
+      piece.fillStyle(color, 0.94);
+      piece.fillRoundedRect(-4 * scale, -9 * scale, 8 * scale, 18 * scale, 2 * scale);
+      piece.setPosition(Phaser.Math.Between(-330, 330) * scale, Phaser.Math.Between(-155, 145) * scale);
+      piece.setRotation(Phaser.Math.FloatBetween(-1.2, 1.2));
+      confetti.push(piece);
+    }
+
+    const flyingCards = [
+      { x: -268 * scale, y: -58 * scale, rotation: -0.42, card: { id: "win-ace-spades", rank: "A", suit: "spades" } as Card },
+      { x: 268 * scale, y: -62 * scale, rotation: 0.34, card: { id: "win-seven-diamonds", rank: "7", suit: "diamonds" } as Card },
+      { x: -318 * scale, y: 82 * scale, rotation: -0.18, card: null },
+      { x: 318 * scale, y: 76 * scale, rotation: 0.24, card: null }
+    ].map((item) => {
+      const card = item.card ? this.createCard(item.card, false) : this.createCardBack();
+
+      card.setPosition(item.x, item.y);
+      card.setScale(0.78 * scale);
+      card.setRotation(item.rotation);
+      card.setAlpha(0);
+      return card;
+    });
+
+    container.add([
+      glow,
+      burst,
+      ...confetti,
+      ...stars,
+      ...flyingCards,
+      ribbon,
+      crown,
+      titleGlow,
+      title,
+      shine,
+      captionBg,
+      caption
+    ]);
+
+    stars.forEach((star, index) => {
+      star.setAlpha(0);
+      star.setScale(0.35);
+      this.tweens.add({
+        targets: star,
+        alpha: 1,
+        scale: { from: 0.35, to: 1 },
+        angle: index % 2 === 0 ? 18 : -18,
+        delay: 110 + index * 42,
+        duration: 360,
+        ease: "Back.Out",
+        yoyo: true,
+        repeat: 2
+      });
+    });
+
+    confetti.forEach((piece, index) => {
+      piece.setAlpha(0);
+      this.tweens.add({
+        targets: piece,
+        alpha: { from: 0, to: 1 },
+        y: piece.y + Phaser.Math.Between(42, 110) * scale,
+        x: piece.x + Phaser.Math.Between(-40, 40) * scale,
+        rotation: piece.rotation + Phaser.Math.FloatBetween(-2.4, 2.4),
+        delay: 80 + index * 15,
+        duration: 1150,
+        ease: "Cubic.Out"
+      });
+    });
+
+    flyingCards.forEach((card, index) => {
+      const targetY = card.y;
+
+      card.setY(card.y + (index < 2 ? -180 : 155) * scale);
+      this.tweens.add({
+        targets: card,
+        alpha: 1,
+        y: targetY,
+        rotation: card.rotation + (index % 2 === 0 ? -0.16 : 0.16),
+        delay: 130 + index * 80,
+        duration: 560,
+        ease: "Back.Out"
+      });
+    });
+
+    this.tweens.add({
+      targets: burst,
+      alpha: { from: 0.28, to: 0.84 },
+      scale: { from: 0.62, to: 1.06 },
+      duration: 520,
+      ease: "Cubic.Out"
+    });
+
+    this.tweens.add({
+      targets: container,
+      alpha: 1,
+      scale: 1,
+      duration: 320,
+      ease: "Back.Out",
+      onComplete: () => {
+        this.tweens.add({
+          targets: [title, titleGlow],
+          scaleX: 1.04,
+          scaleY: 1.04,
+          yoyo: true,
+          repeat: 3,
+          duration: 170,
+          ease: "Sine.Out"
+        });
+
+        this.tweens.add({
+          targets: glow,
+          alpha: 0.68,
+          scale: 1.08,
+          yoyo: true,
+          repeat: 5,
+          duration: 260,
+          ease: "Sine.InOut"
+        });
+
+        this.tweens.add({
+          targets: crown,
+          y: crown.y - 6 * scale,
+          scaleX: 1.01,
+          scaleY: 1.01,
+          yoyo: true,
+          repeat: 5,
+          duration: 260,
+          ease: "Sine.InOut"
+        });
+
+        this.time.delayedCall(2600, () => {
+          this.tweens.add({
+            targets: container,
+            alpha: 0,
+            y: container.y - 92 * scale,
+            scale: 0.76,
+            duration: 420,
+            ease: "Cubic.In",
+            onComplete: () => container.destroy()
+          });
+        });
+      }
+    });
+
+    this.cameras.main.flash(260, 255, 207, 90, true);
+    this.cameras.main.shake(260, 0.007);
   }
 
   private playGameWinAnimation(): void {
+    this.playGameWinTrucoStyleAnimation();
+    return;
     const width = this.getViewWidth();
     const height = this.getViewHeight();
     const container = this.add.container(width / 2, height / 2);
@@ -3495,8 +3939,9 @@ this.exitButton.setPosition(
     }[handValue];
     const enabled = this.canRaiseTruco();
 
-    this.drawTrucoRaiseButton(label, enabled);
+    this.drawTrucoRaiseButton(label, true);
     this.setTrucoButtonInteractive(enabled);
+    this.setTrucoButtonVisibility(enabled);
   }
 
   private renderTrucoResponse(): void {
@@ -3674,6 +4119,45 @@ this.exitButton.setPosition(
     } else {
       this.trucoButtonHitZone.disableInteractive();
     }
+  }
+
+  private setTrucoButtonVisibility(visible: boolean): void {
+    if (this.trucoButtonIsShown === visible && !this.trucoButtonVisibilityTween) {
+      return;
+    }
+
+    this.trucoButtonIsShown = visible;
+    this.trucoButtonVisibilityTween?.stop();
+    this.trucoButtonVisibilityTween = null;
+
+    if (visible) {
+      this.trucoButton.setVisible(true);
+      this.trucoButton.setAlpha(Math.min(this.trucoButton.alpha, 0.08));
+      this.trucoButton.setScale(Math.min(this.trucoButton.scaleX, 0.46));
+      this.trucoButtonVisibilityTween = this.tweens.add({
+        targets: this.trucoButton,
+        alpha: 1,
+        scale: 1,
+        duration: 340,
+        ease: "Back.Out",
+        onComplete: () => {
+          this.trucoButtonVisibilityTween = null;
+        }
+      });
+      return;
+    }
+
+    this.trucoButtonVisibilityTween = this.tweens.add({
+      targets: this.trucoButton,
+      alpha: 0,
+      scale: 0.38,
+      duration: 280,
+      ease: "Back.In",
+      onComplete: () => {
+        this.trucoButton.setVisible(false);
+        this.trucoButtonVisibilityTween = null;
+      }
+    });
   }
 
   private renderScoreboard(): void {

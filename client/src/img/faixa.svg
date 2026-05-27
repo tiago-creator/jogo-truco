@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="700" height="180" viewBox="0 0 700 180">
+  <defs>
+    <linearGradient id="green" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0%" stop-color="#168b3a"></stop>
+      <stop offset="55%" stop-color="#075322"></stop>
+      <stop offset="100%" stop-color="#022b13"></stop>
+    </linearGradient>
+
+    <linearGradient id="gold" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#fff4b0"></stop>
+      <stop offset="45%" stop-color="#d49a25"></stop>
+      <stop offset="100%" stop-color="#7a4b08"></stop>
+    </linearGradient>
+
+    <filter id="shadow">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#000" flood-opacity="0.55"></feDropShadow>
+    </filter>
+  </defs>
+
+  <!-- Sombra -->
+  <path d="M90 60 Q350 10 610 60 L650 130 Q350 85 50 130 Z" fill="#000" opacity="0.45" filter="url(#shadow)"></path>
+
+  <!-- Pontas da faixa -->
+  <path d="M70 62 L10 92 L70 122 L95 92 Z" fill="url(#green)" stroke="url(#gold)" stroke-width="5"></path>
+  <path d="M630 62 L690 92 L630 122 L605 92 Z" fill="url(#green)" stroke="url(#gold)" stroke-width="5"></path>
+
+  <!-- Corpo principal -->
+  <path d="M80 50 Q350 5 620 50 L620 120 Q350 75 80 120 Z" fill="url(#green)" stroke="url(#gold)" stroke-width="6"></path>
+
+  <!-- Brilho interno -->
+  <path d="M105 62 Q350 28 595 62" fill="none" stroke="#fff8c8" stroke-width="3" opacity="0.55"></path>
+
+  <!-- Linha inferior -->
+  <path d="M105 108 Q350 72 595 108" fill="none" stroke="#041b0d" stroke-width="4" opacity="0.6"></path>
+</svg>
