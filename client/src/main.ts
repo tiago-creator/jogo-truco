@@ -1916,8 +1916,7 @@ exitButtonHitZone.on("pointerup", () => {
     ];
 
     if (enabled) {
-      g.fillGradientStyle(0x174c2a, 0x174c2a, 0x04170d, 0x04170d, 1);
-      g.fillPoints(points, true);
+      this.fillPolygonVerticalGradient(g, points, 0x174c2a, 0x04170d, buttonY, buttonHeight, 96, scale);
       g.fillStyle(0x0b3926, 0.18);
       g.fillPoints(points, true);
     } else {
