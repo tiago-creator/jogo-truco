@@ -1915,8 +1915,15 @@ exitButtonHitZone.on("pointerup", () => {
       new Phaser.Math.Vector2(buttonX + 12 * scale, buttonY + 46 * scale),
     ];
 
-    g.fillStyle(enabled ? 0x083f32 : 0x444444, 1);
-    g.fillPoints(points, true);
+    if (enabled) {
+      g.fillGradientStyle(0x174c2a, 0x174c2a, 0x04170d, 0x04170d, 1);
+      g.fillPoints(points, true);
+      g.fillStyle(0x0b3926, 0.18);
+      g.fillPoints(points, true);
+    } else {
+      g.fillStyle(0x444444, 1);
+      g.fillPoints(points, true);
+    }
 
     g.lineStyle(5 * scale, 0xfff3a3, 1);
     g.strokePoints(points, true, true);
@@ -1958,6 +1965,50 @@ exitButtonHitZone.on("pointerup", () => {
 
     this.trucoButton.setScale(1.0);
     this.trucoButton.setSize(buttonWidth, buttonHeight);
+  }
+
+  private fillPolygonVerticalGradient(
+    g: Phaser.GameObjects.Graphics,
+    points: Phaser.Math.Vector2[],
+    topColorValue: number,
+    bottomColorValue: number,
+    top: number,
+    height: number,
+    steps: number,
+    scale: number
+  ): void {
+    const topColor = Phaser.Display.Color.ValueToColor(topColorValue);
+    const bottomColor = Phaser.Display.Color.ValueToColor(bottomColorValue);
+
+    for (let index = 0; index < steps; index += 1) {
+      const ratio = index / (steps - 1);
+      const y1 = top + height * ratio;
+      const y2 = top + height * ((index + 1) / steps) + 1 * scale;
+      const intersections = points
+        .map((point, pointIndex) => {
+          const next = points[(pointIndex + 1) % points.length];
+          const minY = Math.min(point.y, next.y);
+          const maxY = Math.max(point.y, next.y);
+
+          if (y1 < minY || y1 > maxY || point.y === next.y) {
+            return null;
+          }
+
+          const edgeRatio = (y1 - point.y) / (next.y - point.y);
+          return point.x + (next.x - point.x) * edgeRatio;
+        })
+        .filter((value): value is number => value !== null)
+        .sort((left, right) => left - right);
+
+      if (intersections.length < 2) {
+        continue;
+      }
+
+      const color = Phaser.Display.Color.Interpolate.ColorWithColor(topColor, bottomColor, steps - 1, index);
+
+      g.fillStyle(Phaser.Display.Color.GetColor(color.r, color.g, color.b), 1);
+      g.fillRect(intersections[0], y1, intersections[intersections.length - 1] - intersections[0], y2 - y1);
+    }
   }
 
   private uiScale = 1;
