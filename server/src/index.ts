@@ -1030,7 +1030,7 @@ function handlePlayerExit(socketId: string, explicitRoomId?: string, preserveRec
 
     const hasHumanOpponent = room.players.some((item) => item.id !== socketId && !item.isCpu);
 
-    if (room.status === "playing" && room.players.length === 2 && hasHumanOpponent) {
+    if (preserveReconnectSeat && room.status === "playing" && room.players.length === 2 && hasHumanOpponent) {
       makePlayerCpu(room, player, preserveReconnectSeat);
       broadcastState(room);
       return;
@@ -1355,8 +1355,9 @@ io.on("connection", (socket) => {
     broadcastState(room);
   });
 
-socket.on("room:leave", ({ roomId }) => {
+socket.on("room:leave", ({ roomId }, ack?: () => void) => {
   handlePlayerExit(socket.id, roomId, false);
+  ack?.();
 });
   socket.on("card:play", ({ roomId, cardId, faceDown, actionId }, ack) => {
     const room = rooms.get(roomId);

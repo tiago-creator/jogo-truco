@@ -501,6 +501,8 @@ class TableScene extends Phaser.Scene {
   private trucoButtonHitZone!: Phaser.GameObjects.Zone;
   private trucoResponseGroup!: Phaser.GameObjects.Container;
   private trucoResponseTitle!: Phaser.GameObjects.Text;
+  private trucoResponsePlayerName!: Phaser.GameObjects.Text;
+  private trucoResponseSubtitle!: Phaser.GameObjects.Text;
   private trucoResponseRaiseText!: Phaser.GameObjects.Text;
   private trucoResponseProgress!: Phaser.GameObjects.Graphics;
   private elevenHandGroup!: Phaser.GameObjects.Container;
@@ -1150,17 +1152,29 @@ exitButtonHitZone.on("pointerup", () => {
     this.audioRecordingSession += 1;
 
     const currentSocket = this.socket;
+    const leaveRoomId = this.roomId;
+    let didDisconnect = false;
+    const disconnectSocket = () => {
+      if (didDisconnect) {
+        return;
+      }
 
-    if (this.roomState) {
+      didDisconnect = true;
+      currentSocket.disconnect();
+    };
+
+    if (this.roomState && leaveRoomId) {
       this.socket.emit("room:leave", {
-        roomId: this.roomId
+        roomId: leaveRoomId
+      }, () => {
+        disconnectSocket();
       });
+      window.setTimeout(disconnectSocket, 1200);
+    } else {
+      disconnectSocket();
     }
 
     this.roomId = "";
-    window.setTimeout(() => {
-      currentSocket.disconnect();
-    }, 200);
     this.roomState = null;
     this.previousRoomState = null;
     this.lastAnimatedTrucoValue = null;
@@ -1557,30 +1571,53 @@ exitButtonHitZone.on("pointerup", () => {
     const bg = this.add.graphics();
 
     bg.fillStyle(0x000000, 0.34);
-    bg.fillRoundedRect(-284, -119, 572, 244, 24);
-    bg.fillStyle(0x020403, 0.86);
-    bg.fillRoundedRect(-286, -122, 572, 244, 24);
+    bg.fillRoundedRect(-322, -180, 644, 362, 26);
+    bg.fillStyle(0x020403, 0.92);
+    bg.fillRoundedRect(-326, -184, 644, 362, 26);
     bg.lineStyle(1.2, 0x3d250d, 0.34);
-    bg.strokeRoundedRect(-286, -122, 572, 244, 24);
+    bg.strokeRoundedRect(-326, -184, 644, 362, 26);
     bg.lineStyle(0.7, 0xffe8a8, 0.74);
-    bg.strokeRoundedRect(-286, -122, 572, 244, 24);
+    bg.strokeRoundedRect(-326, -184, 644, 362, 26);
     bg.lineStyle(0.3, 0xfff6d8, 0.42);
-    bg.strokeRoundedRect(-284, -120, 568, 240, 21);
+    bg.strokeRoundedRect(-322, -180, 636, 354, 22);
 
-    const title = this.add.text(0, -78, "Pedido de truco", {
-      color: "#fff3a3",
-      fontFamily: "Arial Black",
-      fontSize: "34px",
-      fontStyle: "900"
+    const title = this.add.text(0, -116, "PEDIDO DE TRUCO", {
+      color: "#ffe7a0",
+      fontFamily: "Arial",
+      fontSize: "38px",
+      fontStyle: "bold",
+      stroke: "#5d3b08",
+      strokeThickness: 2
+    }).setOrigin(0.5);
+    const playerName = this.add.text(0, -66, "", {
+      align: "right",
+      color: "#42e878",
+      fontFamily: "Arial",
+      fontSize: "20px",
+      fontStyle: "normal"
+    }).setOrigin(0.5);
+    const subtitle = this.add.text(0, -66, "", {
+      align: "left",
+      color: "#f8f1d9",
+      fontFamily: "Arial",
+      fontSize: "20px",
+      fontStyle: "normal",
+    }).setOrigin(0.5);
+    const footer = this.add.text(0, 144, "Escolha rapidamente para nao perder a vez.", {
+      color: "#d8d3c6",
+      fontFamily: "Arial",
+      fontSize: "17px"
     }).setOrigin(0.5);
     const progress = this.add.graphics();
 
-    const reject = this.createTrucoResponseButton(-182, 44, "CORRER", 0x8b4a12, "reject");
-    const accept = this.createTrucoResponseButton(0, 44, "ACEITAR", 0x1f7a2e, "accept");
-    const raise = this.createTrucoResponseButton(182, 44, "AUMENTAR", 0x1976a8, "raise");
-    const group = this.add.container(0, 0, [bg, title, progress, reject.container, accept.container, raise.container]);
+    const reject = this.createTrucoResponseButton(-208, 50, "CORRER", 0x8b4a12, "reject");
+    const accept = this.createTrucoResponseButton(0, 50, "ACEITAR", 0x1f7a2e, "accept");
+    const raise = this.createTrucoResponseButton(208, 50, "AUMENTAR", 0x1976a8, "raise");
+    const group = this.add.container(0, 0, [bg, title, playerName, subtitle, progress, reject.container, accept.container, raise.container, footer]);
 
     this.trucoResponseTitle = title;
+    this.trucoResponsePlayerName = playerName;
+    this.trucoResponseSubtitle = subtitle;
     this.trucoResponseRaiseText = raise.text;
     this.trucoResponseProgress = progress;
     group.setDepth(15000);
@@ -1668,46 +1705,51 @@ exitButtonHitZone.on("pointerup", () => {
     action: "accept" | "reject" | "raise"
   ): { container: Phaser.GameObjects.Container; text: Phaser.GameObjects.Text } {
     const bg = this.add.graphics();
-    const colors = {
-      reject: { topLeft: 0xf2a334, topRight: 0xa85b16, bottomLeft: 0x4a1e07, bottomRight: 0x160804, border: 0xffcf5a, fill: 0x8b4a12 },
-      accept: { topLeft: 0x66d05f, topRight: 0x238c35, bottomLeft: 0x0d3914, bottomRight: 0x061907, border: 0x55d46f, fill: 0x1f7a2e },
-      raise: { topLeft: 0x68c9ff, topRight: 0x238ac9, bottomLeft: 0x0b3556, bottomRight: 0x041622, border: 0x8fd7ff, fill: 0x1976a8 }
+    const style = {
+      reject: { fill: 0x170e05, border: 0xc98b24, iconTint: 0xf0bd4f, subtitle: "-1 ponto", subtitleColor: "#ff8b34" },
+      accept: { fill: 0x0f2608, border: 0x9be85d, iconTint: 0x8fe26a, subtitle: "Continuar rodada", subtitleColor: "#5cff55" },
+      raise: { fill: 0x081523, border: 0x5e9bd4, iconTint: 0xb9d7ff, subtitle: "+3 pontos", subtitleColor: "#a9d5ff" }
     }[action];
 
-    this.drawQuickActionButton(bg, colors, 158, 74);
+    bg.fillStyle(0x000000, 0.38);
+    bg.fillRoundedRect(-80, -68, 160, 136, 14);
+    bg.fillStyle(style.fill, 0.96);
+    bg.fillRoundedRect(-84, -72, 160, 136, 14);
+    bg.lineStyle(1.6, style.border, 0.88);
+    bg.strokeRoundedRect(-84, -72, 160, 136, 14);
+    bg.lineStyle(0.8, 0xffffff, 0.14);
+    bg.strokeRoundedRect(-78, -66, 148, 124, 10);
+
     const runIcon = action === "reject"
-      ? this.add.image(-48, 0, "running-player-icon").setDisplaySize(40, 40)
+      ? this.add.image(0, -32, "running-player-icon").setDisplaySize(54, 54).setTint(style.iconTint)
       : null;
     const acceptIcon = action === "accept"
-      ? this.add.image(-48, 0, "check-action-icon").setDisplaySize(40, 40)
+      ? this.add.image(0, -32, "check-action-icon").setDisplaySize(54, 54).setTint(style.iconTint)
       : null;
     const raiseIcon = action === "raise"
-      ? this.add.image(-48, 0, "arrow-up-action-icon").setDisplaySize(40, 40)
+      ? this.add.image(0, -32, "arrow-up-action-icon").setDisplaySize(54, 54).setTint(style.iconTint)
       : null;
 
-    const text = this.add.text(24, action === "raise" ? -6 : 0, label, {
+    const text = this.add.text(0, 23, label, {
       align: "center",
       color: "#ffffff",
       fontFamily: "Arial",
-      fontSize: "16px",
-      fontStyle: "bold",
-      lineSpacing: 2
+      fontSize: "22px",
+      fontStyle: "bold"
     }).setOrigin(0.5);
-    const subtitle = action === "raise"
-      ? this.add.text(24, 17, "+3 PONTOS", {
-        color: "#d8f2ff",
-        fontFamily: "Arial",
-        fontSize: "10px",
-        fontStyle: "bold"
-      }).setOrigin(0.5)
-      : null;
+    const subtitle = this.add.text(0, 43, style.subtitle, {
+      color: style.subtitleColor,
+      fontFamily: "Arial",
+      fontSize: "15px",
+      fontStyle: "bold"
+    }).setOrigin(0.5);
 
-    const hitZone = this.add.zone(0, 0, 172, 88);
+    const hitZone = this.add.zone(0, 0, 176, 152);
     const children = [bg, runIcon, acceptIcon, raiseIcon, text, subtitle, hitZone].filter(Boolean) as Phaser.GameObjects.GameObject[];
     const button = this.add.container(x, y, children);
 
     button.setName(`truco-response-${action}`);
-    button.setSize(158, 74);
+    button.setSize(160, 136);
     hitZone.setInteractive({ useHandCursor: true });
     hitZone.on("pointerup", () => {
       this.playButtonClickSound();
@@ -2223,7 +2265,7 @@ exitButtonHitZone.on("pointerup", () => {
       this.trucoButton.y
     );
     this.trucoResponseGroup.setPosition(width / 2, height / 2 + 112 * this.uiScale);
-    this.trucoResponseGroup.setScale(Math.min(this.uiScale * 1.12, (width - 24) / 572));
+    this.trucoResponseGroup.setScale(Math.min(this.uiScale, (width - 24) / 680, (height - 120 * this.uiScale) / 390));
     this.elevenHandGroup.setPosition(width / 2, height / 2 + 112 * this.uiScale);
     this.elevenHandGroup.setScale(Math.min(this.uiScale, (width - 24) / 420));
     const quickActionX = 108 * this.actionButtonScale;
@@ -3480,13 +3522,27 @@ this.exitButton.setPosition(
         12: "doze"
       }[request.requestedValue];
 
-      this.trucoResponseTitle.setText(`Pedido de ${requestLabel}`);
+      this.trucoResponseTitle.setText(`PEDIDO DE ${requestLabel.toUpperCase()}`);
+      this.trucoResponsePlayerName.setText(request.requestedByPlayerName);
+      this.trucoResponseSubtitle.setText(`pediu ${requestLabel}. O que voce deseja fazer?`);
+      this.layoutTrucoResponseSubtitle();
       this.trucoResponseRaiseText.setText(raiseLabel);
       this.setTrucoResponseRaiseEnabled(request.requestedValue < 12);
     }
 
     this.trucoResponseGroup.setVisible(shouldRespond);
     this.syncTrucoResponseTimer(timerKey);
+  }
+
+  private layoutTrucoResponseSubtitle(): void {
+    const gap = -7;
+    const nameWidth = this.trucoResponsePlayerName.getBounds().width;
+    const subtitleWidth = this.trucoResponseSubtitle.getBounds().width;
+    const totalWidth = nameWidth + gap + subtitleWidth;
+    const y = -66;
+
+    this.trucoResponsePlayerName.setPosition(-totalWidth / 2 + nameWidth / 2, y);
+    this.trucoResponseSubtitle.setPosition(totalWidth / 2 - subtitleWidth / 2, y);
   }
 
   private syncTrucoResponseTimer(responseKey: string | null): void {
@@ -3550,10 +3606,10 @@ this.exitButton.setPosition(
       return;
     }
 
-    const progressX = -246;
-    const progressY = 102;
-    const progressWidth = 492;
-    const progressHeight = 8;
+    const progressX = -250;
+    const progressY = 158;
+    const progressWidth = 500;
+    const progressHeight = 7;
 
     this.trucoResponseProgress.fillStyle(0xffffff, 0.14);
     this.trucoResponseProgress.fillRoundedRect(progressX, progressY, progressWidth, progressHeight, progressHeight / 2);
