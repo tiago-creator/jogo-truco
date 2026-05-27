@@ -502,6 +502,7 @@ class TableScene extends Phaser.Scene {
   private trucoResponseGroup!: Phaser.GameObjects.Container;
   private trucoResponseTitle!: Phaser.GameObjects.Text;
   private trucoResponseRaiseText!: Phaser.GameObjects.Text;
+  private trucoResponseProgress!: Phaser.GameObjects.Graphics;
   private elevenHandGroup!: Phaser.GameObjects.Container;
   private handGroup!: Phaser.GameObjects.Container;
   private handHintGroup!: Phaser.GameObjects.Container;
@@ -546,6 +547,10 @@ class TableScene extends Phaser.Scene {
   private turnTimerKey: string | null = null;
   private turnTimerStartedAt = 0;
   private autoPlayTriggeredForKey: string | null = null;
+  private readonly trucoResponseTimeoutMs = 20000;
+  private trucoResponseTimerKey: string | null = null;
+  private trucoResponseTimerStartedAt = 0;
+  private autoRejectTrucoTriggeredForKey: string | null = null;
   constructor() {
     super("table");
   }
@@ -677,27 +682,28 @@ exitButtonHitZone.on("pointerup", () => {
 
     //#region Audio Button
     this.audioButtonBg = this.add.graphics();
-    this.audioButtonText = this.add.text(0, -8, "AUDIO", {
+    this.audioButtonHint = this.add.text(-31, 0, "🎙", {
       color: "#ffffff",
-      fontFamily: "Arial Black",
-      fontSize: "15px",
-      fontStyle: "900"
+      fontFamily: "Arial",
+      fontSize: "26px"
     }).setOrigin(0.5);
-    this.audioButtonHint = this.add.text(0, 13, "SEGURE", {
-      color: "#fff3a3",
+    this.audioButtonText = this.add.text(16, 0, "ENVIAR\nAUDIO", {
+      align: "center",
+      color: "#ffffff",
       fontFamily: "Arial",
       fontSize: "11px",
-      fontStyle: "bold"
+      fontStyle: "bold",
+      lineSpacing: 2
     }).setOrigin(0.5);
     this.audioButton = this.add.container(0, 0, [
       this.audioButtonBg,
-      this.audioButtonText,
-      this.audioButtonHint
+      this.audioButtonHint,
+      this.audioButtonText
     ]);
-    const audioButtonHitZone = this.add.zone(0, 0, 104, 64);
+    const audioButtonHitZone = this.add.zone(0, 0, 116, 64);
 
     this.audioButton.add(audioButtonHitZone);
-    this.audioButton.setSize(104, 64);
+    this.audioButton.setSize(110, 58);
     audioButtonHitZone.setInteractive({ useHandCursor: true });
     audioButtonHitZone.on("pointerdown", () => {
       this.playButtonClickSound();
@@ -815,11 +821,12 @@ exitButtonHitZone.on("pointerup", () => {
 
       const pendingTrucoResponseKey = this.getTrucoResponseKey(state);
 
-      if (!pendingTrucoResponseKey) {
+      if (!state.trucoRequest) {
         this.delayedTrucoResponseKey = null;
         this.visibleTrucoResponseKey = null;
         this.trucoResponseDelayTimer?.remove(false);
         this.trucoResponseDelayTimer = null;
+        this.clearTrucoResponseTimer();
       }
 
       // animação do truco do oponente
@@ -1159,40 +1166,100 @@ exitButtonHitZone.on("pointerup", () => {
     const g = this.audioButtonBg;
     const recording = this.isRecordingAudio;
 
-    g.clear();
-    g.fillStyle(0x000000, 0.34);
-    g.fillRoundedRect(-43, -23, 90, 52, 10);
-    g.fillStyle(recording ? 0xb3261e : 0x0b4a3a, 1);
-    g.fillRoundedRect(-48, -29, 90, 52, 10);
-    g.lineStyle(3, recording ? 0xffffff : 0xffcf5a, 1);
-    g.strokeRoundedRect(-48, -29, 90, 52, 10);
-    g.fillStyle(0xffffff, recording ? 0.18 : 0.1);
-    g.fillRoundedRect(-40, -24, 72, 12, 8);
+    this.drawQuickActionButton(
+      g,
+      recording
+        ? { topLeft: 0x7a1717, topRight: 0x491010, bottomLeft: 0x140506, bottomRight: 0x060203, border: 0xffb2a8, fill: 0x5a1515 }
+        : { topLeft: 0x174c2a, topRight: 0x0b3926, bottomLeft: 0x04170d, bottomRight: 0x020805, border: 0x55d46f, fill: 0x0b3926 },
+      110
+    );
+    this.audioButtonText.setText(recording ? "SOLTE\nAUDIO" : "ENVIAR\nAUDIO");
+    this.audioButtonHint.setText(recording ? "●" : "🎙");
+    this.audioButtonHint.setColor(recording ? "#ffddd8" : "#ffffff");
+  }
 
-    this.audioButtonText.setText(recording ? "SOLTE" : "AUDIO");
-    this.audioButtonHint.setText(recording ? "ENVIAR" : "SEGURE");
+  private drawQuickActionButton(
+    g: Phaser.GameObjects.Graphics,
+    colors: {
+      topLeft: number;
+      topRight: number;
+      bottomLeft: number;
+      bottomRight: number;
+      border: number;
+      fill: number;
+    },
+    width = 126
+  ): void {
+    const height = 58;
+    const x = -width / 2;
+    const y = -height / 2;
+    const radius = 12;
+
+    g.clear();
+    g.fillStyle(colors.bottomLeft, 1);
+    g.fillRoundedRect(x, y, width, height, radius);
+
+    const steps = 18;
+    const getRoundedInset = (localY: number): number => {
+      if (localY < radius) {
+        return radius - Math.sqrt(Math.max(0, radius * radius - (radius - localY) ** 2));
+      }
+
+      if (localY > height - radius) {
+        return radius - Math.sqrt(Math.max(0, radius * radius - (localY - (height - radius)) ** 2));
+      }
+
+      return 0;
+    };
+
+    for (let index = 0; index < steps; index += 1) {
+      const lineY = y + (height / steps) * index;
+      const lineHeight = Math.ceil(height / steps) + 1;
+      const localTop = Math.max(0, lineY - y);
+      const localBottom = Math.min(height, localTop + lineHeight);
+      const topInset = getRoundedInset(localTop);
+      const bottomInset = getRoundedInset(localBottom);
+      const inset = localTop < radius ? Math.max(topInset-3.9, bottomInset+3.1) : Math.max(topInset, bottomInset);
+      const edgeAllowance = localTop < radius ? 1.8 : 0.8;
+      const adjustedInset = Math.max(0, inset - edgeAllowance);
+      const color = Phaser.Display.Color.Interpolate.ColorWithColor(
+        Phaser.Display.Color.ValueToColor(colors.topLeft),
+        Phaser.Display.Color.ValueToColor(colors.bottomLeft),
+        steps - 1,
+        index
+      );
+
+      g.fillStyle(Phaser.Display.Color.GetColor(color.r, color.g, color.b), 1);
+      g.fillRect(x + adjustedInset, lineY, width - adjustedInset * 2, lineHeight);
+    }
+
+    g.fillStyle(colors.fill, 0.18);
+    g.fillRoundedRect(x, y, width, height, radius);
+    g.lineStyle(1.2, colors.border, 0.82);
+    g.strokeRoundedRect(x, y, width, height, radius);
   }
 
   private createMemeButton(): Phaser.GameObjects.Container {
     const bg = this.add.graphics();
-    const title = this.add.text(0, -8, "MEMES", {
+    const icon = this.add.text(-28, 0, "😄", {
       color: "#ffffff",
-      fontFamily: "Arial Black",
-      fontSize: "15px",
-      fontStyle: "900"
+      fontFamily: "Arial",
+      fontSize: "25px"
     }).setOrigin(0.5);
-    const hint = this.add.text(0, 13, "SONS", {
-      color: "#fff3a3",
+    const title = this.add.text(16, 0, "ENVIAR\nMEME", {
+      align: "center",
+      color: "#ffffff",
       fontFamily: "Arial",
       fontSize: "11px",
-      fontStyle: "bold"
+      fontStyle: "bold",
+      lineSpacing: 2
     }).setOrigin(0.5);
-    const hitZone = this.add.zone(0, 0, 104, 64);
-    const button = this.add.container(0, 0, [bg, title, hint, hitZone]);
+    const hitZone = this.add.zone(0, 0, 116, 64);
+    const button = this.add.container(0, 0, [bg, icon, title, hitZone]);
 
     this.memeButtonBg = bg;
     this.drawMemeButton();
-    button.setSize(104, 64);
+    button.setSize(126, 58);
     hitZone.setInteractive({ useHandCursor: true });
     hitZone.on("pointerup", () => {
       this.playButtonClickSound();
@@ -1211,15 +1278,14 @@ exitButtonHitZone.on("pointerup", () => {
   private drawMemeButton(): void {
     const g = this.memeButtonBg;
 
-    g.clear();
-    g.fillStyle(0x000000, 0.34);
-    g.fillRoundedRect(-43, -23, 90, 52, 10);
-    g.fillStyle(0x4a2372, 1);
-    g.fillRoundedRect(-48, -29, 90, 52, 10);
-    g.lineStyle(3, 0xffcf5a, 1);
-    g.strokeRoundedRect(-48, -29, 90, 52, 10);
-    g.fillStyle(0xffffff, 0.1);
-    g.fillRoundedRect(-40, -24, 72, 12, 8);
+    this.drawQuickActionButton(g, {
+      topLeft: 0x44205f,
+      topRight: 0x24153f,
+      bottomLeft: 0x12081f,
+      bottomRight: 0x06030c,
+      border: 0x8d64ff,
+      fill: 0x24153f
+    }, 110);
   }
 
   private createMemePopup(): Phaser.GameObjects.Container {
@@ -1409,14 +1475,16 @@ exitButtonHitZone.on("pointerup", () => {
       fontSize: "34px",
       fontStyle: "900"
     }).setOrigin(0.5);
+    const progress = this.add.graphics();
 
     const reject = this.createTrucoResponseButton(-182, 44, "CORRER", 0x8b4a12, "reject");
     const accept = this.createTrucoResponseButton(0, 44, "ACEITAR", 0x1f7a2e, "accept");
     const raise = this.createTrucoResponseButton(182, 44, "AUMENTAR", 0x1976a8, "raise");
-    const group = this.add.container(0, 0, [bg, title, reject.container, accept.container, raise.container]);
+    const group = this.add.container(0, 0, [bg, title, progress, reject.container, accept.container, raise.container]);
 
     this.trucoResponseTitle = title;
     this.trucoResponseRaiseText = raise.text;
+    this.trucoResponseProgress = progress;
     group.setDepth(15000);
     group.setVisible(false);
 
@@ -1502,79 +1570,67 @@ exitButtonHitZone.on("pointerup", () => {
     action: "accept" | "reject" | "raise"
   ): { container: Phaser.GameObjects.Container; text: Phaser.GameObjects.Text } {
     const bg = this.add.graphics();
-
-    bg.fillStyle(0x000000, 0.38);
-    bg.fillRoundedRect(-76, -38, 160, 84, 12);
-
-    const gradientColors = {
-      reject: { topLeft: 0xf2a334, topRight: 0xa85b16, bottomLeft: 0x4a1e07, bottomRight: 0x160804 },
-      accept: { topLeft: 0x66d05f, topRight: 0x238c35, bottomLeft: 0x0d3914, bottomRight: 0x061907 },
-      raise: { topLeft: 0x68c9ff, topRight: 0x238ac9, bottomLeft: 0x0b3556, bottomRight: 0x041622 }
+    const colors = {
+      reject: { topLeft: 0xf2a334, topRight: 0xa85b16, bottomLeft: 0x4a1e07, bottomRight: 0x160804, border: 0xffcf5a, fill: 0x8b4a12 },
+      accept: { topLeft: 0x66d05f, topRight: 0x238c35, bottomLeft: 0x0d3914, bottomRight: 0x061907, border: 0x55d46f, fill: 0x1f7a2e },
+      raise: { topLeft: 0x68c9ff, topRight: 0x238ac9, bottomLeft: 0x0b3556, bottomRight: 0x041622, border: 0x8fd7ff, fill: 0x1976a8 }
     }[action];
 
-    bg.fillGradientStyle(
-      gradientColors.topLeft,
-      gradientColors.topRight,
-      gradientColors.bottomLeft,
-      gradientColors.bottomRight,
-      1
-    );
-    bg.fillRoundedRect(-80, -42, 160, 84, 12);
-
-    bg.lineStyle(3, 0xffffff, 0.22);
-    bg.strokeRoundedRect(-80, -42, 160, 84, 12);
-
-    bg.lineStyle(2, 0xffcf5a, action === "reject" ? 0.85 : 0.28);
-    bg.strokeRoundedRect(-78, -40, 156, 80, 10);
-
-    this.drawTrucoResponseIcon(bg, action);
+    this.drawQuickActionButton(bg, colors);
     const runIcon = action === "reject"
-      ? this.add.image(0, -16, "running-player-icon").setDisplaySize(42, 42)
+      ? this.add.image(-31, 0, "running-player-icon").setDisplaySize(34, 34)
       : null;
     const acceptIcon = action === "accept"
-      ? this.add.image(0, -16, "check-action-icon").setDisplaySize(44, 44)
+      ? this.add.image(-31, 0, "check-action-icon").setDisplaySize(34, 34)
       : null;
     const raiseIcon = action === "raise"
-      ? this.add.image(0, -17, "arrow-up-action-icon").setDisplaySize(42, 42)
+      ? this.add.image(-31, 0, "arrow-up-action-icon").setDisplaySize(34, 34)
       : null;
 
-    const text = this.add.text(0, 15, label, {
+    const text = this.add.text(20, action === "raise" ? -5 : 0, label, {
+      align: "center",
       color: "#ffffff",
-      fontFamily: "Arial Black",
-      fontSize: "19px",
-      fontStyle: "900",
-      stroke: "#000000",
-      strokeThickness: 3
+      fontFamily: "Arial",
+      fontSize: "13px",
+      fontStyle: "bold",
+      lineSpacing: 2
     }).setOrigin(0.5);
     const subtitle = action === "raise"
-      ? this.add.text(0, 32, "+3 PONTOS", {
+      ? this.add.text(20, 14, "+3 PONTOS", {
         color: "#d8f2ff",
         fontFamily: "Arial",
-        fontSize: "10px",
+        fontSize: "9px",
         fontStyle: "bold"
       }).setOrigin(0.5)
       : null;
 
-    const hitZone = this.add.zone(0, 0, 172, 94);
+    const hitZone = this.add.zone(0, 0, 132, 64);
     const children = [bg, runIcon, acceptIcon, raiseIcon, text, subtitle, hitZone].filter(Boolean) as Phaser.GameObjects.GameObject[];
     const button = this.add.container(x, y, children);
 
     button.setName(`truco-response-${action}`);
-    button.setSize(160, 84);
+    button.setSize(110, 58);
     hitZone.setInteractive({ useHandCursor: true });
     hitZone.on("pointerup", () => {
       this.playButtonClickSound();
-      const didSend = this.sendReliableAction("truco:respond", {
-        roomId: this.roomId,
-        action
-      });
-
-      if (didSend) {
-        this.trucoResponseGroup.setVisible(false);
-      }
+      this.respondToTrucoRequest(action);
     });
 
     return { container: button, text };
+  }
+
+  private respondToTrucoRequest(action: "accept" | "reject" | "raise"): boolean {
+    const didSend = this.sendReliableAction("truco:respond", {
+      roomId: this.roomId,
+      action
+    });
+
+    if (didSend) {
+      this.clearTrucoResponseTimer();
+      this.trucoResponseGroup.setVisible(false);
+    }
+
+    return didSend;
   }
 
   private drawTrucoResponseIcon(
@@ -1788,6 +1844,16 @@ exitButtonHitZone.on("pointerup", () => {
     return `${request.requestedByPlayerId}:${request.responderPlayerId}:${request.requestedValue}`;
   }
 
+  private getTrucoRequestTimerKey(state: RoomState): string | null {
+    const request = state.trucoRequest;
+
+    if (!request) {
+      return null;
+    }
+
+    return `${request.requestedByPlayerId}:${request.responderPlayerId}:${request.requestedValue}`;
+  }
+
   private getTrucoResponseMessage(action: "accept" | "reject" | "raise"): string {
     return {
       accept: "ACEITOU!",
@@ -1950,10 +2016,12 @@ exitButtonHitZone.on("pointerup", () => {
     this.trucoResponseGroup.setScale(Math.min(this.uiScale, (width - 24) / 572));
     this.elevenHandGroup.setPosition(width / 2, height / 2 + 112 * this.uiScale);
     this.elevenHandGroup.setScale(Math.min(this.uiScale, (width - 24) / 420));
+    const quickActionX = 130 * this.actionButtonScale;
+    const quickActionY = height - this.actionBottom;
     this.audioButton.setScale(this.actionButtonScale * 2.18);
-    this.audioButton.setPosition(130 * this.actionButtonScale, height - this.actionBottom);
+    this.audioButton.setPosition(quickActionX, quickActionY - 166 * this.actionButtonScale);
     this.memeButton.setScale(this.actionButtonScale * 2.18);
-    this.memeButton.setPosition(320 * this.actionButtonScale, height - this.actionBottom);
+    this.memeButton.setPosition(quickActionX, quickActionY);
     this.memePopup.setScale(Math.min(this.uiScale, (width - 24) / 430));
     this.memePopup.setPosition(width / 2, height / 2);
     const memeOutsideCloseZone = this.memePopup.list[0];
@@ -1979,6 +2047,7 @@ this.exitButton.setPosition(
 
   update(): void {
     this.updateTurnProgress();
+    this.updateTrucoResponseProgress();
   }
 
   private renderState(): void {
@@ -2224,7 +2293,7 @@ this.exitButton.setPosition(
     this.autoPlayTriggeredForKey = null;
     this.turnProgress?.clear();
     this.opponentTurnProgress?.clear();
-    this.drawOpponentNameBox(false);
+    this.drawOpponentNameBox(this.hasOpponentTrucoResponseProgress());
   }
 
   private updateTurnProgress(): void {
@@ -2313,7 +2382,17 @@ this.exitButton.setPosition(
     const state = this.roomState;
     const selfId = state?.self?.id;
 
-    return Boolean(this.getTurnTimerKey() && selfId && state?.turnPlayerId && state.turnPlayerId !== selfId);
+    return Boolean(
+      (this.getTurnTimerKey() && selfId && state?.turnPlayerId && state.turnPlayerId !== selfId) ||
+      this.hasOpponentTrucoResponseProgress()
+    );
+  }
+
+  private hasOpponentTrucoResponseProgress(): boolean {
+    const state = this.roomState;
+    const selfId = state?.self?.id;
+
+    return Boolean(this.trucoResponseTimerKey && selfId && state?.trucoRequest?.responderPlayerId !== selfId);
   }
 
   private drawOpponentNameBox(hasProgress: boolean): void {
@@ -3161,6 +3240,7 @@ this.exitButton.setPosition(
   private renderTrucoResponse(): void {
     const request = this.roomState?.trucoRequest;
     const responseKey = this.roomState ? this.getTrucoResponseKey(this.roomState) : null;
+    const timerKey = this.roomState ? this.getTrucoRequestTimerKey(this.roomState) : null;
     const shouldRespond = Boolean(
       responseKey &&
       (this.visibleTrucoResponseKey === responseKey || this.delayedTrucoResponseKey !== responseKey)
@@ -3186,6 +3266,96 @@ this.exitButton.setPosition(
     }
 
     this.trucoResponseGroup.setVisible(shouldRespond);
+    this.syncTrucoResponseTimer(timerKey);
+  }
+
+  private syncTrucoResponseTimer(responseKey: string | null): void {
+    if (!responseKey) {
+      this.clearTrucoResponseTimer();
+      return;
+    }
+
+    if (this.trucoResponseTimerKey !== responseKey) {
+      this.trucoResponseTimerKey = responseKey;
+      this.trucoResponseTimerStartedAt = Date.now();
+      this.autoRejectTrucoTriggeredForKey = null;
+    }
+
+    this.drawTrucoResponseProgress();
+  }
+
+  private clearTrucoResponseTimer(): void {
+    this.trucoResponseTimerKey = null;
+    this.trucoResponseTimerStartedAt = 0;
+    this.autoRejectTrucoTriggeredForKey = null;
+    this.trucoResponseProgress?.clear();
+    this.opponentTurnProgress?.clear();
+    this.drawOpponentNameBox(this.hasOpponentTurnProgress());
+  }
+
+  private updateTrucoResponseProgress(): void {
+    if (!this.trucoResponseTimerKey) {
+      return;
+    }
+
+    this.drawTrucoResponseProgress();
+
+    if (Date.now() - this.trucoResponseTimerStartedAt >= this.trucoResponseTimeoutMs) {
+      this.autoRejectTrucoRequest();
+    }
+  }
+
+  private getTrucoResponseProgressRatio(): number {
+    if (!this.trucoResponseTimerKey || !this.trucoResponseTimerStartedAt) {
+      return 0;
+    }
+
+    return Phaser.Math.Clamp((Date.now() - this.trucoResponseTimerStartedAt) / this.trucoResponseTimeoutMs, 0, 1);
+  }
+
+  private drawTrucoResponseProgress(): void {
+    this.trucoResponseProgress.clear();
+    this.opponentTurnProgress?.clear();
+
+    if (!this.trucoResponseTimerKey) {
+      return;
+    }
+
+    const state = this.roomState;
+    const selfId = state?.self?.id;
+    const ratio = this.getTrucoResponseProgressRatio();
+
+    if (selfId && state?.trucoRequest?.responderPlayerId !== selfId) {
+      this.drawOpponentTurnProgress(ratio);
+      return;
+    }
+
+    const progressX = -246;
+    const progressY = 102;
+    const progressWidth = 492;
+    const progressHeight = 8;
+
+    this.trucoResponseProgress.fillStyle(0xffffff, 0.14);
+    this.trucoResponseProgress.fillRoundedRect(progressX, progressY, progressWidth, progressHeight, progressHeight / 2);
+    this.trucoResponseProgress.fillStyle(0xffcf5a, 0.94);
+    this.trucoResponseProgress.fillRoundedRect(progressX, progressY, progressWidth * ratio, progressHeight, progressHeight / 2);
+  }
+
+  private autoRejectTrucoRequest(): void {
+    const timerKey = this.trucoResponseTimerKey;
+    const request = this.roomState?.trucoRequest;
+
+    if (
+      !timerKey ||
+      this.autoRejectTrucoTriggeredForKey === timerKey ||
+      !request ||
+      request.responderPlayerId !== this.roomState?.self?.id
+    ) {
+      return;
+    }
+
+    this.autoRejectTrucoTriggeredForKey = timerKey;
+    this.respondToTrucoRequest("reject");
   }
 
   private renderElevenHandDecision(): void {
@@ -3343,11 +3513,17 @@ this.exitButton.setPosition(
     addValue(leftX - sideWidth * 0.25, mainY + 12 * this.uiScale, String(self?.games ?? 0), "#f8f1d9", 44);
     addValue(leftX + sideWidth * 0.25, mainY + 12 * this.uiScale, String(opponent?.games ?? 0), "#ffddd8", 44);
 
-    addLabel(centerX - centerWidth * 0.34, mainY - 35 * this.uiScale, "NÓS", "#42e878", 26, "normal");
-    addValue(centerX - centerWidth * 0.1, mainY - 35 * this.uiScale, String(self?.points ?? 0), "#ffffff", 70);
+    const selfPointsText = String(self?.points ?? 0);
+    const opponentPointsText = String(opponent?.points ?? 0);
+    const hasDoubleDigitPoints = selfPointsText.length > 1 || opponentPointsText.length > 1;
+    const pointValueSize = hasDoubleDigitPoints ? 68 : 70;
+    const pointValueOffset = hasDoubleDigitPoints ? 0.15 : 0.12;
+
+    addLabel(centerX - centerWidth * 0.38, mainY - 35 * this.uiScale, "NÓS", "#42e878", 26, "normal");
+    addValue(centerX - centerWidth * pointValueOffset, mainY - 35 * this.uiScale, selfPointsText, "#ffffff", pointValueSize);
     addLabel(centerX, mainY - 35 * this.uiScale, "X", "#79746d", 24, "normal");
-    addValue(centerX + centerWidth * 0.1, mainY - 35 * this.uiScale, String(opponent?.points ?? 0), "#ffffff", 70);
-    addLabel(centerX + centerWidth * 0.34, mainY - 35 * this.uiScale, "ELES", "#ff5a50", 26, "normal");
+    addValue(centerX + centerWidth * pointValueOffset, mainY - 35 * this.uiScale, opponentPointsText, "#ffffff", pointValueSize);
+    addLabel(centerX + centerWidth * 0.38, mainY - 35 * this.uiScale, "ELES", "#ff5a50", 26, "normal");
 
     const trickResults = this.roomState?.trickResults ?? [];
     const getRoundDotColor = (playerId: string | undefined, index: number) => {
