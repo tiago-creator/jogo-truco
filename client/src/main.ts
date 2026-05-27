@@ -541,6 +541,7 @@ class TableScene extends Phaser.Scene {
   private quickActionButtonBg!: Phaser.GameObjects.Graphics;
   private quickActionMenu!: Phaser.GameObjects.Container;
   private quickActionMenuBg!: Phaser.GameObjects.Graphics;
+  private quickActionOutsideZone!: Phaser.GameObjects.Zone;
   private memePopup!: Phaser.GameObjects.Container;
   private memePopupIgnoreClicksUntil = 0;
   private audioRecorder = new WavAudioRecorder();
@@ -1295,7 +1296,14 @@ exitButtonHitZone.on("pointerup", () => {
     this.quickActionMenuBg = this.add.graphics();
     this.audioButton.setPosition(0, -43);
     this.memeButton.setPosition(0, 43);
+    this.quickActionOutsideZone = this.add.zone(0, 0, this.getViewWidth(), this.getViewHeight());
+    this.quickActionOutsideZone.setOrigin(0);
+    this.quickActionOutsideZone.setInteractive({ useHandCursor: false });
+    this.quickActionOutsideZone.on("pointerup", () => {
+      this.setQuickActionMenuVisible(false);
+    });
     const menu = this.add.container(0, 0, [
+      this.quickActionOutsideZone,
       this.quickActionMenuBg,
       this.audioButton,
       this.memeButton
@@ -1323,11 +1331,11 @@ exitButtonHitZone.on("pointerup", () => {
 
   private createQuickActionButton(): Phaser.GameObjects.Container {
     this.quickActionButtonBg = this.add.graphics();
-    const hitZone = this.add.zone(0, 0, 96, 96);
+    const hitZone = this.add.zone(0, 0, 112, 112);
     const button = this.add.container(0, 0, [this.quickActionButtonBg, hitZone]);
 
     this.drawQuickActionToggleButton(false);
-    button.setSize(94, 94);
+    button.setSize(110, 110);
     hitZone.setInteractive({ useHandCursor: true });
     hitZone.on("pointerup", () => {
       this.playButtonClickSound();
@@ -1348,30 +1356,28 @@ exitButtonHitZone.on("pointerup", () => {
     g.clear();
     if (active) {
       g.fillStyle(0xffcf5a, 0.26);
-      g.fillCircle(0, 0, 47);
+      g.fillCircle(0, 0, 55);
     }
     g.fillStyle(0x050505, 0.94);
-    g.fillCircle(0, 0, 38);
+    g.fillCircle(0, 0, 45);
     if (active) {
-      g.lineStyle(3.5, 0xffcf5a, 0.95);
-      g.strokeCircle(0, 0, 38);
+      g.lineStyle(4, 0xffcf5a, 0.95);
+      g.strokeCircle(0, 0, 45);
       g.lineStyle(1, 0xffffff, 0.18);
-      g.strokeCircle(0, 0, 30);
+      g.strokeCircle(0, 0, 36);
     } else {
       g.lineStyle(1.2, 0x3d250d, 0.34);
-      g.strokeCircle(0, 0, 38);
+      g.strokeCircle(0, 0, 45);
       g.lineStyle(0.7, 0xffe8a8, 0.74);
-      g.strokeCircle(0, 0, 38);
-      g.lineStyle(0.3, 0xfff6d8, 0.42);
-      g.strokeCircle(0, 0, 32);
+      g.strokeCircle(0, 0, 45);
     }
     g.fillStyle(0xffffff, 1);
-    g.fillRoundedRect(-19, -13, 38, 25, 10);
-    g.fillTriangle(-9, 11, -17, 21, 4, 13);
+    g.fillRoundedRect(-22, -14, 44, 28, 11);
+    g.fillTriangle(-9, 12, -18, 23, 6, 14);
     g.fillStyle(0x050505, 0.92);
-    g.fillCircle(-9, 0, 2.4);
-    g.fillCircle(0, 0, 2.4);
-    g.fillCircle(9, 0, 2.4);
+    g.fillCircle(-10, 0, 2.6);
+    g.fillCircle(0, 0, 2.6);
+    g.fillCircle(10, 0, 2.6);
   }
 
   private drawMemeButton(): void {
@@ -1668,40 +1674,40 @@ exitButtonHitZone.on("pointerup", () => {
       raise: { topLeft: 0x68c9ff, topRight: 0x238ac9, bottomLeft: 0x0b3556, bottomRight: 0x041622, border: 0x8fd7ff, fill: 0x1976a8 }
     }[action];
 
-    this.drawQuickActionButton(bg, colors);
+    this.drawQuickActionButton(bg, colors, 158, 74);
     const runIcon = action === "reject"
-      ? this.add.image(-31, 0, "running-player-icon").setDisplaySize(34, 34)
+      ? this.add.image(-48, 0, "running-player-icon").setDisplaySize(40, 40)
       : null;
     const acceptIcon = action === "accept"
-      ? this.add.image(-31, 0, "check-action-icon").setDisplaySize(34, 34)
+      ? this.add.image(-48, 0, "check-action-icon").setDisplaySize(40, 40)
       : null;
     const raiseIcon = action === "raise"
-      ? this.add.image(-31, 0, "arrow-up-action-icon").setDisplaySize(34, 34)
+      ? this.add.image(-48, 0, "arrow-up-action-icon").setDisplaySize(40, 40)
       : null;
 
-    const text = this.add.text(20, action === "raise" ? -5 : 0, label, {
+    const text = this.add.text(24, action === "raise" ? -6 : 0, label, {
       align: "center",
       color: "#ffffff",
       fontFamily: "Arial",
-      fontSize: "13px",
+      fontSize: "16px",
       fontStyle: "bold",
       lineSpacing: 2
     }).setOrigin(0.5);
     const subtitle = action === "raise"
-      ? this.add.text(20, 14, "+3 PONTOS", {
+      ? this.add.text(24, 17, "+3 PONTOS", {
         color: "#d8f2ff",
         fontFamily: "Arial",
-        fontSize: "9px",
+        fontSize: "10px",
         fontStyle: "bold"
       }).setOrigin(0.5)
       : null;
 
-    const hitZone = this.add.zone(0, 0, 132, 64);
+    const hitZone = this.add.zone(0, 0, 172, 88);
     const children = [bg, runIcon, acceptIcon, raiseIcon, text, subtitle, hitZone].filter(Boolean) as Phaser.GameObjects.GameObject[];
     const button = this.add.container(x, y, children);
 
     button.setName(`truco-response-${action}`);
-    button.setSize(110, 58);
+    button.setSize(158, 74);
     hitZone.setInteractive({ useHandCursor: true });
     hitZone.on("pointerup", () => {
       this.playButtonClickSound();
@@ -2217,16 +2223,21 @@ exitButtonHitZone.on("pointerup", () => {
       this.trucoButton.y
     );
     this.trucoResponseGroup.setPosition(width / 2, height / 2 + 112 * this.uiScale);
-    this.trucoResponseGroup.setScale(Math.min(this.uiScale, (width - 24) / 572));
+    this.trucoResponseGroup.setScale(Math.min(this.uiScale * 1.12, (width - 24) / 572));
     this.elevenHandGroup.setPosition(width / 2, height / 2 + 112 * this.uiScale);
     this.elevenHandGroup.setScale(Math.min(this.uiScale, (width - 24) / 420));
-    const quickActionX = 130 * this.actionButtonScale;
-    const quickActionY = height - this.actionBottom;
+    const quickActionX = 108 * this.actionButtonScale;
+    const quickActionY = height - this.actionBottom - 18 * this.actionButtonScale;
     const quickActionScale = this.actionButtonScale * 1.55;
     this.audioButton.setScale(1);
     this.memeButton.setScale(1);
     this.quickActionMenu.setScale(quickActionScale);
-    this.quickActionMenu.setPosition(quickActionX + 92 * quickActionScale, quickActionY - 148 * quickActionScale);
+    this.quickActionMenu.setPosition(quickActionX + 94 * quickActionScale, quickActionY - 156 * quickActionScale);
+    this.quickActionOutsideZone.setPosition(
+      -this.quickActionMenu.x / quickActionScale,
+      -this.quickActionMenu.y / quickActionScale
+    );
+    this.quickActionOutsideZone.setSize(width / quickActionScale, height / quickActionScale);
     this.quickActionButton.setScale(quickActionScale);
     this.quickActionButton.setPosition(quickActionX, quickActionY);
     this.memePopup.setScale(Math.min(this.uiScale, (width - 24) / 430));
