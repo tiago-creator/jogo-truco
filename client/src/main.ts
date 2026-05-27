@@ -1935,8 +1935,22 @@ exitButtonHitZone.on("pointerup", () => {
     this.drawMiniCardIcon(g, centerX, buttonY + 52 * scale, 0, "A", "♠", "#202124", scale);
     this.drawMiniCardIcon(g, centerX + 28 * scale, buttonY + 58 * scale, 0.2, "3", "♣", "#202124", scale);
 
-    g.fillStyle(enabled ? 0xf7c948 : 0x999999, 1);
-    g.fillRoundedRect(plateX, plateY, plateWidth, plateHeight, 14 * scale);
+    if (enabled) {
+      this.fillRoundedVerticalGradient(
+        g,
+        plateX,
+        plateY,
+        plateWidth,
+        plateHeight,
+        14 * scale,
+        0xffe27a,
+        0x8a4308,
+        0xc17a13
+      );
+    } else {
+      g.fillStyle(0x999999, 1);
+      g.fillRoundedRect(plateX, plateY, plateWidth, plateHeight, 14 * scale);
+    }
 
     g.lineStyle(2.4 * scale, 0xfff3a3, 1);
     g.strokeRoundedRect(plateX, plateY, plateWidth, plateHeight, 14 * scale);
@@ -2009,6 +2023,54 @@ exitButtonHitZone.on("pointerup", () => {
       g.fillStyle(Phaser.Display.Color.GetColor(color.r, color.g, color.b), 1);
       g.fillRect(intersections[0], y1, intersections[intersections.length - 1] - intersections[0], y2 - y1);
     }
+  }
+
+  private fillRoundedVerticalGradient(
+    g: Phaser.GameObjects.Graphics,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number,
+    topColorValue: number,
+    bottomColorValue: number,
+    overlayColorValue: number
+  ): void {
+    g.fillStyle(bottomColorValue, 1);
+    g.fillRoundedRect(x, y, width, height, radius);
+
+    const steps = 18;
+    const getRoundedInset = (localY: number): number => {
+      if (localY < radius) {
+        return radius - Math.sqrt(Math.max(0, radius * radius - (radius - localY) ** 2));
+      }
+
+      if (localY > height - radius) {
+        return radius - Math.sqrt(Math.max(0, radius * radius - (localY - (height - radius)) ** 2));
+      }
+
+      return 0;
+    };
+    const topColor = Phaser.Display.Color.ValueToColor(topColorValue);
+    const bottomColor = Phaser.Display.Color.ValueToColor(bottomColorValue);
+
+    for (let index = 0; index < steps; index += 1) {
+      const lineY = y + (height / steps) * index;
+      const lineHeight = Math.ceil(height / steps) + 1;
+      const localTop = Math.max(0, lineY - y);
+      const localBottom = Math.min(height, localTop + lineHeight);
+      const topInset = getRoundedInset(localTop);
+      const bottomInset = getRoundedInset(localBottom);
+      const inset = localTop < radius ? Math.max(topInset - 3.9, bottomInset + 3.1) : Math.max(topInset, bottomInset);
+      const adjustedInset = Math.max(0, inset - 0.8);
+      const color = Phaser.Display.Color.Interpolate.ColorWithColor(topColor, bottomColor, steps - 1, index);
+
+      g.fillStyle(Phaser.Display.Color.GetColor(color.r, color.g, color.b), 1);
+      g.fillRect(x + adjustedInset, lineY, width - adjustedInset * 2, lineHeight);
+    }
+
+    g.fillStyle(overlayColorValue, 0.18);
+    g.fillRoundedRect(x, y, width, height, radius);
   }
 
   private uiScale = 1;
