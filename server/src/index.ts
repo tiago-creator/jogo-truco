@@ -1635,8 +1635,8 @@ socket.on("room:leave", ({ roomId }, ack?: () => void) => {
       return;
     }
 
-    if (room.lastTrucoRequesterId === socket.id) {
-      failAction(socket, ack, "Voce deve esperar o oponente aumentar a aposta");
+    if (areSameTeam(room, room.lastTrucoRequesterId, socket.id)) {
+      failAction(socket, ack, "Sua dupla deve esperar o oponente aumentar a aposta");
       return;
     }
 
@@ -1745,6 +1745,11 @@ socket.on("room:leave", ({ roomId }, ack?: () => void) => {
 
     if (request.requestedByPlayerId === socket.id) {
       failAction(socket, ack, "Voce nao pode aumentar o proprio pedido");
+      return;
+    }
+
+    if (areSameTeam(room, room.lastTrucoRequesterId, socket.id)) {
+      failAction(socket, ack, "Sua dupla deve esperar o oponente aumentar a aposta");
       return;
     }
 

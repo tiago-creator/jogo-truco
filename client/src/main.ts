@@ -3,6 +3,7 @@ import { io, type Socket } from "socket.io-client";
 import { compareCards, compareCardsWithVira, type ActionAck, type Card, type ClientToServerEvents, type RoomState, type ServerToClientEvents } from "@truco/shared";
 import "./styles.css";
 import opponentAvatarUrl from "./img/avatar/user-secret.svg";
+import cpuAvatarUrl from "./img/bot_cpu.svg";
 import crimsonGoldCardBackUrl from "./img/cartas/crimson-gold.svg";
 import blackCardBackUrl from "./img/cartas/black.svg";
 import grayCardBackUrl from "./img/cartas/gray.svg";
@@ -503,12 +504,14 @@ class WavAudioRecorder {
 
 class TableScene extends Phaser.Scene {
   private socket!: TrucoSocket;
+  private isLeavingTable = false;
   private roomState: RoomState | null = null;
   private previousRoomState: RoomState | null = null;
   private hasReceivedRoomState = false;
   private suppressNextStateEffects = false;
   private animatingTableCardIds = new Set<string>();
   private animatingHandCardIds = new Set<string>();
+  private locallyPlayedCardIds = new Set<string>();
   private revealedDealCardIds = new Set<string>();
   private faceDownHandCardIds = new Set<string>();
   private pendingFaceDownTableCardIds = new Set<string>();
@@ -551,6 +554,12 @@ class TableScene extends Phaser.Scene {
   private opponentNameText!: Phaser.GameObjects.Text;
   private opponentTurnProgress!: Phaser.GameObjects.Graphics;
   private opponentFootMarker!: Phaser.GameObjects.Container;
+  private duoCpuSidePlayers: Array<{
+    container: Phaser.GameObjects.Container;
+    avatar: Phaser.GameObjects.Image;
+    handGroup: Phaser.GameObjects.Container;
+    nameText: Phaser.GameObjects.Text;
+  }> = [];
   private selfFootMarker!: Phaser.GameObjects.Container;
   private currentOpponentAvatarUrl: string | null = null;
   private deckGroup!: Phaser.GameObjects.Container;
@@ -563,6 +572,8 @@ class TableScene extends Phaser.Scene {
   private trucoResponseDelayTimer: Phaser.Time.TimerEvent | null = null;
   private lastCelebratedGameWinnerKey: string | null = null;
   private activeDealAnimationKey: string | null = null;
+  private postDealHandUnlockTimer: Phaser.Time.TimerEvent | null = null;
+  private postDealHandUnlockHandSequence: number | null = null;
   private animatingViraHandSequence: number | null = null;
   private lastShownTrucoResponseKey: string | null = null;
   private exitButton!: Phaser.GameObjects.Container;
@@ -606,6 +617,7 @@ class TableScene extends Phaser.Scene {
       this.load.image(cardBackId, cardBack.url);
     }
     this.load.image("opponent-avatar", opponentAvatarUrl);
+    this.load.image("cpu-avatar", cpuAvatarUrl);
     this.load.image("arrow-up-action-icon", arrowUpActionIconUrl);
     this.load.image("check-action-icon", checkActionIconUrl);
     this.load.image("chevron-up-hint-icon", chevronUpHintIconUrl);
@@ -775,11 +787,18 @@ exitButtonHitZone.on("pointerup", () => {
     this.handGroup.add(this.selfFootMarker);
     this.opponentHandGroup = this.add.container(0, 0);
     this.opponentAvatarGroup = this.createOpponentAvatar();
+    this.duoCpuSidePlayers = [
+      this.createDuoCpuSidePlayer("CPU 1"),
+      this.createDuoCpuSidePlayer("CPU 2")
+    ];
     this.deckGroup = this.add.container(0, 0);
     this.viraGroup = this.add.container(0, 0);
     this.tableGroup = this.add.container(0, 0);
     this.opponentHandGroup.setDepth(9);
     this.opponentNameGroup.setDepth(10);
+    for (const sidePlayer of this.duoCpuSidePlayers) {
+      sidePlayer.container.setDepth(10);
+    }
     this.viraGroup.setDepth(8);
     this.deckGroup.setDepth(12);
     this.tableGroup.setDepth(20);
@@ -794,6 +813,9 @@ exitButtonHitZone.on("pointerup", () => {
     this.exitButton.setDepth(100);
 
     this.socket.on("connect", () => {
+     if (this.isLeavingTable || !this.scene.isActive()) {
+       return;
+     }
      if (this.hasReceivedRoomState) {
        this.suppressNextStateEffects = true;
      }
@@ -806,6 +828,10 @@ exitButtonHitZone.on("pointerup", () => {
     });
 
     this.socket.on("room:state", (state) => {
+      if (this.isLeavingTable || !this.scene.isActive()) {
+        return;
+      }
+
       const previousState = this.hasReceivedRoomState ? this.roomState : null;
       const suppressStateEffects = this.suppressNextStateEffects;
 
@@ -928,6 +954,10 @@ exitButtonHitZone.on("pointerup", () => {
     });
 
     this.socket.on("room:error", ({ message }) => {
+      if (this.isLeavingTable || !this.scene.isActive()) {
+        return;
+      }
+
       this.setStatusMessage(message);
 
       if (this.roomState?.status !== "playing") {
@@ -936,13 +966,29 @@ exitButtonHitZone.on("pointerup", () => {
     });
 
     this.socket.on("audio:message", ({ playerName, audio }) => {
+      if (this.isLeavingTable || !this.scene.isActive()) {
+        return;
+      }
+
       this.showOpponentSpeechBubble(`${playerName}: audio`);
       void playIncomingAudio(audio).catch(() => {
+        if (this.isLeavingTable || !this.scene.isActive()) {
+          return;
+        }
+
         this.setStatusMessage("Toque uma vez na tela para liberar o audio");
       });
     });
 
     this.socket.on("meme:play", ({ memeId }, ack) => {
+      if (this.isLeavingTable || !this.scene.isActive()) {
+        ack?.({
+          ok: false,
+          message: "Mesa encerrada"
+        });
+        return;
+      }
+
       const didPlay = this.playMeme(memeId);
 
       this.showOpponentSpeechBubble("audio meme...");
@@ -953,14 +999,28 @@ exitButtonHitZone.on("pointerup", () => {
     });
 
     this.scale.on("resize", () => this.layout());
-    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.clearTurnTimer());
-    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.clearTurnTimer());
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => this.cleanupTableScene());
+    this.events.once(Phaser.Scenes.Events.DESTROY, () => this.cleanupTableScene());
     this.sharpenExistingTexts();
     this.layout();
   }
 
   private getTextResolution(): number {
     return Phaser.Math.Clamp((window.devicePixelRatio || 1) * 1.75, 2, 4);
+  }
+
+  private cleanupTableScene(): void {
+    this.isLeavingTable = true;
+    this.clearTurnTimer();
+    this.clearReliableActions();
+    this.audioRecorder.cancel();
+    this.audioStopTimer?.remove(false);
+    this.audioStopTimer = null;
+    this.clearPostDealHandUnlockDelay();
+
+    if (this.socket) {
+      this.socket.removeAllListeners();
+    }
   }
 
   private createReliableActionId(): string {
@@ -1050,6 +1110,13 @@ exitButtonHitZone.on("pointerup", () => {
       window.clearTimeout(pendingAction.retryTimer);
 
       if (!response.ok) {
+        if (pendingAction.event === "card:play" && "cardId" in pendingAction.payload) {
+          this.locallyPlayedCardIds.delete(pendingAction.payload.cardId);
+          this.pendingFaceDownTableCardIds.delete(pendingAction.payload.cardId);
+          this.animatingTableCardIds.delete(pendingAction.payload.cardId);
+          this.renderState();
+        }
+
         this.setStatusMessage(response.message ?? "Acao nao realizada");
       }
     });
@@ -1183,14 +1250,22 @@ exitButtonHitZone.on("pointerup", () => {
   }
 
   leaveTable(returnTo: "home" | "mode" = "home"): void {
+    this.isLeavingTable = true;
     this.clearReliableActions();
     this.audioRecorder.cancel();
     this.audioStopTimer?.remove(false);
     this.audioStopTimer = null;
+    this.clearPostDealHandUnlockDelay();
     this.isRecordingAudio = false;
     this.audioRecordingSession += 1;
 
     const currentSocket = this.socket;
+    currentSocket.removeAllListeners("connect");
+    currentSocket.removeAllListeners("room:state");
+    currentSocket.removeAllListeners("room:error");
+    currentSocket.removeAllListeners("audio:message");
+    currentSocket.removeAllListeners("meme:play");
+
     const leaveRoomId = this.roomId;
     let didDisconnect = false;
     const disconnectSocket = () => {
@@ -1217,6 +1292,7 @@ exitButtonHitZone.on("pointerup", () => {
     this.roomState = null;
     this.previousRoomState = null;
     this.lastAnimatedTrucoValue = null;
+    this.locallyPlayedCardIds.clear();
     this.faceDownHandCardIds.clear();
     this.pendingFaceDownTableCardIds.clear();
     this.clearCachedCardObjects();
@@ -2352,6 +2428,11 @@ this.exitButton.setPosition(
     this.opponentHandGroup.setPosition(width / 2, safeTop + 336 * this.uiScale);
     this.opponentAvatarGroup.setPosition(width / 2, safeTop + 276 * this.uiScale);
     this.opponentNameGroup.setPosition(width / 2, safeTop + 276 * this.uiScale);
+    this.duoCpuSidePlayers[0]?.container.setPosition(74 * this.uiScale, height / 2 - 40 * this.uiScale);
+    this.duoCpuSidePlayers[1]?.container.setPosition(width - 74 * this.uiScale, height / 2 - 40 * this.uiScale);
+    for (const sidePlayer of this.duoCpuSidePlayers) {
+      sidePlayer.container.setScale(1);
+    }
     this.updateOpponentAvatarMaskPosition();
     this.viraGroup.setPosition(width / 2, height / 2 + 10 * this.uiScale);
     this.deckGroup.setPosition(width / 2 + 30 * this.uiScale, height / 2 + 12 * this.uiScale);
@@ -2374,10 +2455,16 @@ this.exitButton.setPosition(
     const self = this.roomState.self;
     const opponent = this.getPrimaryOpponent();
     const isMyTurn = this.roomState.turnPlayerId === self?.id;
+    const hasPendingLocalCardPlay = Boolean(
+      self?.hand.some((card) => this.locallyPlayedCardIds.has(card.id))
+    );
+    const isDealAnimationActive = Boolean(this.activeDealAnimationKey);
+    const isPostDealHandLocked = this.isPostDealHandUnlockDelayed();
 
     this.opponentNameText.setText((opponent?.name ?? "Oponente").toUpperCase());
     this.drawOpponentNameBox(this.hasOpponentTurnProgress());
     this.updateOpponentAvatar(opponent);
+    this.updateDuoCpuSidePlayers();
     this.renderFootMarkers();
 
     this.setStatusMessage(this.roomState.message);
@@ -2400,7 +2487,15 @@ this.exitButton.setPosition(
     this.updateHandGroupPosition();
     this.updateStatusPosition(12 * this.uiScale);
     this.drawStatusBox();
-    this.renderHand(self?.hand ?? [], isMyTurn && !this.roomState.trucoRequest && !this.roomState.elevenHandDecision);
+    this.renderHand(
+      self?.hand ?? [],
+      isMyTurn &&
+        !isDealAnimationActive &&
+        !isPostDealHandLocked &&
+        !hasPendingLocalCardPlay &&
+        !this.roomState.trucoRequest &&
+        !this.roomState.elevenHandDecision
+    );
     this.syncTurnTimer();
     this.sharpenExistingTexts();
   }
@@ -2412,8 +2507,34 @@ this.exitButton.setPosition(
       return this.roomState?.players[1] ?? this.roomState?.players[0];
     }
 
+    if (this.roomState.mode === "duo-cpu") {
+      return this.roomState.players.find((player) => player.id !== self.id && player.teamId === self.teamId);
+    }
+
     return this.roomState.players.find((player) => player.id !== self.id && player.teamId !== self.teamId)
       ?? this.roomState.players.find((player) => player.id !== self.id);
+  }
+
+  private getCpuOpponents(): RoomState["players"] {
+    const self = this.roomState?.self;
+
+    if (!this.roomState || !self || this.roomState.mode !== "duo-cpu") {
+      return [];
+    }
+
+    return this.roomState.players.filter((player) => player.teamId !== self.teamId);
+  }
+
+  private updateDuoCpuSidePlayers(): void {
+    const cpuOpponents = this.getCpuOpponents();
+
+    this.duoCpuSidePlayers.forEach((sidePlayer, index) => {
+      const cpu = cpuOpponents[index];
+
+      sidePlayer.container.setVisible(Boolean(cpu));
+      sidePlayer.nameText.setText((cpu?.name ?? `CPU ${index + 1}`).toUpperCase());
+      this.renderSmallOpponentHand(sidePlayer.handGroup, cpu?.hand ?? []);
+    });
   }
 
   private updateStatusPosition(safeTop = 12 * this.uiScale): void {
@@ -2437,6 +2558,10 @@ this.exitButton.setPosition(
   }
 
   private setStatusMessage(message: string): void {
+    if (this.isLeavingTable || !this.scene.isActive() || !this.status?.active || !this.statusName?.active) {
+      return;
+    }
+
     const turnPrefix = "Vez de ";
     const playerName = message.startsWith(turnPrefix) ? message.slice(turnPrefix.length).trim() : "";
 
@@ -2567,6 +2692,12 @@ this.exitButton.setPosition(
     for (const cardId of this.faceDownHandCardIds) {
       if (!handIds.has(cardId)) {
         this.faceDownHandCardIds.delete(cardId);
+      }
+    }
+
+    for (const cardId of this.locallyPlayedCardIds) {
+      if (!handIds.has(cardId)) {
+        this.locallyPlayedCardIds.delete(cardId);
       }
     }
 
@@ -3617,10 +3748,11 @@ this.exitButton.setPosition(
     const previousOpponent = this.previousRoomState.players.find((player) => player.id === playedEntry.playerId);
     const previousCardIndex = previousOpponent?.hand.findIndex((card) => card.id === playedEntry.card.id) ?? -1;
     const opponentCardCount = previousOpponent?.hand.length ?? 1;
-    const opponentSpacing = Math.min(82, this.getViewWidth() / 4.8);
-    const opponentStartX = -((opponentCardCount - 1) * opponentSpacing) / 2;
-    const fromX = this.opponentHandGroup.x + opponentStartX + Math.max(previousCardIndex, 0) * opponentSpacing;
-    const fromY = this.opponentHandGroup.y;
+    const fromPosition = this.getOpponentPlayCardSource(
+      playedEntry.playerId,
+      previousOpponent?.hand ?? [],
+      Math.max(previousCardIndex, 0)
+    );
     const targetPosition = this.getTableCardPosition(playedEntry.playerId, currentTable.length - 1, currentTable.length);
     const toX = this.tableGroup.x + targetPosition.x;
     const toY = this.tableGroup.y + targetPosition.y;
@@ -3628,7 +3760,7 @@ this.exitButton.setPosition(
 
     this.playGameSound("card-place", 0.75);
     this.animatingTableCardIds.add(playedEntry.card.id);
-    animatedCard.setPosition(fromX, fromY);
+    animatedCard.setPosition(fromPosition.x, fromPosition.y);
     animatedCard.setScale(0.72 * this.uiScale);
     animatedCard.setDepth(30);
 
@@ -3657,33 +3789,42 @@ this.exitButton.setPosition(
     const selfCards = isNewHand
       ? [...this.roomState.self.hand]
       : this.roomState.self.hand.filter((card) => !previousSelfHandIds.has(card.id));
-    const opponent = this.roomState.players.find((player) => player.id !== this.roomState?.self?.id);
-    const previousOpponent = this.previousRoomState?.players.find((player) => player.id === opponent?.id);
-    const previousOpponentHandIds = new Set(previousOpponent?.hand.map((card) => card.id) ?? []);
-    const opponentCards = isNewHand
-      ? [...(opponent?.hand ?? [])]
-      : opponent?.hand.filter((card) => !previousOpponentHandIds.has(card.id)) ?? [];
-    const cardsToAnimate: Array<{ card: Card; owner: "self" | "opponent"; hand: Card[] }> = [];
-    const dealCount = Math.max(selfCards.length, opponentCards.length);
+    const otherPlayers = this.roomState.players.filter((player) => player.id !== this.roomState?.self?.id);
+    const otherPlayerDealCards = otherPlayers.map((player) => {
+      const previousPlayer = this.previousRoomState?.players.find((item) => item.id === player.id);
+      const previousHandIds = new Set(previousPlayer?.hand.map((card) => card.id) ?? []);
+      const cards = isNewHand
+        ? [...player.hand]
+        : player.hand.filter((card) => !previousHandIds.has(card.id));
+
+      return { player, cards };
+    });
+    const cardsToAnimate: Array<{ card: Card; owner: "self" | "opponent"; hand: Card[]; playerId: string }> = [];
+    const dealCount = Math.max(selfCards.length, ...otherPlayerDealCards.map((item) => item.cards.length));
 
     for (let index = 0; index < dealCount; index += 1) {
       const selfCard = selfCards[index];
-      const opponentCard = opponentCards[index];
 
       if (selfCard) {
         cardsToAnimate.push({
           card: selfCard,
           owner: "self",
-          hand: this.roomState.self.hand
+          hand: this.roomState.self.hand,
+          playerId: this.roomState.self.id
         });
       }
 
-      if (opponentCard) {
-        cardsToAnimate.push({
-          card: opponentCard,
-          owner: "opponent",
-          hand: opponent?.hand ?? []
-        });
+      for (const item of otherPlayerDealCards) {
+        const card = item.cards[index];
+
+        if (card) {
+          cardsToAnimate.push({
+            card,
+            owner: "opponent",
+            hand: item.player.hand,
+            playerId: item.player.id
+          });
+        }
       }
     }
 
@@ -3751,14 +3892,14 @@ this.exitButton.setPosition(
     });
   }
 
-  private animateDealtCards(cardsToAnimate: Array<{ card: Card; owner: "self" | "opponent"; hand: Card[] }>): void {
+  private animateDealtCards(cardsToAnimate: Array<{ card: Card; owner: "self" | "opponent"; hand: Card[]; playerId: string }>): void {
     cardsToAnimate.forEach((item, index) => {
       const handIndex = item.hand.findIndex((card) => card.id === item.card.id);
       const fromX = this.deckGroup.x;
       const fromY = this.deckGroup.y;
       const target = item.owner === "self"
         ? this.getHandCardTarget(item.hand, handIndex)
-        : this.getOpponentHandCardTarget(item.hand, handIndex);
+        : this.getOpponentHandCardTarget(item.hand, handIndex, item.playerId);
       const animatedCard = this.createCardBack();
 
       animatedCard.setPosition(fromX, fromY);
@@ -3800,6 +3941,10 @@ this.exitButton.setPosition(
   }
 
   private playDeckShuffleAnimation(onComplete: () => void): void {
+    if (this.isLeavingTable || !this.scene.isActive()) {
+      return;
+    }
+
     if (this.deckGroup.list.length === 0) {
       this.renderDeck();
     }
@@ -3828,7 +3973,7 @@ this.exitButton.setPosition(
     let deckOrder = [...deckCards];
 
     deckCards.forEach((card, index) => {
-      this.deckGroup.moveTo(card, index);
+      this.moveDeckCardTo(card, index);
     });
 
     const playPass = () => {
@@ -3839,6 +3984,10 @@ this.exitButton.setPosition(
       let finishedTweens = 0;
 
       const finishPassTween = () => {
+        if (this.isLeavingTable || !this.scene.isActive()) {
+          return;
+        }
+
         finishedTweens += 1;
 
         if (finishedTweens < deckOrder.length) {
@@ -3848,7 +3997,7 @@ this.exitButton.setPosition(
         deckOrder = nextOrder;
 
         deckOrder.forEach((deckCard, deckIndex) => {
-          this.deckGroup.moveTo(deckCard, deckIndex);
+          this.moveDeckCardTo(deckCard, deckIndex);
         });
 
         pass += 1;
@@ -3861,7 +4010,7 @@ this.exitButton.setPosition(
         deckOrder.forEach((deckCard, deckIndex) => {
           const target = basePositions[deckIndex];
 
-          this.deckGroup.moveTo(deckCard, deckIndex);
+          this.moveDeckCardTo(deckCard, deckIndex);
           this.tweens.add({
             targets: deckCard,
             x: target.x,
@@ -3884,7 +4033,13 @@ this.exitButton.setPosition(
         duration: 130,
         ease: "Sine.easeOut",
         onComplete: () => {
-          this.deckGroup.bringToTop(card);
+          if (this.isLeavingTable || !this.scene.isActive()) {
+            return;
+          }
+
+          if (this.deckGroup.exists(card)) {
+            this.deckGroup.bringToTop(card);
+          }
           card.setDepth(topDepth);
           topDepth += 1;
 
@@ -3930,6 +4085,15 @@ this.exitButton.setPosition(
     playPass();
   }
 
+  private moveDeckCardTo(card: Phaser.GameObjects.Container, index: number): void {
+    if (!this.deckGroup.exists(card)) {
+      return;
+    }
+
+    const maxIndex = Math.max(0, this.deckGroup.length - 1);
+    this.deckGroup.moveTo(card, Phaser.Math.Clamp(index, 0, maxIndex));
+  }
+
   private revealDealtCard(
     cardBack: Phaser.GameObjects.Container,
     card: Card,
@@ -3940,18 +4104,52 @@ this.exitButton.setPosition(
     this.renderState();
     cardBack.destroy();
 
-    if (this.animatingHandCardIds.size === 0) {
-      this.activeDealAnimationKey = null;
-    }
+    this.completeDealAnimationIfFinished();
   }
 
   private finishDealAnimation(cardId: string): void {
     this.animatingHandCardIds.delete(cardId);
 
+    this.completeDealAnimationIfFinished();
+  }
+
+  private completeDealAnimationIfFinished(): void {
     if (this.animatingHandCardIds.size === 0) {
       this.activeDealAnimationKey = null;
+      this.startPostDealHandUnlockDelayIfNeeded();
       this.renderState();
     }
+  }
+
+  private startPostDealHandUnlockDelayIfNeeded(): void {
+    const state = this.roomState;
+    const self = state?.self;
+
+    if (!state || !self || state.status !== "playing" || state.turnPlayerId !== self.id) {
+      this.clearPostDealHandUnlockDelay();
+      return;
+    }
+
+    this.clearPostDealHandUnlockDelay();
+    this.postDealHandUnlockHandSequence = state.handSequence;
+    this.postDealHandUnlockTimer = this.time.delayedCall(3000, () => {
+      this.postDealHandUnlockTimer = null;
+      this.postDealHandUnlockHandSequence = null;
+      this.renderState();
+    });
+  }
+
+  private isPostDealHandUnlockDelayed(): boolean {
+    return Boolean(
+      this.postDealHandUnlockTimer &&
+        this.postDealHandUnlockHandSequence === this.roomState?.handSequence
+    );
+  }
+
+  private clearPostDealHandUnlockDelay(): void {
+    this.postDealHandUnlockTimer?.remove(false);
+    this.postDealHandUnlockTimer = null;
+    this.postDealHandUnlockHandSequence = null;
   }
 
   private canRaiseTruco(): boolean {
@@ -3965,13 +4163,21 @@ this.exitButton.setPosition(
       this.roomState?.elevenHandDecision ||
       this.roomState?.players.some((player) => player.points === 11)
     );
-    const lastRaiseWasMine = this.roomState?.lastTrucoRaise?.playerId === self?.id;
+    const lastRaisePlayer = this.roomState?.players.find(
+      (player) => player.id === this.roomState?.lastTrucoRaise?.playerId
+    );
+    const lastRaiseWasByMyTeam = Boolean(
+      self &&
+        lastRaisePlayer &&
+        (lastRaisePlayer.id === self.id ||
+          (self.teamId !== undefined && lastRaisePlayer.teamId === self.teamId))
+    );
 
     return isPlaying &&
       isMyTurn &&
       !hasElevenHand &&
       !this.roomState?.trucoRequest &&
-      !lastRaiseWasMine &&
+      !lastRaiseWasByMyTeam &&
       selfPoints !== 11 &&
       handValue < 12;
   }
@@ -4384,6 +4590,10 @@ this.exitButton.setPosition(
   }
 
   private renderDeck(): void {
+    if (this.activeDealAnimationKey && this.deckGroup.list.length > 0) {
+      return;
+    }
+
     this.deckGroup.removeAll(true);
 
     if (this.roomState?.status === "waiting") {
@@ -4429,6 +4639,10 @@ this.exitButton.setPosition(
     const lastTrickWinnerId = this.roomState?.trickResults.at(-1)?.winnerPlayerId;
 
     for (const cardId of Array.from(this.tableCardObjects.keys())) {
+      if (!activeCardIds.has(cardId) && this.locallyPlayedCardIds.has(cardId)) {
+        continue;
+      }
+
       if (!activeCardIds.has(cardId)) {
         const tableEntry = this.previousRoomState?.table.find((entry) => entry.card.id === cardId);
         const isWinningCard = !!lastTrickWinnerId && tableEntry?.playerId === lastTrickWinnerId;
@@ -4451,7 +4665,7 @@ this.exitButton.setPosition(
       const isPartner = player?.teamId === self.teamId;
 
       if (isPartner) {
-        return { x: -135 * this.uiScale, y: 120 * this.uiScale };
+        return { x: 0, y: -130 * this.uiScale };
       }
 
       const opponentIndex = this.roomState.players
@@ -4459,8 +4673,8 @@ this.exitButton.setPosition(
         .findIndex((item) => item.id === playerId);
 
       return {
-        x: (opponentIndex === 0 ? -95 : 95) * this.uiScale,
-        y: -130 * this.uiScale
+        x: (opponentIndex === 0 ? -150 : 150) * this.uiScale,
+        y: 26 * this.uiScale
       };
     }
 
@@ -4605,28 +4819,69 @@ this.exitButton.setPosition(
     };
   }
 
-  private getOpponentHandCardTarget(cards: Card[], index: number): { x: number; y: number; scale: number; rotation: number } {
+  private getOpponentHandCardTarget(
+    cards: Card[],
+    index: number,
+    playerId?: string
+  ): { x: number; y: number; scale: number; rotation: number } {
+    const handGroup = playerId ? this.getOpponentHandGroupForPlayer(playerId) : this.opponentHandGroup;
+
+    return this.getSmallOpponentHandCardTarget(handGroup, cards, index);
+  }
+
+  private getSmallOpponentHandCardTarget(
+    handGroup: Phaser.GameObjects.Container,
+    cards: Card[],
+    index: number
+  ): { x: number; y: number; scale: number; rotation: number } {
     const spacing = Math.min(20, this.getViewWidth() / 12);
     const startX = -((cards.length - 1) * spacing) / 2;
     const middleIndex = (cards.length - 1) / 2;
     const spread = index - middleIndex;
+    const localX = startX + index * spacing;
+    const localY = Math.abs(spread) * 5;
 
     return {
-      x: this.opponentHandGroup.x + startX + index * spacing,
-      y: this.opponentHandGroup.y + Math.abs(spread) * 5,
+      x: this.getContainerWorldX(handGroup) + localX,
+      y: this.getContainerWorldY(handGroup) + localY,
       scale: 0.32 * this.uiScale,
       rotation: Phaser.Math.DegToRad(spread * 9)
     };
   }
 
+  private getContainerWorldX(container: Phaser.GameObjects.Container): number {
+    let x = container.x;
+    let parent = container.parentContainer;
+
+    while (parent) {
+      x = parent.x + x * parent.scaleX;
+      parent = parent.parentContainer;
+    }
+
+    return x;
+  }
+
+  private getContainerWorldY(container: Phaser.GameObjects.Container): number {
+    let y = container.y;
+    let parent = container.parentContainer;
+
+    while (parent) {
+      y = parent.y + y * parent.scaleY;
+      parent = parent.parentContainer;
+    }
+
+    return y;
+  }
+
   private renderHand(cards: Card[], enabled: boolean): void {
-    const scale = this.getHandCardScale(cards.length);
-    const spacing = this.getHandCardSpacing(cards.length, scale);
-    const startX = -((cards.length - 1) * spacing) / 2;
-    const middleIndex = (cards.length - 1) / 2;
+    const visibleCards = cards.filter((card) => !this.locallyPlayedCardIds.has(card.id));
+    const scale = this.getHandCardScale(visibleCards.length);
+    const spacing = this.getHandCardSpacing(visibleCards.length, scale);
+    const startX = -((visibleCards.length - 1) * spacing) / 2;
+    const middleIndex = (visibleCards.length - 1) / 2;
     const activeCardIds = new Set<string>();
 
-    cards.forEach((cardData, index) => {
+    visibleCards.forEach((cardData, index) => {
       activeCardIds.add(cardData.id);
 
       if (this.animatingHandCardIds.has(cardData.id)) {
@@ -4674,7 +4929,7 @@ this.exitButton.setPosition(
 
     this.handHintGroup.setPosition(0, 86 * scale);
     this.handHintGroup.setScale(this.uiScale);
-    this.handHintGroup.setVisible(cards.length > 0 && enabled);
+    this.handHintGroup.setVisible(visibleCards.length > 0 && enabled);
   }
 
   private getHandCardScale(cardCount: number): number {
@@ -4777,7 +5032,11 @@ this.exitButton.setPosition(
   }
 
   private renderOpponentHand(cards: Card[]): void {
-    this.opponentHandGroup.removeAll(true);
+    this.renderSmallOpponentHand(this.opponentHandGroup, cards);
+  }
+
+  private renderSmallOpponentHand(handGroup: Phaser.GameObjects.Container, cards: Card[]): void {
+    handGroup.removeAll(true);
 
     const spacing = Math.min(20, this.getViewWidth() / 12);
     const startX = -((cards.length - 1) * spacing) / 2;
@@ -4794,8 +5053,29 @@ this.exitButton.setPosition(
       card.setPosition(startX + index * spacing, Math.abs(spread) * 5);
       card.setRotation(Phaser.Math.DegToRad(spread * 9));
       card.setScale(0.62 * this.uiScale);//Tamanho carta dos oponenetes
-      this.opponentHandGroup.add(card);
+      handGroup.add(card);
     });
+  }
+
+  private getOpponentPlayCardSource(playerId: string, cards: Card[], index: number): { x: number; y: number } {
+    const handGroup = this.getOpponentHandGroupForPlayer(playerId);
+    const target = this.getSmallOpponentHandCardTarget(handGroup, cards, index);
+
+    return { x: target.x, y: target.y };
+  }
+
+  private getOpponentHandGroupForPlayer(playerId: string): Phaser.GameObjects.Container {
+    const self = this.roomState?.self;
+
+    if (this.roomState?.mode === "duo-cpu" && self) {
+      const cpuIndex = this.roomState.players
+        .filter((player) => player.teamId !== self.teamId)
+        .findIndex((player) => player.id === playerId);
+
+      return this.duoCpuSidePlayers[cpuIndex]?.handGroup ?? this.opponentHandGroup;
+    }
+
+    return this.opponentHandGroup;
   }
 
   private createOpponentAvatar(): Phaser.GameObjects.Container {
@@ -4843,6 +5123,38 @@ this.exitButton.setPosition(
     return container;
   }
 
+  private createDuoCpuSidePlayer(defaultName: string): {
+    container: Phaser.GameObjects.Container;
+    avatar: Phaser.GameObjects.Image;
+    handGroup: Phaser.GameObjects.Container;
+    nameText: Phaser.GameObjects.Text;
+  } {
+    const container = this.add.container(0, 0);
+    const bg = this.add.circle(0, 0, 58, 0x020403, 0.92)
+      .setStrokeStyle(2, 0xffcf5a, 0.78);
+    const avatar = this.add.image(0, 0, "cpu-avatar")
+      .setDisplaySize(opponentAvatarPhotoSize, opponentAvatarPhotoSize);
+    const handGroup = this.add.container(0, 68);
+    const nameBox = this.add.graphics();
+
+    nameBox.fillStyle(0x020403, 0.9);
+    nameBox.fillRoundedRect(-58, 106, 116, 28, 9);
+    nameBox.lineStyle(1, 0xffcf5a, 0.45);
+    nameBox.strokeRoundedRect(-58, 106, 116, 28, 9);
+
+    const nameText = this.add.text(0, 120, defaultName, {
+      color: "#ffdf78",
+      fontFamily: "Arial",
+      fontSize: "14px",
+      fontStyle: "bold"
+    }).setOrigin(0.5);
+
+    container.add([bg, avatar, handGroup, nameBox, nameText]);
+    container.setVisible(false);
+
+    return { container, avatar, handGroup, nameText };
+  }
+
   private updateOpponentAvatarMaskPosition(): void {
     if (!this.opponentAvatarMaskShape || !this.opponentAvatarGroup) {
       return;
@@ -4853,6 +5165,13 @@ this.exitButton.setPosition(
 
   private updateOpponentAvatar(opponent: RoomState["players"][number] | undefined): void {
     const avatarUrl = opponent?.avatarUrl ?? null;
+
+    if (opponent?.isCpu) {
+      this.currentOpponentAvatarUrl = null;
+      this.opponentAvatarImage.setTexture("cpu-avatar");
+      this.opponentAvatarImage.setDisplaySize(opponentAvatarPhotoSize, opponentAvatarPhotoSize);
+      return;
+    }
 
     if (!avatarUrl) {
       this.currentOpponentAvatarUrl = null;
@@ -4985,6 +5304,7 @@ this.exitButton.setPosition(
       let hasPlayed = false;
       let isDragging = false;
       let isAnimatingToTable = false;
+      let playedFaceDown = false;
       let dragStartX = 0;
       let dragStartY = 0;
       let dragStartRotation = 0;
@@ -4994,8 +5314,10 @@ this.exitButton.setPosition(
         }
 
         hasPlayed = true;
+        this.locallyPlayedCardIds.add(card.id);
         const shouldPlayFaceDown = this.faceDownHandCardIds.has(card.id);
 
+        playedFaceDown = shouldPlayFaceDown;
         this.faceDownHandCardIds.delete(card.id);
 
         if (shouldPlayFaceDown) {
@@ -5003,11 +5325,19 @@ this.exitButton.setPosition(
         }
 
         this.playGameSound("card-place", 0.78);
-        this.sendReliableAction("card:play", {
+        const didQueueAction = this.sendReliableAction("card:play", {
           roomId: this.roomId,
           cardId: card.id,
           faceDown: shouldPlayFaceDown
         });
+
+        if (!didQueueAction) {
+          this.locallyPlayedCardIds.delete(card.id);
+          this.pendingFaceDownTableCardIds.delete(card.id);
+          hasPlayed = false;
+        }
+
+        this.renderState();
       };
 
       container.setInteractive({ draggable: true, useHandCursor: true });
@@ -5031,6 +5361,9 @@ this.exitButton.setPosition(
           isAnimatingToTable = true;
           container.disableInteractive();
           this.tweens.killTweensOf(container);
+          this.handCardObjects.delete(card.id);
+          this.animatingTableCardIds.add(card.id);
+          playCard();
           const targetPosition = this.getTableCardPosition(this.roomState?.self?.id ?? "", this.roomState?.table.length ?? 0, (this.roomState?.table.length ?? 0) + 1);
 
           this.tweens.add({
@@ -5038,12 +5371,21 @@ this.exitButton.setPosition(
             x: this.tableGroup.x + targetPosition.x - this.handGroup.x,
             y: this.tableGroup.y + targetPosition.y - this.handGroup.y,
             scale: this.tableCardScale * this.uiScale,
-            duration: 520,
+            duration: 360,
             ease: "Cubic.Out",
             onComplete: () => {
               isDragging = false;
               container.setDepth(0);
-              playCard();
+              this.animatingTableCardIds.delete(card.id);
+              this.handGroup.remove(container, false);
+              this.tableGroup.add(container);
+              container.setPosition(targetPosition.x, targetPosition.y);
+              container.setScale(this.tableCardScale * this.uiScale);
+              this.tableCardObjects.set(card.id, {
+                container,
+                signature: playedFaceDown ? "back" : "front"
+              });
+              this.renderState();
             }
           });
         } else {
