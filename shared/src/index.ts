@@ -12,6 +12,8 @@ export type PublicPlayer = {
   id: string;
   name: string;
   avatarUrl?: string;
+  isCpu?: boolean;
+  teamId?: number;
   cardCount: number;
   roundWins: number;
   points: number;
@@ -63,6 +65,7 @@ export type ReliableActionPayload = {
 
 export type RoomState = {
   roomId: string;
+  mode?: "classic" | "duo-cpu";
   players: PublicPlayer[];
   self?: ClientPlayer;
   table: TableCard[];
@@ -89,7 +92,7 @@ export type RoomState = {
 };
 
 export type ClientToServerEvents = {
-  "room:join": (payload: { roomId?: string; name: string; token: string }) => void;
+  "room:join": (payload: { roomId?: string; name: string; token: string; mode?: "classic" | "duo-cpu" }) => void;
   "room:leave": (payload: { roomId: string }, ack?: () => void) => void;
   "card:play": (payload: { roomId: string; cardId: string; faceDown?: boolean } & ReliableActionPayload, ack?: (response: ActionAck) => void) => void;
   "truco:raise": (payload: { roomId: string } & ReliableActionPayload, ack?: (response: ActionAck) => void) => void;

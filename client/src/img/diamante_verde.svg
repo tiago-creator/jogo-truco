@@ -1,0 +1,26 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+ 
+  
+  <g filter="url(#shadow)">
+    <path d="M74 45H182L218 91L128 218L38 91L74 45Z" fill="#0BA928" stroke="#B7FF5D" stroke-width="4" stroke-linejoin="round"/>
+    
+    <!-- top facets -->
+    <path d="M74 45L38 91H92L74 45Z" fill="url(#topLeft)" stroke="#E4FF83" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M74 45H128L92 91L74 45Z" fill="#79FF43" stroke="#D9FF7A" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M128 45L164 91H92L128 45Z" fill="url(#topMid)" stroke="#E8FF8D" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M128 45H182L164 91L128 45Z" fill="#31D931" stroke="#B9FF61" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M182 45L218 91H164L182 45Z" fill="url(#topRight)" stroke="#9BFF57" stroke-width="2" stroke-linejoin="round"/>
+
+    <!-- lower facets -->
+    <path d="M38 91H92L128 218L38 91Z" fill="url(#bodyLeft)" stroke="#58F448" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M92 91H128V218L92 91Z" fill="#1CD834" stroke="#86FF60" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M128 91H164L128 218V91Z" fill="url(#bodyMid)" stroke="#C4FF69" stroke-width="2" stroke-linejoin="round"/>
+    <path d="M164 91H218L128 218L164 91Z" fill="url(#bodyRight)" stroke="#34E83B" stroke-width="2" stroke-linejoin="round"/>
+
+    <!-- highlights -->
+    <path d="M63 86L78 58H112" stroke="white" stroke-width="5" stroke-linecap="round" opacity="0.45"/>
+    <path d="M130 56L153 88" stroke="white" stroke-width="4" stroke-linecap="round" opacity="0.38"/>
+    <path d="M57 101L116 186" stroke="#D9FF88" stroke-width="3" stroke-linecap="round" opacity="0.45"/>
+    <path d="M199 100L146 178" stroke="#0C5A18" stroke-width="3" stroke-linecap="round" opacity="0.3"/>
+  </g>
+</svg>

@@ -40,6 +40,7 @@ type PlayerState = {
   avatarUrl?: string;
   isCpu?: boolean;
   cpuToken?: string;
+  teamId?: number;
   hand: Card[];
   roundWins: number;
   handsWonInGame: number;
@@ -55,6 +56,7 @@ type HandOutcome =
 
 type Room = {
   id: string;
+  mode?: "classic" | "duo-cpu";
   players: PlayerState[];
   table: TableCard[];
   vira?: Card;
@@ -204,6 +206,8 @@ function toPublicPlayer(player: PlayerState): PublicPlayer {
     id: player.id,
     name: player.name,
     avatarUrl: player.avatarUrl,
+    isCpu: player.isCpu,
+    teamId: player.teamId,
     cardCount: player.hand.length,
     roundWins: player.roundWins,
     points: player.points,
@@ -221,6 +225,7 @@ function getRoom(roomId: string): Room {
 
   const room: Room = {
     id: roomId,
+    mode: "classic",
     players: [],
     table: [],
     vira: undefined,
@@ -265,7 +270,7 @@ function restoreRoomSnapshot(snapshot: unknown): Room | null {
 }
 
 function resumeRestoredRoom(room: Room): void {
-  if (room.status !== "playing" || room.table.length < 2 || room.turnPlayerId) {
+  if (room.status !== "playing" || room.table.length < room.players.length || room.turnPlayerId) {
     return;
   }
 
@@ -302,8 +307,9 @@ function persistRoom(room: Room): void {
   });
 }
 
-function createAutoRoom(): Room {
-  let roomId = `mesa-${nextAutoRoomNumber}`;
+function createAutoRoom(mode: Room["mode"] = "classic"): Room {
+  const prefix = mode === "duo-cpu" ? "duplas-cpu" : "mesa";
+  let roomId = `${prefix}-${nextAutoRoomNumber}`;
 
   while (rooms.has(roomId)) {
     nextAutoRoomNumber += 1;
@@ -311,7 +317,9 @@ function createAutoRoom(): Room {
   }
 
   nextAutoRoomNumber += 1;
-  return getRoom(roomId);
+  const room = getRoom(roomId);
+  room.mode = mode;
+  return room;
 }
 
 function findRoomByPlayerToken(token: string): Room | undefined {
@@ -346,9 +354,17 @@ function shouldRejoinMemoryRoom(room: Room, token: string): boolean {
   return true;
 }
 
-function findWaitingRoom(): Room | undefined {
+function getRoomTargetHumanCount(room: Room): number {
+  return room.mode === "duo-cpu" ? 2 : 2;
+}
+
+function getHumanCount(room: Room): number {
+  return room.players.filter((player) => !player.isCpu).length;
+}
+
+function findWaitingRoom(mode: Room["mode"] = "classic"): Room | undefined {
   for (const room of rooms.values()) {
-    if (room.status === "waiting" && room.players.length < 2) {
+    if (room.status === "waiting" && (room.mode ?? "classic") === mode && getHumanCount(room) < getRoomTargetHumanCount(room)) {
       return room;
     }
   }
@@ -356,12 +372,12 @@ function findWaitingRoom(): Room | undefined {
   return undefined;
 }
 
-async function getJoinRoom(roomId: string | undefined, token: string): Promise<Room> {
+async function getJoinRoom(roomId: string | undefined, token: string, mode: Room["mode"] = "classic"): Promise<Room> {
   const requestedRoomId = roomId?.trim();
 
   if (requestedRoomId) {
     if (closedRoomIds.has(requestedRoomId)) {
-      return findWaitingRoom() ?? createAutoRoom();
+      return findWaitingRoom(mode) ?? createAutoRoom(mode);
     }
 
     const existingRoom = rooms.get(requestedRoomId);
@@ -376,7 +392,9 @@ async function getJoinRoom(roomId: string | undefined, token: string): Promise<R
     });
     const restoredRoom = restoredSnapshot ? restoreRoomSnapshot(restoredSnapshot) : null;
 
-    return restoredRoom ?? getRoom(requestedRoomId);
+    const room = restoredRoom ?? getRoom(requestedRoomId);
+    room.mode ??= mode;
+    return room;
   }
 
   const memoryRoom = findRoomByPlayerToken(token);
@@ -393,12 +411,12 @@ async function getJoinRoom(roomId: string | undefined, token: string): Promise<R
     runDatabaseTask(async () => {
       await deleteActiveRoom(restoredSnapshot.id);
     });
-    return findWaitingRoom() ?? createAutoRoom();
+    return findWaitingRoom(mode) ?? createAutoRoom(mode);
   }
 
   const restoredRoom = restoredSnapshot ? restoreRoomSnapshot(restoredSnapshot) : null;
 
-  return restoredRoom ?? findWaitingRoom() ?? createAutoRoom();
+  return restoredRoom ?? findWaitingRoom(mode) ?? createAutoRoom(mode);
 }
 
 function replacePlayerId(room: Room, previousId: string, nextId: string): void {
@@ -460,6 +478,7 @@ function buildState(room: Room, viewerId: string): RoomState {
 
   return {
     roomId: room.id,
+    mode: room.mode ?? "classic",
     players: room.players.map(toPublicPlayer),
     self: self ? toPublicPlayer(self) : undefined,
     table: room.table,
@@ -484,7 +503,9 @@ function buildState(room: Room, viewerId: string): RoomState {
 
 function buildMessage(room: Room, viewerId: string): string {
   if (room.status === "waiting") {
-    return "Esperando outro jogador";
+    return room.mode === "duo-cpu"
+      ? "Procurando parceiro para enfrentar dupla CPU"
+      : "Esperando outro jogador";
   }
 
   if (room.trucoRequest) {
@@ -608,7 +629,9 @@ function startPersistentMatch(room: Room): void {
       room.players.map((player) => ({
         token: player.token,
         name: player.name,
-        avatarUrl: player.avatarUrl
+        avatarUrl: player.avatarUrl,
+        isCpu: player.isCpu,
+        cpuToken: player.cpuToken
       }))
     ) ?? undefined;
   });
@@ -616,6 +639,64 @@ function startPersistentMatch(room: Room): void {
 
 function getOpponentPlayerId(room: Room, playerId: string | undefined): string | undefined {
   return room.players.find((player) => player.id !== playerId)?.id;
+}
+
+function getNextPlayerId(room: Room, playerId: string | undefined): string | undefined {
+  if (!playerId || room.players.length === 0) {
+    return room.players[0]?.id;
+  }
+
+  const playerIndex = room.players.findIndex((player) => player.id === playerId);
+  const nextIndex = playerIndex < 0 ? 0 : (playerIndex + 1) % room.players.length;
+
+  return room.players[nextIndex]?.id;
+}
+
+function getNextTablePlayerId(room: Room, playerId: string | undefined): string | undefined {
+  const playedPlayerIds = new Set(room.table.map((entry) => entry.playerId));
+  let cursor = playerId;
+
+  for (let offset = 0; offset < room.players.length; offset += 1) {
+    const nextPlayerId = getNextPlayerId(room, cursor);
+    const nextPlayer = room.players.find((player) => player.id === nextPlayerId);
+
+    if (nextPlayer && !playedPlayerIds.has(nextPlayer.id)) {
+      return nextPlayer.id;
+    }
+
+    cursor = nextPlayerId;
+  }
+
+  return undefined;
+}
+
+function areSameTeam(room: Room, leftPlayerId: string | null | undefined, rightPlayerId: string | null | undefined): boolean {
+  if (!leftPlayerId || !rightPlayerId) {
+    return false;
+  }
+
+  if (leftPlayerId === rightPlayerId) {
+    return true;
+  }
+
+  const left = room.players.find((player) => player.id === leftPlayerId);
+  const right = room.players.find((player) => player.id === rightPlayerId);
+
+  return left?.teamId !== undefined && left.teamId === right?.teamId;
+}
+
+function getOpposingPlayer(room: Room, playerId: string | undefined): PlayerState | undefined {
+  const player = room.players.find((item) => item.id === playerId);
+
+  return room.players.find((item) => item.id !== playerId && item.teamId !== player?.teamId);
+}
+
+function getTeamPlayers(room: Room, playerId: string): PlayerState[] {
+  const player = room.players.find((item) => item.id === playerId);
+
+  return player?.teamId === undefined
+    ? [player].filter(Boolean) as PlayerState[]
+    : room.players.filter((item) => item.teamId === player.teamId);
 }
 
 function ensureFootPlayer(room: Room): string | undefined {
@@ -629,13 +710,48 @@ function ensureFootPlayer(room: Room): string | undefined {
 
 function rotateFootPlayer(room: Room): string | undefined {
   const currentFootPlayerId = ensureFootPlayer(room);
-  const nextFootPlayerId = getOpponentPlayerId(room, currentFootPlayerId);
+  const nextFootPlayerId = getNextPlayerId(room, currentFootPlayerId);
 
   if (nextFootPlayerId) {
     room.footPlayerId = nextFootPlayerId;
   }
 
   return room.footPlayerId;
+}
+
+function createCpuPlayer(room: Room, index: number): PlayerState {
+  return {
+    id: `cpu:${room.id}:${index}`,
+    name: `CPU ${index}`,
+    isCpu: true,
+    cpuToken: `cpu:${room.id}:${index}`,
+    token: `cpu:${room.id}:${index}`,
+    teamId: 1,
+    hand: [],
+    roundWins: 0,
+    handsWonInGame: 0,
+    points: 0,
+    games: 0
+  };
+}
+
+function completeDuoCpuRoom(room: Room): void {
+  if (room.mode !== "duo-cpu") {
+    return;
+  }
+
+  const humans = room.players.filter((player) => !player.isCpu);
+
+  if (humans.length < 2) {
+    return;
+  }
+
+  humans.forEach((player) => {
+    player.teamId = 0;
+  });
+
+  const cpus = [createCpuPlayer(room, 1), createCpuPlayer(room, 2)];
+  room.players = [humans[0], cpus[0], humans[1], cpus[1]];
 }
 
 function suitName(suit: Card["suit"]): string {
@@ -701,16 +817,17 @@ function dealHand(room: Room, rotateFootPlayerBeforeDeal = false): void {
   const previousTrucoResponse = room.lastTrucoResponse;
   const deck = shuffle(createDeck());
   const footPlayerId = rotateFootPlayerBeforeDeal ? rotateFootPlayer(room) : ensureFootPlayer(room);
-  const firstPlayerId = getOpponentPlayerId(room, footPlayerId) ?? room.players[0]?.id;
+  const firstPlayerId = getNextPlayerId(room, footPlayerId) ?? room.players[0]?.id;
   const isIronHand = room.players.length === 2 && room.players.every((player) => player.points === 11);
   const elevenHandPlayer = room.players.find((player) => player.points === 11);
 
-  room.players[0].hand = deck.slice(0, 3);
-  room.players[1].hand = deck.slice(3, 6);
-  room.vira = deck[6];
+  for (const [index, player] of room.players.entries()) {
+    player.hand = deck.slice(index * 3, index * 3 + 3);
+    player.roundWins = 0;
+  }
+
+  room.vira = deck[room.players.length * 3];
   room.handSequence = (room.handSequence ?? 0) + 1;
-  room.players[0].roundWins = 0;
-  room.players[1].roundWins = 0;
   room.table = [];
   room.trickResults = [];
   room.handValue = isIronHand || elevenHandPlayer ? 3 : 1;
@@ -785,8 +902,46 @@ export function getHandOutcome(trickResults: TrickResult[]): HandOutcome {
     : { type: "winner", winnerPlayerId: third };
 }
 
+function getRoomHandOutcome(room: Room): HandOutcome {
+  if (room.mode !== "duo-cpu") {
+    return getHandOutcome(room.trickResults);
+  }
+
+  const [first, second, third] = room.trickResults.map((result) => result.winnerPlayerId);
+
+  if (room.trickResults.length < 2) {
+    return { type: "continue" };
+  }
+
+  if (!first) {
+    if (second) {
+      return { type: "winner", winnerPlayerId: second };
+    }
+
+    if (room.trickResults.length < 3) {
+      return { type: "continue" };
+    }
+
+    return third
+      ? { type: "winner", winnerPlayerId: third }
+      : { type: "draw" };
+  }
+
+  if (!second || areSameTeam(room, first, second)) {
+    return { type: "winner", winnerPlayerId: first };
+  }
+
+  if (room.trickResults.length < 3) {
+    return { type: "continue" };
+  }
+
+  return !third || areSameTeam(room, first, third)
+    ? { type: "winner", winnerPlayerId: first }
+    : { type: "winner", winnerPlayerId: third };
+}
+
 function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue"], dealNextHandImmediately = true): void {
-  const loser = room.players.find((player) => player.id !== winner.id);
+  const loser = getOpposingPlayer(room, winner.id);
   const matchId = room.dbMatchId;
   const winnerSnapshot = {
     id: winner.id,
@@ -809,8 +964,13 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
 
   const winnerPointsBefore = winner.points;
 
-  winner.points += points;
-  winner.handsWonInGame = (winner.handsWonInGame ?? 0) + 1;
+  const winnerTeam = getTeamPlayers(room, winner.id);
+
+  for (const teamPlayer of winnerTeam) {
+    teamPlayer.points += points;
+    teamPlayer.handsWonInGame = (teamPlayer.handsWonInGame ?? 0) + 1;
+  }
+
   const finishedGame = winner.points >= 12;
   const winnerPointsAfter = winner.points;
   const loserPointsAfter = loser?.points ?? 0;
@@ -844,11 +1004,14 @@ function awardHand(room: Room, winner: PlayerState, points: RoomState["handValue
   });
 
   if (finishedGame) {
-    winner.games += 1;
-    winner.points = 0;
-    winner.handsWonInGame = 0;
+    for (const teamPlayer of winnerTeam) {
+      teamPlayer.games += 1;
+      teamPlayer.points = 0;
+      teamPlayer.handsWonInGame = 0;
+    }
+
     for (const player of room.players) {
-      if (player.id !== winner.id) {
+      if (!areSameTeam(room, player.id, winner.id)) {
         player.points = 0;
         player.handsWonInGame = 0;
       }
@@ -912,23 +1075,25 @@ function finishTrickIfReady(room: Room, expectedHandSequence = room.handSequence
     return;
   }
 
-  if (room.table.length < 2) {
+  if (room.table.length < room.players.length) {
     return;
   }
 
-  const [first, second] = room.table;
-  const winner = getTrickWinner(room, first, second);
+  const first = room.table[0];
+  const winner = getTrickWinner(room, room.table);
   const winnerPlayer = room.players.find((player) => player.id === winner);
 
   if (winnerPlayer) {
-    winnerPlayer.roundWins += 1;
+    for (const teamPlayer of getTeamPlayers(room, winnerPlayer.id)) {
+      teamPlayer.roundWins += 1;
+    }
   }
 
   room.trickResults.push({ winnerPlayerId: winner });
   room.table = [];
   room.turnPlayerId = winner ?? first.playerId;
 
-  const outcome = getHandOutcome(room.trickResults);
+  const outcome = getRoomHandOutcome(room);
 
   if (outcome.type === "continue") {
     return;
@@ -946,30 +1111,35 @@ function finishTrickIfReady(room: Room, expectedHandSequence = room.handSequence
   }
 }
 
-function getTrickWinner(room: Room, first: TableCard, second: TableCard): string | null {
-  if (first.faceDown && second.faceDown) {
-    return null;
-  }
-
-  if (first.faceDown) {
-    return second.playerId;
-  }
-
-  if (second.faceDown) {
-    return first.playerId;
-  }
-
+function getTrickWinner(room: Room, cards: TableCard[]): string | null {
   if (!room.vira) {
     return null;
   }
 
-  const comparison = compareCardsWithVira(first.card, second.card, room.vira);
+  const openCards = cards.filter((card) => !card.faceDown);
 
-  if (comparison === 0) {
+  if (openCards.length === 0) {
     return null;
   }
 
-  return comparison > 0 ? first.playerId : second.playerId;
+  let winner = openCards[0];
+  let tied = false;
+
+  for (const card of openCards.slice(1)) {
+    const comparison = compareCardsWithVira(card.card, winner.card, room.vira);
+
+    if (comparison > 0) {
+      winner = card;
+      tied = false;
+      continue;
+    }
+
+    if (comparison === 0) {
+      tied = true;
+    }
+  }
+
+  return tied ? null : winner.playerId;
 }
 
 function nextHandValue(value: RoomState["handValue"]): RoomState["handValue"] | null {
@@ -1030,7 +1200,7 @@ function handlePlayerExit(socketId: string, explicitRoomId?: string, preserveRec
 
     const hasHumanOpponent = room.players.some((item) => item.id !== socketId && !item.isCpu);
 
-    if (preserveReconnectSeat && room.status === "playing" && room.players.length === 2 && hasHumanOpponent) {
+    if (preserveReconnectSeat && room.status === "playing" && hasHumanOpponent) {
       makePlayerCpu(room, player, preserveReconnectSeat);
       broadcastState(room);
       return;
@@ -1118,7 +1288,7 @@ function scheduleCpuAction(room: Room): void {
 }
 
 function respondElevenHandAsCpu(room: Room, cpu: PlayerState): void {
-  const opponent = room.players.find((player) => player.id !== cpu.id);
+  const opponent = getOpposingPlayer(room, cpu.id);
 
   room.elevenHandDecision = undefined;
 
@@ -1261,41 +1431,44 @@ function playCardAsCpu(room: Room): void {
   room.table.push({ playerId: cpu.id, card });
   logCardPlay(room, cpu, card);
 
-  if (room.table.length === 1) {
-    room.turnPlayerId = room.players.find((player) => player.id !== cpu.id)?.id ?? null;
+  if (room.table.length < room.players.length) {
+    room.turnPlayerId = getNextTablePlayerId(room, cpu.id) ?? null;
     broadcastState(room);
     return;
   }
 
-  if (room.table.length === 2) {
-    room.turnPlayerId = null;
-    const handSequence = room.handSequence;
-    broadcastState(room);
-
-    setTimeout(() => {
-      finishTrickIfReady(room, handSequence);
-      broadcastState(room);
-    }, trickRevealDelayMs);
-    return;
-  }
-
-  finishTrickIfReady(room);
+  room.turnPlayerId = null;
+  const handSequence = room.handSequence;
   broadcastState(room);
+
+  setTimeout(() => {
+    finishTrickIfReady(room, handSequence);
+    broadcastState(room);
+  }, trickRevealDelayMs);
 }
 
 io.on("connection", (socket) => {
-  socket.on("room:join", async ({ roomId, name, token }) => {
+  socket.on("room:join", async ({ roomId, name, token, mode }) => {
+    const joinMode: Room["mode"] = mode === "duo-cpu" ? "duo-cpu" : "classic";
     const profile = await getProfileForJoin(token);
     const playerName = (profile?.name ?? name.trim()) || "Jogador";
     const avatarUrl = profile?.avatarUrl ?? undefined;
-    const room = await getJoinRoom(roomId, token);
+    const room = await getJoinRoom(roomId, token, joinMode);
+    room.mode ??= joinMode;
     const existing = room.players.find((player) => player.token === token);
 
-    const cpuSeat = !existing && room.players.length >= 2
+    const targetHumanCount = getRoomTargetHumanCount(room);
+    const humanCount = getHumanCount(room);
+    const cpuSeat = !existing
       ? room.players.find((player) => player.isCpu && player.cpuToken === token)
       : undefined;
 
-    if (!existing && room.players.length >= 2 && !cpuSeat) {
+    if (!existing && room.status === "playing" && !cpuSeat) {
+      socket.emit("room:error", { message: "Partida em andamento" });
+      return;
+    }
+
+    if (!existing && humanCount >= targetHumanCount && !cpuSeat) {
       socket.emit("room:error", { message: "Mesa cheia" });
       return;
     }
@@ -1330,6 +1503,7 @@ io.on("connection", (socket) => {
         name: playerName,
         avatarUrl,
         isCpu: false,
+        teamId: room.mode === "duo-cpu" ? 0 : undefined,
         token,
         hand: [],
         roundWins: 0,
@@ -1348,7 +1522,10 @@ io.on("connection", (socket) => {
       });
     }
 
-    if (room.players.length === 2 && room.status === "waiting") {
+    if (room.mode === "duo-cpu" && getHumanCount(room) === 2 && room.status === "waiting") {
+      completeDuoCpuRoom(room);
+      startMatch(room);
+    } else if (room.mode !== "duo-cpu" && room.players.length === 2 && room.status === "waiting") {
       startMatch(room);
     }
 
@@ -1403,11 +1580,11 @@ socket.on("room:leave", ({ roomId }, ack?: () => void) => {
     logCardPlay(room, player, card, shouldPlayFaceDown);
     markActionProcessed(room, actionId);
 
-    if (room.table.length === 1) {
-      room.turnPlayerId = room.players.find((item) => item.id !== player.id)?.id ?? null;
+    if (room.table.length < room.players.length) {
+      room.turnPlayerId = getNextTablePlayerId(room, player.id) ?? null;
     }
 
-    if (room.table.length === 2) {
+    if (room.table.length === room.players.length) {
       room.turnPlayerId = null;
       const handSequence = room.handSequence;
       broadcastState(room);
@@ -1420,7 +1597,6 @@ socket.on("room:leave", ({ roomId }, ack?: () => void) => {
       return;
     }
 
-    finishTrickIfReady(room);
     broadcastState(room);
     acknowledgeAction(ack);
   });
@@ -1471,7 +1647,7 @@ socket.on("room:leave", ({ roomId }, ack?: () => void) => {
       return;
     }
 
-    const opponent = room.players.find((item) => item.id !== socket.id);
+    const opponent = getOpposingPlayer(room, socket.id);
 
     if (!opponent) {
       failAction(socket, ack, "Sem oponente na mesa");
@@ -1629,7 +1805,7 @@ socket.on("room:leave", ({ roomId }, ack?: () => void) => {
       return;
     }
 
-    const opponent = room.players.find((item) => item.id !== socket.id);
+    const opponent = getOpposingPlayer(room, socket.id);
 
     if (!opponent) {
       room.elevenHandDecision = undefined;

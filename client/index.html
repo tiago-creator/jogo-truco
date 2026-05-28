@@ -47,14 +47,6 @@
             </div>
           </div>
         </div>
-        <button class="home-side-button home-side-left" type="button" aria-label="Missoes">
-          <span class="home-side-icon">+</span>
-          <strong>Missoes</strong>
-        </button>
-        <button class="home-side-button home-side-right" type="button" aria-label="Ranking">
-          <span class="home-side-icon">^</span>
-          <strong>Ranking</strong>
-        </button>
         <div class="home-hero">
           <div class="home-copy">
             <img class="home-logo" src="/src/img/truco.png" alt="Truco" />
@@ -220,12 +212,143 @@
     </main>
     <main id="rank" class="rank-screen is-hidden">
       <section class="rank-content" aria-labelledby="rank-title">
-        <div class="home-badge">Rank</div>
-        <h2 id="rank-title">Melhores jogadores</h2>
+        <div class="rank-topbar">
+          <button id="back-home-rank" class="game-mode-back" type="button" aria-label="Voltar">
+            <span aria-hidden="true"></span>
+          </button>
+          <div class="rank-heading">
+            <h2 id="rank-title" class="sr-only">Ranking dos jogadores</h2>
+            <img src="/src/img/rank.png" alt="" aria-hidden="true" />
+          </div>
+          <button class="rank-help-button" type="button" aria-label="Ajuda">?</button>
+        </div>
+        <div class="rank-tabs" aria-label="Filtros do ranking">
+          <button class="is-active" type="button">Geral</button>
+          <button type="button">Amigos</button>
+          <button type="button">Regional</button>
+          <button type="button">Clas</button>
+        </div>
+        <div class="rank-summary">
+          <div class="rank-summary-medal" aria-hidden="true">♛</div>
+          <div>
+            <span>Sua posição</span>
+            <strong id="rank-self-position">--</strong>
+            <small>Entre os melhores</small>
+          </div>
+          <div>
+            <span>Pontos</span>
+            <strong id="rank-self-points">0</strong>
+            <small id="rank-self-wins">0 vitórias</small>
+          </div>
+          <div class="rank-win-rate">
+            <strong id="rank-self-rate">0%</strong>
+            <small>Taxa de vitórias</small>
+          </div>
+        </div>
+        <div class="rank-table-head" aria-hidden="true">
+          <span>Posição</span>
+          <span>Jogador</span>
+          <span>Pontos</span>
+          <span>Vitórias</span>
+        </div>
         <div id="rank-list" class="rank-list" aria-live="polite"></div>
-        <button id="back-home-rank"  type="button">
-          Voltar
-        </button>
+        <p class="rank-updated">Ranking atualizado agora</p>
+      </section>
+    </main>
+    <main id="game-mode" class="game-mode-screen is-hidden">
+      <section class="game-mode-content" aria-labelledby="game-mode-title">
+        <div class="game-mode-topbar">
+          <button id="back-home-mode" class="game-mode-back" type="button" aria-label="Voltar">
+            <span aria-hidden="true"></span>
+          </button>
+         
+          <div class="home-wallet" aria-label="Moedas e gemas">
+            <div class="home-currency">
+              <span class="home-currency-icon">$</span>
+              <strong>12.450</strong>
+              <span class="home-plus">+</span>
+            </div>
+            <div class="home-currency">
+              <span class="home-currency-icon home-gem"></span>
+              <strong>85</strong>
+              <span class="home-plus">+</span>
+            </div>
+          </div>
+        </div>
+         <img class="game-mode-logo" src="/src/img/truco.png" alt="Truco" />
+        <h2 id="game-mode-title">Escolha o modo</h2>
+        <p class="game-mode-subtitle">Jogue online e mostre quem e o rei do truco!</p>
+        <img src="/src/img/divisoria-dourada.png" alt="Divisoria" aria-hidden="true" class="game-mode-divider" />
+        <h3 class="game-mode-section-title">Truco Paulista</h3>
+        <div class="game-mode-options">
+          <button id="play-mode-1v1" class="game-mode-option" type="button">
+            <span class="game-mode-icon">1 x 1</span>
+            <span class="game-mode-players" aria-hidden="true">
+              <span></span>
+              <span></span>
+            </span>
+            <strong>Duelo online</strong>
+            <small>Procure outro jogador e entre em uma mesa em tempo real.</small>
+            <span class="game-mode-cta">Jogar agora</span>
+          </button>
+          <button id="play-mode-2v2" class="game-mode-option" type="button">
+            <span class="game-mode-icon">2 x 2</span>
+            <span class="game-mode-players game-mode-players-four" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+            </span>
+            <strong>Duplas online</strong>
+            <small>Jogue em duplas com outros dois jogadores em tempo real.</small>
+            <span class="game-mode-cta">Jogar agora</span>
+          </button>
+          <button id="play-mode-2v2-cpu" class="game-mode-option" type="button">
+            <span class="game-mode-icon">2 x 2</span>
+            <span class="game-mode-players game-mode-players-four game-mode-players-cpu" aria-hidden="true">
+              <span></span>
+              <span></span>
+              <span></span>
+              <span></span>
+            </span>
+            <strong>Duplas CPU</strong>
+            <small>Jogue em duplas com outros adversarios controlados pela CPU.</small>
+            <span class="game-mode-cta">Jogar agora</span>
+          </button>
+        </div>
+        <div class="game-mode-security">
+          <img class="game-mode-shield" src="/src/img/seguranca.png" alt="" aria-hidden="true" />
+          <div>
+            <strong>Jogo seguro e justo</strong>
+            <span>Todos os jogos sao protegidos contra trapacas para garantir uma experiencia justa para todos.</span>
+          </div>
+          <div class="game-mode-lock">
+            <img src="/src/img/padlock.svg" alt="" aria-hidden="true" />
+          </div>
+        </div>
+        <div class="game-mode-features">
+          <div>
+            <span class="game-mode-feature-icon game-mode-feature-clean" aria-hidden="true">
+              <img src="/src/img/sem-trapacas.svg" alt="" />
+            </span>
+            <strong>Sem trapacas</strong>
+            <small>Jogo limpo e protegido</small>
+          </div>
+          <div>
+            <span class="game-mode-feature-icon game-mode-feature-image" aria-hidden="true">
+              <img src="/src/img/conexao-estavel.svg" alt="" />
+            </span>
+            <strong>Conexao estavel</strong>
+            <small>Partidas rapidas e sem quedas</small>
+          </div>
+          <div>
+            <span class="game-mode-feature-icon game-mode-feature-image" aria-hidden="true">
+              <img src="/src/img/milhares-online.svg" alt="" />
+            </span>
+            <strong>Milhares online</strong>
+            <small>Jogadores ativos 24 horas por dia</small>
+          </div>
+        </div>
       </section>
     </main>
     <main id="waiting-room" class="waiting-screen is-hidden">

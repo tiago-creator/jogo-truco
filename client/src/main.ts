@@ -70,6 +70,7 @@ const memeAudios = [
 ];
 
 type TrucoSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
+type OnlineGameMode = "classic" | "duo-cpu";
 type PlayerProfile = {
   token: string;
   name: string;
@@ -277,6 +278,7 @@ function loadStoredProfile(): PlayerProfile | null {
 function saveStoredProfile(profile: PlayerProfile): void {
   currentPlayerProfile = profile;
   savePlayerToken(profile.token);
+  renderHomeProfile();
 
   try {
     localStorage.setItem(profileStorageKey, JSON.stringify(profile));
@@ -288,6 +290,35 @@ function saveStoredProfile(profile: PlayerProfile): void {
 
 function getCurrentPlayerName(): string {
   return currentPlayerProfile?.name ?? `Jogador ${Math.floor(Math.random() * 900 + 100)}`;
+}
+
+function renderHomeProfile(): void {
+  const avatars = document.querySelectorAll<HTMLElement>(".home-avatar");
+  const playerNames = document.querySelectorAll<HTMLElement>(".home-player-copy strong");
+  const avatarUrl = currentPlayerProfile?.avatarUrl ?? "";
+
+  playerNames.forEach((playerName) => {
+    playerName.textContent = currentPlayerProfile?.name || "Jogador123";
+  });
+
+  if (avatars.length === 0) {
+    return;
+  }
+
+  avatars.forEach((avatar) => {
+    avatar.replaceChildren();
+    avatar.classList.toggle("has-photo", Boolean(avatarUrl));
+
+    if (!avatarUrl) {
+      return;
+    }
+
+    const image = document.createElement("img");
+
+    image.src = avatarUrl;
+    image.alt = "";
+    avatar.append(image);
+  });
 }
 
 async function fetchPlayerProfile(): Promise<PlayerProfile | null> {
@@ -769,7 +800,8 @@ exitButtonHitZone.on("pointerup", () => {
      this.socket.emit("room:join", {
   roomId: this.roomId,
   name: this.playerName,
-  token: playerToken
+  token: playerToken,
+  mode: selectedOnlineGameMode
 });
     });
 
@@ -1150,7 +1182,7 @@ exitButtonHitZone.on("pointerup", () => {
     g.fillCircle(-12, 12, 3.1);
   }
 
-  leaveTable(): void {
+  leaveTable(returnTo: "home" | "mode" = "home"): void {
     this.clearReliableActions();
     this.audioRecorder.cancel();
     this.audioStopTimer?.remove(false);
@@ -1188,6 +1220,11 @@ exitButtonHitZone.on("pointerup", () => {
     this.faceDownHandCardIds.clear();
     this.pendingFaceDownTableCardIds.clear();
     this.clearCachedCardObjects();
+
+    if (returnTo === "mode") {
+      returnToGameModeMenu();
+      return;
+    }
 
     returnToMainMenu();
   }
@@ -2335,7 +2372,7 @@ this.exitButton.setPosition(
     }
 
     const self = this.roomState.self;
-    const opponent = this.roomState.players.find((player) => player.id !== self?.id);
+    const opponent = this.getPrimaryOpponent();
     const isMyTurn = this.roomState.turnPlayerId === self?.id;
 
     this.opponentNameText.setText((opponent?.name ?? "Oponente").toUpperCase());
@@ -2366,6 +2403,17 @@ this.exitButton.setPosition(
     this.renderHand(self?.hand ?? [], isMyTurn && !this.roomState.trucoRequest && !this.roomState.elevenHandDecision);
     this.syncTurnTimer();
     this.sharpenExistingTexts();
+  }
+
+  private getPrimaryOpponent(): RoomState["players"][number] | undefined {
+    const self = this.roomState?.self;
+
+    if (!this.roomState || !self) {
+      return this.roomState?.players[1] ?? this.roomState?.players[0];
+    }
+
+    return this.roomState.players.find((player) => player.id !== self.id && player.teamId !== self.teamId)
+      ?? this.roomState.players.find((player) => player.id !== self.id);
   }
 
   private updateStatusPosition(safeTop = 12 * this.uiScale): void {
@@ -4165,7 +4213,7 @@ this.exitButton.setPosition(
 
     const players = this.roomState?.players ?? [];
     const self = this.roomState?.self ?? players[0];
-    const opponent = players.find((player) => player.id !== self?.id) ?? players[1] ?? players[0];
+    const opponent = this.getPrimaryOpponent() ?? players[1] ?? players[0];
     const availableWidth = Math.min(this.getViewWidth() - 96 * this.uiScale, 620 * this.uiScale);
     const gap = 14 * this.uiScale;
     const sideWidth = Phaser.Math.Clamp(185 * this.uiScale, 124 * this.uiScale, availableWidth * 0.34);
@@ -4391,13 +4439,32 @@ this.exitButton.setPosition(
   }
 
   private getTableCardPosition(playerId: string, fallbackIndex: number, tableCardCount: number): { x: number; y: number } {
-    const isSelf = playerId === this.roomState?.self?.id;
+    const self = this.roomState?.self;
+    const isSelf = playerId === self?.id;
 
     if (isSelf) {
       return { x: 0, y: 190 * this.uiScale };
     }
 
-    if (this.roomState?.self) {
+    if (this.roomState?.mode === "duo-cpu" && self) {
+      const player = this.roomState.players.find((item) => item.id === playerId);
+      const isPartner = player?.teamId === self.teamId;
+
+      if (isPartner) {
+        return { x: -135 * this.uiScale, y: 120 * this.uiScale };
+      }
+
+      const opponentIndex = this.roomState.players
+        .filter((item) => item.id !== self.id && item.teamId !== self.teamId)
+        .findIndex((item) => item.id === playerId);
+
+      return {
+        x: (opponentIndex === 0 ? -95 : 95) * this.uiScale,
+        y: -130 * this.uiScale
+      };
+    }
+
+    if (self) {
       return { x: 0, y: -130 * this.uiScale };
     }
 
@@ -5038,6 +5105,7 @@ this.exitButton.setPosition(
 }
 
 let game: Phaser.Game | null = null;
+let selectedOnlineGameMode: OnlineGameMode = "classic";
 let currentTableBackground = getSelectedTableBackground();
 let currentCardBack = getSelectedCardBack();
 let resizeGameCanvas: (() => void) | null = null;
@@ -5116,12 +5184,14 @@ function stopWaitingTimer(): void {
 }
 
 function showHomeMenu(): void {
+  renderHomeProfile();
   stopWaitingTimer();
   document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.remove("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
   document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
+  document.getElementById("game-mode")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
 }
@@ -5133,6 +5203,7 @@ function showLoginMenu(): void {
   document.getElementById("profile")?.classList.add("is-hidden");
   document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
+  document.getElementById("game-mode")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
 }
@@ -5144,6 +5215,7 @@ function showSettingsMenu(): void {
   document.getElementById("profile")?.classList.add("is-hidden");
   document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.remove("is-hidden");
+  document.getElementById("game-mode")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
   renderBackgroundOptions();
@@ -5156,21 +5228,36 @@ function showProfileMenu(): void {
   document.getElementById("profile")?.classList.remove("is-hidden");
   document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
+  document.getElementById("game-mode")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
   renderProfileForm();
 }
 
 function showRankMenu(): void {
+  renderHomeProfile();
   stopWaitingTimer();
   document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.add("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
   document.getElementById("rank")?.classList.remove("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
+  document.getElementById("game-mode")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
   void renderRanking();
+}
+
+function showGameModeMenu(): void {
+  stopWaitingTimer();
+  document.getElementById("login")?.classList.add("is-hidden");
+  document.getElementById("home")?.classList.add("is-hidden");
+  document.getElementById("profile")?.classList.add("is-hidden");
+  document.getElementById("rank")?.classList.add("is-hidden");
+  document.getElementById("settings")?.classList.add("is-hidden");
+  document.getElementById("game-mode")?.classList.remove("is-hidden");
+  document.getElementById("waiting-room")?.classList.add("is-hidden");
+  document.getElementById("game")?.classList.add("is-hidden");
 }
 
 function showWaitingRoom(message = "Procurando outro jogador para iniciar a partida."): void {
@@ -5180,6 +5267,7 @@ function showWaitingRoom(message = "Procurando outro jogador para iniciar a part
   document.getElementById("profile")?.classList.add("is-hidden");
   document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
+  document.getElementById("game-mode")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.remove("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
   const waitingMessage = document.getElementById("waiting-message");
@@ -5196,6 +5284,7 @@ function showGameTable(): void {
   document.getElementById("profile")?.classList.add("is-hidden");
   document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
+  document.getElementById("game-mode")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.remove("is-hidden");
 }
@@ -5254,12 +5343,41 @@ async function renderRanking(): Promise<void> {
 
     if (ranking.length === 0) {
       list.innerHTML = '<p class="rank-empty">Ainda nao ha jogadores no rank.</p>';
+      renderSelfRankSummary(null);
       return;
     }
 
+    renderSelfRankSummary(ranking);
     list.replaceChildren(...ranking.map(createRankingRow));
   } catch {
     list.innerHTML = '<p class="rank-empty">Nao foi possivel carregar o rank.</p>';
+    renderSelfRankSummary(null);
+  }
+
+}
+
+function renderSelfRankSummary(ranking: RankingPlayer[] | null): void {
+  const position = document.getElementById("rank-self-position");
+  const points = document.getElementById("rank-self-points");
+  const wins = document.getElementById("rank-self-wins");
+  const rate = document.getElementById("rank-self-rate");
+  const self = ranking?.find((player) => player.name === currentPlayerProfile?.name) ?? ranking?.[0] ?? null;
+  const winRate = self && self.gamesPlayed > 0 ? Math.round((self.gamesWon / self.gamesPlayed) * 100) : 0;
+
+  if (position) {
+    position.textContent = self ? `${self.position}º` : "--";
+  }
+
+  if (points) {
+    points.textContent = self ? self.rankPoints.toLocaleString("pt-BR") : "0";
+  }
+
+  if (wins) {
+    wins.textContent = `${self?.gamesWon ?? 0} vitórias`;
+  }
+
+  if (rate) {
+    rate.textContent = `${winRate}%`;
   }
 }
 
@@ -5271,24 +5389,30 @@ function createRankingRow(player: RankingPlayer): HTMLElement {
   const stats = document.createElement("div");
   const position = document.createElement("div");
   const points = document.createElement("div");
+  const wins = document.createElement("div");
+  const arrow = document.createElement("div");
 
-  row.className = "rank-row";
+  row.className = `rank-row rank-row-${Math.min(player.position, 4)}`;
   position.className = "rank-position";
   avatar.className = "rank-avatar";
   playerInfo.className = "rank-player";
   name.className = "rank-name";
   stats.className = "rank-stats";
   points.className = "rank-points";
+  wins.className = "rank-wins";
+  arrow.className = "rank-arrow";
 
-  position.textContent = `#${player.position}`;
+  position.textContent = String(player.position);
   avatar.alt = "";
   avatar.src = player.avatarUrl || opponentAvatarUrl;
   name.textContent = player.name;
-  stats.textContent = `${player.gamesWon} vitorias • ${player.gamesPlayed} jogos • ${player.handsWon} maos`;
-  points.textContent = `${player.rankPoints} pts`;
+  stats.textContent = `${player.gamesPlayed} jogos | ${player.handsWon} maos`;
+  points.textContent = player.rankPoints.toLocaleString("pt-BR");
+  wins.textContent = String(player.gamesWon);
+  arrow.textContent = "›";
 
   playerInfo.append(name, stats);
-  row.append(position, avatar, playerInfo, points);
+  row.append(position, avatar, playerInfo, points, wins, arrow);
 
   return row;
 }
@@ -5487,6 +5611,19 @@ function returnToMainMenu(): void {
   currentGame?.destroy(true);
 }
 
+function returnToGameModeMenu(): void {
+  const currentGame = game;
+
+  game = null;
+  if (resizeGameCanvas) {
+    window.removeEventListener("resize", resizeGameCanvas);
+    window.removeEventListener("orientationchange", resizeGameCanvas);
+    resizeGameCanvas = null;
+  }
+  showGameModeMenu();
+  currentGame?.destroy(true);
+}
+
 function leaveOnlineGame(): void {
   const tableScene = game?.scene.getScene("table");
 
@@ -5498,15 +5635,29 @@ function leaveOnlineGame(): void {
   returnToMainMenu();
 }
 
-async function startOnlineGame(): Promise<void> {
+function cancelWaitingSearch(): void {
+  const tableScene = game?.scene.getScene("table");
+
+  if (tableScene instanceof TableScene) {
+    tableScene.leaveTable("mode");
+    return;
+  }
+
+  returnToGameModeMenu();
+}
+
+async function startOnlineGame(mode: OnlineGameMode = "classic"): Promise<void> {
   try {
     if (game) {
     return;
   }
 
+  selectedOnlineGameMode = mode;
   await fetchPlayerProfile().catch(() => currentPlayerProfile);
   void unlockAudioPlayback().catch(() => undefined);
-  showWaitingRoom();
+  showWaitingRoom(mode === "duo-cpu"
+    ? "Procurando parceiro para jogar contra dupla CPU."
+    : "Procurando outro jogador para iniciar a partida.");
 
   const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
@@ -5550,7 +5701,15 @@ async function startOnlineGame(): Promise<void> {
 
 document.getElementById("play-online")?.addEventListener("click", () => {
   void unlockAudioPlayback().catch(() => undefined);
+  showGameModeMenu();
+});
+document.getElementById("play-mode-1v1")?.addEventListener("click", () => {
+  void unlockAudioPlayback().catch(() => undefined);
   void startOnlineGame();
+});
+document.getElementById("play-mode-2v2-cpu")?.addEventListener("click", () => {
+  void unlockAudioPlayback().catch(() => undefined);
+  void startOnlineGame("duo-cpu");
 });
 document.getElementById("login-form")?.addEventListener("submit", (event) => {
   void loginWithEmail(event);
@@ -5563,7 +5722,8 @@ document.getElementById("open-settings")?.addEventListener("click", showSettings
 document.getElementById("back-home")?.addEventListener("click", showHomeMenu);
 document.getElementById("back-home-profile")?.addEventListener("click", showHomeMenu);
 document.getElementById("back-home-rank")?.addEventListener("click", showHomeMenu);
-document.getElementById("cancel-waiting")?.addEventListener("click", leaveOnlineGame);
+document.getElementById("back-home-mode")?.addEventListener("click", showHomeMenu);
+document.getElementById("cancel-waiting")?.addEventListener("click", cancelWaitingSearch);
 document.getElementById("profile-form")?.addEventListener("submit", (event) => {
   void saveProfile(event);
 });
