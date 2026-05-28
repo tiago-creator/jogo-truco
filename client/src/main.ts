@@ -871,7 +871,13 @@ exitButtonHitZone.on("pointerup", () => {
         this.lastShownTrucoResponseKey !== trucoResponseKey
       ) {
         this.lastShownTrucoResponseKey = trucoResponseKey;
-        this.showOpponentSpeechBubble(this.getTrucoResponseMessage(trucoResponse.action));
+        const responsePlayer = state.players.find((player) => player.id === trucoResponse.playerId);
+
+        if (state.mode === "duo-cpu" && responsePlayer?.isCpu && trucoResponse.action === "accept") {
+          this.showDuoCpuSpeechBubbles("ACEITA O TRUCO");
+        } else {
+          this.showOpponentSpeechBubble(this.getTrucoResponseMessage(trucoResponse.action));
+        }
       }
 
       const gameWinnerKey = state.lastGameWinnerId
@@ -1975,6 +1981,20 @@ exitButtonHitZone.on("pointerup", () => {
   }
 
   private showOpponentSpeechBubble(message: string): void {
+    this.showSpeechBubbleOn(this.opponentAvatarGroup, message);
+  }
+
+  private showDuoCpuSpeechBubbles(message: string): void {
+    const cpuOpponents = this.getCpuOpponents();
+
+    this.duoCpuSidePlayers.forEach((sidePlayer, index) => {
+      if (cpuOpponents[index]) {
+        this.showSpeechBubbleOn(sidePlayer.container, message);
+      }
+    });
+  }
+
+  private showSpeechBubbleOn(parent: Phaser.GameObjects.Container, message: string): void {
     const bubble = this.add.container(0, -82);
     bubble.setAlpha(0);
     bubble.setScale(0.85);
@@ -2042,7 +2062,7 @@ exitButtonHitZone.on("pointerup", () => {
 
     bubble.add([bg, text]);
 
-    this.opponentAvatarGroup.add(bubble);
+    parent.add(bubble);
 
     this.tweens.add({
       targets: bubble,

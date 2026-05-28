@@ -82,6 +82,7 @@ type Room = {
   dbMatchId?: string;
   processedActionIds?: string[];
   cpuActionTimer?: ReturnType<typeof setTimeout>;
+  cpuActionAllowedAt?: number;
 };
 
 type TrucoServerSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -199,6 +200,7 @@ const rooms = new Map<string, Room>();
 const closedRoomIds = new Set<string>();
 const trickRevealDelayMs = 1200;
 const nextHandDelayMs = 1600;
+const cpuInitialDealDelayMs = 4600;
 let nextAutoRoomNumber = 1;
 
 function toPublicPlayer(player: PlayerState): PublicPlayer {
@@ -847,6 +849,7 @@ function dealHand(room: Room, rotateFootPlayerBeforeDeal = false): void {
   room.lastTrucoResponse = previousTrucoResponse;
   room.lastGameWinnerId = undefined;
   room.lastGameWinnerName = undefined;
+  room.cpuActionAllowedAt = Date.now() + cpuInitialDealDelayMs;
   logHandDeal(room);
 }
 
@@ -1237,10 +1240,18 @@ function handlePlayerExit(socketId: string, explicitRoomId?: string, preserveRec
     room.isIronHand = false;
     room.trickResults = [];
     room.dbMatchId = undefined;
+    room.cpuActionAllowedAt = undefined;
 
     broadcastState(room);
     return;
   }
+}
+
+function getCpuActionDelay(room: Room): number {
+  const baseDelayMs = 1200;
+  const initialDealDelayMs = Math.max(0, (room.cpuActionAllowedAt ?? 0) - Date.now());
+
+  return Math.max(baseDelayMs, initialDealDelayMs);
 }
 
 function scheduleCpuAction(room: Room): void {
@@ -1284,7 +1295,7 @@ function scheduleCpuAction(room: Room): void {
     }
 
     playCardAsCpu(room);
-  }, 1200);
+  }, getCpuActionDelay(room));
 }
 
 function respondElevenHandAsCpu(room: Room, cpu: PlayerState): void {
