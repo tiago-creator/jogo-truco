@@ -23,21 +23,111 @@
     </main>
     <main id="home" class="home-screen is-hidden">
       <section class="home-content" aria-labelledby="home-title">
-        <div class="home-badge">Truco Online</div>
-        <h1 id="home-title">Truco</h1>
-        <p>Entre em uma mesa online e jogue uma partida em tempo real.</p>
-        <button id="play-online" class="play-button" type="button">
-          Jogar online
+        <div class="home-topbar" aria-label="Resumo do jogador">
+          <div class="home-player">
+            <div class="home-avatar" aria-hidden="true"></div>
+            <div class="home-player-copy">
+              <strong>Jogador123</strong>
+              <span>Nivel 12</span>
+              <div class="home-level-bar" aria-hidden="true">
+                <span></span>
+              </div>
+            </div>
+          </div>
+          <div class="home-wallet" aria-label="Moedas e gemas">
+            <div class="home-currency">
+              <span class="home-currency-icon">$</span>
+              <strong>12.450</strong>
+              <span class="home-plus">+</span>
+            </div>
+            <div class="home-currency">
+              <span class="home-currency-icon home-gem"></span>
+              <strong>85</strong>
+              <span class="home-plus">+</span>
+            </div>
+          </div>
+        </div>
+        <button class="home-side-button home-side-left" type="button" aria-label="Missoes">
+          <span class="home-side-icon">+</span>
+          <strong>Missoes</strong>
         </button>
-        <button id="open-profile" class="secondary-button menu-button" type="button">
-          Perfil
+        <button class="home-side-button home-side-right" type="button" aria-label="Ranking">
+          <span class="home-side-icon">^</span>
+          <strong>Ranking</strong>
         </button>
-        <button id="open-rank" class="secondary-button menu-button" type="button">
-          Rank
-        </button>
-        <button id="open-settings" class="secondary-button menu-button" type="button">
-          Configuração
-        </button>
+        <div class="home-hero">
+          <div class="home-copy">
+            <img class="home-logo" src="/src/img/truco.png" alt="Truco" />
+            <h1 id="home-title">Mesa valendo</h1>
+            <p>Entre na mesa e mostre quem e o rei do truco!</p>
+          </div>
+          <div class="home-table" aria-hidden="true">
+            <div class="home-card home-card-left">
+              <span>4</span>
+              <strong>&clubs;</strong>
+            </div>
+            <div class="home-table-center">
+              <span>12</span>
+              <small>PONTOS</small>
+            </div>
+            <div class="home-card home-card-right">
+              <span>7</span>
+              <strong>&hearts;</strong>
+            </div>
+          </div>
+        </div>
+        <div class="home-actions">
+          <button id="play-online" class="play-button" type="button">
+            <span>Jogar online</span>
+            <small>Encontrar mesa agora</small>
+          </button>
+          <div class="home-menu-grid">
+            <button id="open-profile" class="menu-button" type="button">
+              <img class="menu-icon menu-icon-image" src="/src/img/icons/profile-gold.svg" alt="" />
+              <span class="menu-icon">●</span>
+              <strong>Perfil</strong>
+              <small>Veja suas estatisticas</small>
+            </button>
+            <button id="open-rank" class="menu-button" type="button">
+              <img class="menu-icon menu-icon-image" src="/src/img/icons/rank-gold.svg" alt="" />
+              <span class="menu-icon">T</span>
+              <strong>Rank</strong>
+              <small>Veja o ranking geral</small>
+            </button>
+            <button id="open-settings" class="menu-button" type="button">
+              <img class="menu-icon menu-icon-image" src="/src/img/icons/settings-gold.svg" alt="" />
+              <span class="menu-icon">*</span>
+              <strong>Configuracao</strong>
+              <small>Ajustes do jogo</small>
+            </button>
+          </div>
+        </div>
+        <div class="home-daily">
+          <img class="home-chest" src="/src/img/bau.png" alt="" aria-hidden="true" />
+          <div>
+            <strong>Bau diario</strong>
+            <span>Volte todos os dias e ganhe recompensas incriveis!</span>
+          </div>
+          <button class="home-chest-button" type="button">Abrir bau</button>
+        </div>
+        <nav class="home-bottom-nav" aria-label="Navegacao principal">
+          <button class="is-active" type="button">
+            <span>⌂</span>
+            Inicio
+          </button>
+          <button type="button">
+            <span>●●</span>
+            Amigos
+          </button>
+          <button type="button">
+            <span>□</span>
+            Loja
+          </button>
+          <button type="button">
+            <span>?</span>
+            Ajuda
+          </button>
+        </nav>
       </section>
     </main>
     <main id="profile" class="profile-screen is-hidden">
@@ -61,7 +151,7 @@
           <p id="profile-message" class="profile-message" aria-live="polite"></p>
           <button class="play-button" type="submit">Salvar perfil</button>
         </form>
-        <button id="back-home-profile" class="secondary-button" type="button">
+        <button id="back-home-profile" type="button">
           Voltar
         </button>
       </section>
@@ -123,7 +213,7 @@
             <span>Gray</span>
           </button>
         </div>
-        <button id="back-home" class="secondary-button" type="button">
+        <button id="back-home"  type="button">
           Voltar
         </button>
       </section>
@@ -133,17 +223,41 @@
         <div class="home-badge">Rank</div>
         <h2 id="rank-title">Melhores jogadores</h2>
         <div id="rank-list" class="rank-list" aria-live="polite"></div>
-        <button id="back-home-rank" class="secondary-button" type="button">
+        <button id="back-home-rank"  type="button">
           Voltar
         </button>
       </section>
     </main>
     <main id="waiting-room" class="waiting-screen is-hidden">
       <section class="waiting-content" aria-labelledby="waiting-title">
-        <div class="loading-ring" aria-hidden="true"></div>
+        <div class="waiting-brand" aria-hidden="true">
+          <img src="/src/img/truco.png" alt="" />
+        </div>
+        <div class="waiting-table" aria-hidden="true">
+          <div class="waiting-card waiting-card-left">
+            <span>A</span>
+            <strong>♠</strong>
+          </div>
+          <div class="waiting-ring">
+            <div class="loading-ring"></div>
+            <div class="waiting-dots">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+          <div class="waiting-card waiting-card-right">
+            <span>7</span>
+            <strong>♦</strong>
+          </div>
+        </div>
         <h2 id="waiting-title">Aguardando jogadores</h2>
         <p id="waiting-message">Procurando outro jogador para iniciar a partida.</p>
-        <button id="cancel-waiting" class="secondary-button" type="button">
+        <div class="waiting-timer" aria-live="polite">
+          <span class="waiting-hourglass" aria-hidden="true"></span>
+          Tempo aguardando <strong id="waiting-timer">00:00</strong>
+        </div>
+        <button id="cancel-waiting" class="waiting-cancel-button" type="button">
           Cancelar
         </button>
       </section>

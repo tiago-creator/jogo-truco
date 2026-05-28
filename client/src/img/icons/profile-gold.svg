@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="80" height="80" viewBox="10 12 60 60">
+  <defs>
+    <linearGradient id="profileGold" x1="24" y1="8" x2="58" y2="72" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#FFF9C9"/>
+      <stop offset="0.25" stop-color="#FFE071"/>
+      <stop offset="0.55" stop-color="#FEC417"/>
+      <stop offset="0.8" stop-color="#D98616"/>
+      <stop offset="1" stop-color="#8A4305"/>
+    </linearGradient>
+    <linearGradient id="profileShine" x1="30" y1="14" x2="47" y2="42" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFFFFF" stop-opacity="0.88"/>
+      <stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+  <path d="M0 0h80v80H0z" fill="none"/>
+  <path fill="url(#profileGold)" d="M60 70H20a4 4 0 0 1-4-4a15.87 15.87 0 0 1 10.3-14.86l1.23-.462a35.53 35.53 0 0 1 24.94 0l1.23.462A15.87 15.87 0 0 1 64 66a4 4 0 0 1-4 4Z"/>
+  <path fill="url(#profileGold)" d="M33.902 38.867a13.347 13.347 0 0 0 19.15-9.08l.223-1.044a14.2 14.2 0 0 0-2.51-11.466l-.36-.48a12.992 12.992 0 0 0-20.81 0l-.36.48a14.2 14.2 0 0 0-2.51 11.465l.223 1.046a13.35 13.35 0 0 0 6.953 9.08"/>
+  <path d="M33 18.5c3.75-3.2 9.5-3.8 14.2-.5c-4.9-.8-9.7-.2-14.2.5Z" fill="url(#profileShine)" opacity="0.78"/>
+  <path d="M28.7 54.2a32.5 32.5 0 0 1 22.6 0" fill="none" stroke="#FFF7C8" stroke-width="2.2" stroke-linecap="round" opacity="0.58"/>
+</svg>

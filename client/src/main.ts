@@ -2076,7 +2076,7 @@ exitButtonHitZone.on("pointerup", () => {
     ];
 
     if (enabled) {
-      this.fillPolygonVerticalGradient(g, points, 0x28d85b, 0x020d06, buttonY, buttonHeight, 220, scale);
+      this.fillPolygonVerticalGradient(g, points, 0x16833a, 0x010703, buttonY, buttonHeight, 220, scale);
       g.fillStyle(0x0f7a2d, 0.12);
       g.fillPoints(points, true);
     } else {
@@ -2126,12 +2126,12 @@ exitButtonHitZone.on("pointerup", () => {
     this.trucoButtonSmallText.setText("PEDIR");
     this.trucoButtonSmallText.setFontSize(Math.max(16, 19 * scale));
     this.trucoButtonSmallText.setPosition(centerX, plateY + 21 * scale);
-    this.trucoButtonSmallText.setColor(enabled ? "#5f3900" : "#555555");
+    this.trucoButtonSmallText.setColor(enabled ? "#553301" : "#555555");
 
     this.trucoButtonText.setText(value.toUpperCase());
     this.trucoButtonText.setFontSize(Math.max(19, 23 * scale));
     this.trucoButtonText.setPosition(centerX, plateY + 45 * scale);
-    this.trucoButtonText.setColor(enabled ? "#5f3900" : "#555555");
+    this.trucoButtonText.setColor(enabled ? "#553301" : "#555555");
 
     this.trucoButton.add(this.trucoButtonSmallText);
     this.trucoButton.add(this.trucoButtonText);
@@ -5067,7 +5067,56 @@ function applyGameCanvasSize(currentGame: Phaser.Game): void {
   currentGame.scale.resize(getGamePixelWidth(), getGamePixelHeight());
 }
 
+let waitingStartedAt: number | null = null;
+let waitingTimerId: number | null = null;
+
+function formatWaitingElapsed(milliseconds: number): string {
+  const totalSeconds = Math.max(0, Math.floor(milliseconds / 1000));
+  const minutes = Math.floor(totalSeconds / 60);
+  const seconds = totalSeconds % 60;
+
+  return `${minutes.toString().padStart(2, "0")}:${seconds.toString().padStart(2, "0")}`;
+}
+
+function updateWaitingTimer(): void {
+  const timer = document.getElementById("waiting-timer");
+
+  if (!timer || waitingStartedAt === null) {
+    return;
+  }
+
+  timer.textContent = formatWaitingElapsed(Date.now() - waitingStartedAt);
+}
+
+function startWaitingTimer(): void {
+  if (waitingStartedAt === null) {
+    waitingStartedAt = Date.now();
+  }
+
+  updateWaitingTimer();
+
+  if (waitingTimerId === null) {
+    waitingTimerId = window.setInterval(updateWaitingTimer, 1000);
+  }
+}
+
+function stopWaitingTimer(): void {
+  if (waitingTimerId !== null) {
+    window.clearInterval(waitingTimerId);
+    waitingTimerId = null;
+  }
+
+  waitingStartedAt = null;
+
+  const timer = document.getElementById("waiting-timer");
+
+  if (timer) {
+    timer.textContent = "00:00";
+  }
+}
+
 function showHomeMenu(): void {
+  stopWaitingTimer();
   document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.remove("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
@@ -5078,6 +5127,7 @@ function showHomeMenu(): void {
 }
 
 function showLoginMenu(): void {
+  stopWaitingTimer();
   document.getElementById("login")?.classList.remove("is-hidden");
   document.getElementById("home")?.classList.add("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
@@ -5088,6 +5138,7 @@ function showLoginMenu(): void {
 }
 
 function showSettingsMenu(): void {
+  stopWaitingTimer();
   document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.add("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
@@ -5099,6 +5150,7 @@ function showSettingsMenu(): void {
 }
 
 function showProfileMenu(): void {
+  stopWaitingTimer();
   document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.add("is-hidden");
   document.getElementById("profile")?.classList.remove("is-hidden");
@@ -5110,6 +5162,7 @@ function showProfileMenu(): void {
 }
 
 function showRankMenu(): void {
+  stopWaitingTimer();
   document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.add("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
@@ -5121,6 +5174,7 @@ function showRankMenu(): void {
 }
 
 function showWaitingRoom(message = "Procurando outro jogador para iniciar a partida."): void {
+  startWaitingTimer();
   document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.add("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
@@ -5136,6 +5190,7 @@ function showWaitingRoom(message = "Procurando outro jogador para iniciar a part
 }
 
 function showGameTable(): void {
+  stopWaitingTimer();
   document.getElementById("login")?.classList.add("is-hidden");
   document.getElementById("home")?.classList.add("is-hidden");
   document.getElementById("profile")?.classList.add("is-hidden");
