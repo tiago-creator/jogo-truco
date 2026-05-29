@@ -105,6 +105,10 @@ export async function upsertPlayer(player: PlayerSnapshot): Promise<string | nul
     return null;
   }
 
+  if (player.isCpu) {
+    return null;
+  }
+
   const playerName = getHumanPlayerName(player.name);
 
   if (!playerName) {
@@ -252,6 +256,11 @@ export async function createMatch(roomId: string, players: PlayerSnapshot[]): Pr
     );
 
     for (const [index, player] of players.entries()) {
+      if (player.isCpu) {
+        await upsertCpuPlayer(player.cpuToken, player.name);
+        continue;
+      }
+
       const playerName = getHumanPlayerName(player.name);
 
       if (!playerName) {

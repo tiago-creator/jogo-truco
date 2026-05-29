@@ -86,6 +86,7 @@ type Room = {
   processedActionIds?: string[];
   cpuActionTimer?: ReturnType<typeof setTimeout>;
   elevenHandDecisionTimer?: ReturnType<typeof setTimeout>;
+  stuckTurnRecoveryTimer?: ReturnType<typeof setTimeout>;
   cpuActionAllowedAt?: number;
 };
 
@@ -202,10 +203,12 @@ const io = new Server<ClientToServerEvents, ServerToClientEvents>(httpServer, {
 
 const rooms = new Map<string, Room>();
 const closedRoomIds = new Set<string>();
+const pendingRoomRestores = new Map<string, Promise<Room>>();
 const trickRevealDelayMs = 1200;
 const nextHandDelayMs = 1600;
 const cpuInitialDealDelayMs = 4600;
 const elevenHandDecisionTimeoutMs = 30000;
+const stuckTurnRecoveryDelayMs = 3500;
 let nextAutoRoomNumber = 1;
 
 function toPublicPlayer(player: PlayerState): PublicPlayer {
@@ -249,10 +252,11 @@ function getRoom(roomId: string): Room {
   return room;
 }
 
-function sanitizeRoomForStorage(room: Room): Omit<Room, "cpuActionTimer" | "elevenHandDecisionTimer"> {
+function sanitizeRoomForStorage(room: Room): Omit<Room, "cpuActionTimer" | "elevenHandDecisionTimer" | "stuckTurnRecoveryTimer"> {
   const {
     cpuActionTimer: _cpuActionTimer,
     elevenHandDecisionTimer: _elevenHandDecisionTimer,
+    stuckTurnRecoveryTimer: _stuckTurnRecoveryTimer,
     ...snapshot
   } = room;
 
@@ -273,6 +277,7 @@ function restoreRoomSnapshot(snapshot: unknown): Room | null {
   }));
   room.cpuActionTimer = undefined;
   room.elevenHandDecisionTimer = undefined;
+  room.stuckTurnRecoveryTimer = undefined;
   room.handSequence ??= 0;
   room.trickResults ??= [];
   room.processedActionIds ??= [];
@@ -400,21 +405,39 @@ async function getJoinRoom(roomId: string | undefined, token: string, mode: Room
       return existingRoom;
     }
 
-    const restoredSnapshot = await findActiveRoomById(requestedRoomId).catch((error: unknown) => {
-      console.error("Could not restore requested active room", error);
-      return null;
-    });
-    const restoredRoom = restoredSnapshot ? restoreRoomSnapshot(restoredSnapshot) : null;
+    const pendingRestore = pendingRoomRestores.get(requestedRoomId);
 
-    const room = restoredRoom ?? getRoom(requestedRoomId);
-
-    if (!restoredRoom && room.status === "waiting" && room.players.length === 0) {
-      room.mode = mode;
-    } else {
-      room.mode ??= mode;
+    if (pendingRestore) {
+      return pendingRestore;
     }
 
-    return room;
+    const restorePromise = (async () => {
+      const restoredSnapshot = await findActiveRoomById(requestedRoomId).catch((error: unknown) => {
+        console.error("Could not restore requested active room", error);
+        return null;
+      });
+      const restoredRoom = restoredSnapshot ? restoreRoomSnapshot(restoredSnapshot) : null;
+
+      const room = restoredRoom ?? getRoom(requestedRoomId);
+
+      if (!restoredRoom && room.status === "waiting" && room.players.length === 0) {
+        room.mode = mode;
+      } else {
+        room.mode ??= mode;
+      }
+
+      return room;
+    })();
+
+    pendingRoomRestores.set(requestedRoomId, restorePromise);
+
+    try {
+      return await restorePromise;
+    } finally {
+      if (pendingRoomRestores.get(requestedRoomId) === restorePromise) {
+        pendingRoomRestores.delete(requestedRoomId);
+      }
+    }
   }
 
   const memoryRoom = findRoomByPlayerToken(token);
@@ -566,6 +589,7 @@ function broadcastState(room: Room): void {
   }
 
   scheduleCpuAction(room);
+  scheduleStuckTurnRecovery(room);
 }
 
 function failAction(socket: TrucoServerSocket, ack: ((response: ActionAck) => void) | undefined, message: string): void {
@@ -1239,6 +1263,7 @@ function handlePlayerExit(socketId: string, explicitRoomId?: string, preserveRec
     clearTimeout(room.cpuActionTimer);
     room.cpuActionTimer = undefined;
     clearElevenHandDecisionTimeout(room);
+    clearStuckTurnRecovery(room);
 
     if (remainingHumans.length === 0) {
       closedRoomIds.add(room.id);
@@ -1356,6 +1381,59 @@ function scheduleElevenHandDecisionTimeout(room: Room): void {
     room.elevenHandDecision = undefined;
     broadcastState(room);
   }, elevenHandDecisionTimeoutMs);
+}
+
+function clearStuckTurnRecovery(room: Room): void {
+  clearTimeout(room.stuckTurnRecoveryTimer);
+  room.stuckTurnRecoveryTimer = undefined;
+}
+
+function shouldWatchForStuckTurn(room: Room): boolean {
+  return (
+    room.status === "playing" &&
+    !room.turnPlayerId &&
+    !room.trucoRequest &&
+    !room.elevenHandDecision
+  );
+}
+
+function scheduleStuckTurnRecovery(room: Room): void {
+  if (!shouldWatchForStuckTurn(room)) {
+    clearStuckTurnRecovery(room);
+    return;
+  }
+
+  if (room.stuckTurnRecoveryTimer) {
+    return;
+  }
+
+  const expectedHandSequence = room.handSequence;
+
+  room.stuckTurnRecoveryTimer = setTimeout(() => {
+    room.stuckTurnRecoveryTimer = undefined;
+
+    if (
+      closedRoomIds.has(room.id) ||
+      room.handSequence !== expectedHandSequence ||
+      !shouldWatchForStuckTurn(room)
+    ) {
+      return;
+    }
+
+    if (room.table.length >= room.players.length) {
+      finishTrickIfReady(room, expectedHandSequence);
+      broadcastState(room);
+      return;
+    }
+
+    const lastPlayerId = room.table.at(-1)?.playerId;
+    const nextPlayerId = getNextTablePlayerId(room, lastPlayerId);
+
+    if (nextPlayerId) {
+      room.turnPlayerId = nextPlayerId;
+      broadcastState(room);
+    }
+  }, stuckTurnRecoveryDelayMs);
 }
 
 function scheduleCpuAction(room: Room): void {
