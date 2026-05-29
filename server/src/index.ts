@@ -816,7 +816,7 @@ function logHandAward(
   nextPoints: number,
   finishedGame: boolean
 ): void {
-  const loser = room.players.find((player) => player.id !== winner.id);
+  const loser = getOpposingPlayer(room, winner.id);
   const loserPoints = loser?.points ?? 0;
 
   console.info(
