@@ -14,6 +14,7 @@ import {
   type ServerToClientEvents,
   type TableCard,
   type TrucoRequest,
+  type TrucoResponseVote,
   ranks,
   shuffle
 } from "@truco/shared";
@@ -53,6 +54,7 @@ type HandOutcome =
   | { type: "continue" }
   | { type: "draw" }
   | { type: "winner"; winnerPlayerId: string };
+type TrucoResponseAction = TrucoResponseVote["action"];
 
 type Room = {
   id: string;
@@ -69,6 +71,7 @@ type Room = {
   trickResults: TrickResult[];
   elevenHandDecision?: RoomState["elevenHandDecision"];
   trucoRequest?: TrucoRequest;
+  trucoResponseVotes?: Record<string, TrucoResponseAction>;
   lastTrucoRequesterId?: string;
   lastTrucoRaise?: {
     playerId: string;
@@ -504,6 +507,9 @@ function buildState(room: Room, viewerId: string): RoomState {
     isIronHand: room.isIronHand,
     elevenHandDecision: room.elevenHandDecision,
     trucoRequest: room.trucoRequest,
+    trucoResponseVotes: room.trucoResponseVotes
+      ? Object.entries(room.trucoResponseVotes).map(([playerId, action]) => ({ playerId, action }))
+      : undefined,
     lastTrucoRaise: room.lastTrucoRaise,
     lastGameWinnerId: room.lastGameWinnerId,
     lastGameWinnerName: room.lastGameWinnerName,
@@ -855,6 +861,7 @@ function dealHand(room: Room, rotateFootPlayerBeforeDeal = false): void {
     }
     : undefined;
   room.trucoRequest = undefined;
+  room.trucoResponseVotes = undefined;
   room.lastTrucoRequesterId = undefined;
   room.lastTrucoRaise = undefined;
   room.lastTrucoResponse = previousTrucoResponse;
@@ -1244,6 +1251,7 @@ function handlePlayerExit(socketId: string, explicitRoomId?: string, preserveRec
     room.turnPlayerId = null;
     room.footPlayerId = undefined;
     room.trucoRequest = undefined;
+    room.trucoResponseVotes = undefined;
     room.lastTrucoRequesterId = undefined;
     room.lastTrucoRaise = undefined;
     room.lastTrucoResponse = undefined;
@@ -1265,6 +1273,52 @@ function getCpuActionDelay(room: Room): number {
   const initialDealDelayMs = Math.max(0, (room.cpuActionAllowedAt ?? 0) - Date.now());
 
   return Math.max(baseDelayMs, initialDealDelayMs);
+}
+
+function clearTrucoResponseVotes(room: Room): void {
+  room.trucoResponseVotes = undefined;
+}
+
+function setTrucoRequest(room: Room, request: TrucoRequest): void {
+  room.trucoRequest = request;
+  clearTrucoResponseVotes(room);
+}
+
+function clearTrucoRequest(room: Room): void {
+  room.trucoRequest = undefined;
+  clearTrucoResponseVotes(room);
+}
+
+function registerTrucoConsensusVote(
+  room: Room,
+  player: PlayerState,
+  action: TrucoResponseAction
+): TrucoResponseAction | null {
+  const request = room.trucoRequest;
+
+  if (!request || room.mode !== "duo-cpu") {
+    return action;
+  }
+
+  const responderTeamHumans = getTeamPlayers(room, request.responderPlayerId)
+    .filter((teamPlayer) => !teamPlayer.isCpu);
+
+  if (responderTeamHumans.length <= 1 || player.isCpu) {
+    return action;
+  }
+
+  room.trucoResponseVotes ??= {};
+  room.trucoResponseVotes[player.id] = action;
+
+  const votes = responderTeamHumans.map((teamPlayer) => room.trucoResponseVotes?.[teamPlayer.id] ?? null);
+
+  if (votes.some((vote) => !vote)) {
+    return null;
+  }
+
+  const [firstVote] = votes;
+
+  return votes.every((vote) => vote === firstVote) ? firstVote : null;
 }
 
 function clearElevenHandDecisionTimeout(room: Room): void {
@@ -1403,13 +1457,13 @@ function respondTrucoAsCpu(room: Room): void {
       action: "raise",
       requestedValue: raisedValue as TrucoRequest["requestedValue"]
     };
-    room.trucoRequest = {
+    setTrucoRequest(room, {
       requestedByPlayerId: cpu.id,
       requestedByPlayerName: cpu.name,
       responderPlayerId: requester.id,
       currentValue: request.requestedValue,
       requestedValue: raisedValue as TrucoRequest["requestedValue"]
-    };
+    });
     room.lastTrucoRaise = {
       playerId: cpu.id,
       playerName: cpu.name,
@@ -1427,7 +1481,7 @@ function respondTrucoAsCpu(room: Room): void {
     requestedValue: request.requestedValue
   };
   room.handValue = request.requestedValue;
-  room.trucoRequest = undefined;
+  clearTrucoRequest(room);
   broadcastState(room);
 }
 
@@ -1710,13 +1764,13 @@ socket.on("room:leave", ({ roomId }, ack?: () => void) => {
       return;
     }
 
-    room.trucoRequest = {
+    setTrucoRequest(room, {
       requestedByPlayerId: player.id,
       requestedByPlayerName: player.name,
       responderPlayerId: opponent.id,
       currentValue: room.handValue as TrucoRequest["currentValue"],
       requestedValue: raisedValue as TrucoRequest["requestedValue"]
-    };
+    });
     room.lastTrucoRaise = {
       playerId: player.id,
       playerName: player.name,
@@ -1756,37 +1810,45 @@ socket.on("room:leave", ({ roomId }, ack?: () => void) => {
     const requester = room.players.find((item) => item.id === request.requestedByPlayerId);
 
     if (!requester) {
-      room.trucoRequest = undefined;
+      clearTrucoRequest(room);
       broadcastState(room);
       acknowledgeAction(ack);
       return;
     }
 
-    if (action === "accept") {
+    const consensusAction = registerTrucoConsensusVote(room, player, action);
+
+    if (!consensusAction) {
+      broadcastState(room);
+      acknowledgeAction(ack);
+      return;
+    }
+
+    if (consensusAction === "accept") {
       room.lastTrucoResponse = {
         playerId: player.id,
         playerName: player.name,
-        action,
+        action: consensusAction,
         requestedValue: request.requestedValue
       };
       room.handValue = request.requestedValue;
-      room.trucoRequest = undefined;
+      clearTrucoRequest(room);
       markActionProcessed(room, actionId);
       broadcastState(room);
       acknowledgeAction(ack);
       return;
     }
 
-    if (action === "reject") {
+    if (consensusAction === "reject") {
       const points = request.currentValue;
 
       room.lastTrucoResponse = {
         playerId: player.id,
         playerName: player.name,
-        action,
+        action: consensusAction,
         requestedValue: request.requestedValue
       };
-      room.trucoRequest = undefined;
+      clearTrucoRequest(room);
       markActionProcessed(room, actionId);
       awardHand(room, requester, points);
       broadcastState(room);
@@ -1820,16 +1882,16 @@ socket.on("room:leave", ({ roomId }, ack?: () => void) => {
     room.lastTrucoResponse = {
       playerId: player.id,
       playerName: player.name,
-      action,
+      action: consensusAction,
       requestedValue: raisedValue as TrucoRequest["requestedValue"]
     };
-    room.trucoRequest = {
+    setTrucoRequest(room, {
       requestedByPlayerId: player.id,
       requestedByPlayerName: player.name,
       responderPlayerId: requester.id,
       currentValue: request.requestedValue,
       requestedValue: raisedValue as TrucoRequest["requestedValue"]
-    };
+    });
     room.lastTrucoRaise = {
       playerId: player.id,
       playerName: player.name,

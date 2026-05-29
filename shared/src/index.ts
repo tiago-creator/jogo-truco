@@ -50,6 +50,11 @@ export type TrucoResponseNotice = {
   requestedValue: 3 | 6 | 9 | 12;
 };
 
+export type TrucoResponseVote = {
+  playerId: string;
+  action: "accept" | "reject" | "raise";
+};
+
 export type TrickResult = {
   winnerPlayerId: string | null;
 };
@@ -80,6 +85,7 @@ export type RoomState = {
   isIronHand?: boolean;
   elevenHandDecision?: ElevenHandDecision;
   trucoRequest?: TrucoRequest;
+  trucoResponseVotes?: TrucoResponseVote[];
   lastTrucoRaise?: {
     playerId: string;
     playerName: string;

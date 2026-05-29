@@ -541,6 +541,7 @@ class TableScene extends Phaser.Scene {
   private trucoResponsePlayerName!: Phaser.GameObjects.Text;
   private trucoResponseSubtitle!: Phaser.GameObjects.Text;
   private trucoResponseRaiseText!: Phaser.GameObjects.Text;
+  private trucoResponseFooter!: Phaser.GameObjects.Text;
   private trucoResponseProgress!: Phaser.GameObjects.Graphics;
   private elevenHandGroup!: Phaser.GameObjects.Container;
   private elevenHandProgress!: Phaser.GameObjects.Graphics;
@@ -1752,6 +1753,7 @@ exitButtonHitZone.on("pointerup", () => {
     this.trucoResponsePlayerName = playerName;
     this.trucoResponseSubtitle = subtitle;
     this.trucoResponseRaiseText = raise.text;
+    this.trucoResponseFooter = footer;
     this.trucoResponseProgress = progress;
     group.setDepth(15000);
     group.setVisible(false);
@@ -1915,10 +1917,16 @@ exitButtonHitZone.on("pointerup", () => {
     });
 
     if (didSend) {
-      this.clearTrucoResponseTimer();
-      this.trucoResponseGroup.setVisible(false);
+      const requiresConsensus = this.isTrucoConsensusRequiredForSelf();
 
-      if (action === "raise" && request) {
+      if (requiresConsensus) {
+        this.trucoResponseFooter.setText(this.getTrucoResponseFooterText());
+      } else {
+        this.clearTrucoResponseTimer();
+        this.trucoResponseGroup.setVisible(false);
+      }
+
+      if (action === "raise" && request && !requiresConsensus) {
         const raisedValue = {
           3: "SEIS",
           6: "NOVE",
@@ -1931,6 +1939,20 @@ exitButtonHitZone.on("pointerup", () => {
     }
 
     return didSend;
+  }
+
+  private isTrucoConsensusRequiredForSelf(): boolean {
+    const state = this.roomState;
+    const request = state?.trucoRequest;
+    const self = state?.self;
+
+    if (!state || !request || !self || state.mode !== "duo-cpu" || !this.isSameTeamAsSelf(request.responderPlayerId)) {
+      return false;
+    }
+
+    return state.players.filter(
+      (player) => !player.isCpu && player.teamId !== undefined && player.teamId === self.teamId
+    ).length > 1;
   }
 
   private drawTrucoResponseIcon(
@@ -4330,11 +4352,54 @@ this.exitButton.setPosition(
       this.trucoResponseSubtitle.setText(`pediu ${requestLabel}. O que voce deseja fazer?`);
       this.layoutTrucoResponseSubtitle();
       this.trucoResponseRaiseText.setText(raiseLabel);
+      this.trucoResponseFooter.setText(this.getTrucoResponseFooterText());
       this.setTrucoResponseRaiseEnabled(request.requestedValue < 12);
     }
 
     this.trucoResponseGroup.setVisible(shouldRespond);
     this.syncTrucoResponseTimer(timerKey);
+  }
+
+  private getTrucoResponseFooterText(): string {
+    const state = this.roomState;
+    const request = state?.trucoRequest;
+    const self = state?.self;
+
+    if (!state || !request || !self || state.mode !== "duo-cpu" || !this.isSameTeamAsSelf(request.responderPlayerId)) {
+      return "Escolha rapidamente para nao perder a vez.";
+    }
+
+    const teamPlayers = state.players.filter(
+      (player) => !player.isCpu && player.teamId !== undefined && player.teamId === self.teamId
+    );
+
+    if (teamPlayers.length <= 1) {
+      return "Escolha rapidamente para nao perder a vez.";
+    }
+
+    const votes = state.trucoResponseVotes ?? [];
+    const teamVotes = votes.filter((vote) => teamPlayers.some((player) => player.id === vote.playerId));
+    const selfVote = teamVotes.find((vote) => vote.playerId === self.id);
+    const actionLabels = {
+      accept: "aceitar",
+      reject: "correr",
+      raise: "aumentar"
+    };
+    const uniqueVotes = new Set(teamVotes.map((vote) => vote.action));
+
+    if (teamVotes.length >= teamPlayers.length && uniqueVotes.size > 1) {
+      return "A dupla escolheu diferente. Votem na mesma opcao.";
+    }
+
+    if (selfVote) {
+      return `Seu voto: ${actionLabels[selfVote.action]}. Aguardando consenso da dupla.`;
+    }
+
+    if (teamVotes.length > 0) {
+      return "Seu parceiro ja votou. Escolha a mesma opcao para confirmar.";
+    }
+
+    return "Os dois da dupla precisam escolher a mesma opcao.";
   }
 
   private layoutTrucoResponseSubtitle(): void {
