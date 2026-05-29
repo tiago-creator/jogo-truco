@@ -407,7 +407,13 @@ async function getJoinRoom(roomId: string | undefined, token: string, mode: Room
     const restoredRoom = restoredSnapshot ? restoreRoomSnapshot(restoredSnapshot) : null;
 
     const room = restoredRoom ?? getRoom(requestedRoomId);
-    room.mode ??= mode;
+
+    if (!restoredRoom && room.status === "waiting" && room.players.length === 0) {
+      room.mode = mode;
+    } else {
+      room.mode ??= mode;
+    }
+
     return room;
   }
 
