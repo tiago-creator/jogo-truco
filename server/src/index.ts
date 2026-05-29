@@ -82,6 +82,7 @@ type Room = {
   dbMatchId?: string;
   processedActionIds?: string[];
   cpuActionTimer?: ReturnType<typeof setTimeout>;
+  elevenHandDecisionTimer?: ReturnType<typeof setTimeout>;
   cpuActionAllowedAt?: number;
 };
 
@@ -201,6 +202,7 @@ const closedRoomIds = new Set<string>();
 const trickRevealDelayMs = 1200;
 const nextHandDelayMs = 1600;
 const cpuInitialDealDelayMs = 4600;
+const elevenHandDecisionTimeoutMs = 30000;
 let nextAutoRoomNumber = 1;
 
 function toPublicPlayer(player: PlayerState): PublicPlayer {
@@ -244,8 +246,12 @@ function getRoom(roomId: string): Room {
   return room;
 }
 
-function sanitizeRoomForStorage(room: Room): Omit<Room, "cpuActionTimer"> {
-  const { cpuActionTimer: _cpuActionTimer, ...snapshot } = room;
+function sanitizeRoomForStorage(room: Room): Omit<Room, "cpuActionTimer" | "elevenHandDecisionTimer"> {
+  const {
+    cpuActionTimer: _cpuActionTimer,
+    elevenHandDecisionTimer: _elevenHandDecisionTimer,
+    ...snapshot
+  } = room;
 
   return snapshot;
 }
@@ -263,6 +269,7 @@ function restoreRoomSnapshot(snapshot: unknown): Room | null {
     handsWonInGame: player.handsWonInGame ?? 0
   }));
   room.cpuActionTimer = undefined;
+  room.elevenHandDecisionTimer = undefined;
   room.handSequence ??= 0;
   room.trickResults ??= [];
   room.processedActionIds ??= [];
@@ -272,6 +279,8 @@ function restoreRoomSnapshot(snapshot: unknown): Room | null {
 }
 
 function resumeRestoredRoom(room: Room): void {
+  scheduleElevenHandDecisionTimeout(room);
+
   if (room.status !== "playing" || room.table.length < room.players.length || room.turnPlayerId) {
     return;
   }
@@ -517,7 +526,7 @@ function buildMessage(room: Room, viewerId: string): string {
   }
 
   if (room.elevenHandDecision) {
-    return room.elevenHandDecision.playerId === viewerId
+    return areSameTeam(room, room.elevenHandDecision.playerId, viewerId)
       ? room.elevenHandDecision.isIronHand
         ? "Mao de ferro: jogue sem ver as cartas"
         : "Mao de 11: jogar ou correr?"
@@ -816,6 +825,8 @@ function logElevenHandCpuDecision(room: Room, cpu: PlayerState, action: "play" |
 }
 
 function dealHand(room: Room, rotateFootPlayerBeforeDeal = false): void {
+  clearElevenHandDecisionTimeout(room);
+
   const previousTrucoResponse = room.lastTrucoResponse;
   const deck = shuffle(createDeck());
   const footPlayerId = rotateFootPlayerBeforeDeal ? rotateFootPlayer(room) : ensureFootPlayer(room);
@@ -850,6 +861,7 @@ function dealHand(room: Room, rotateFootPlayerBeforeDeal = false): void {
   room.lastGameWinnerId = undefined;
   room.lastGameWinnerName = undefined;
   room.cpuActionAllowedAt = Date.now() + cpuInitialDealDelayMs;
+  scheduleElevenHandDecisionTimeout(room);
   logHandDeal(room);
 }
 
@@ -1213,6 +1225,7 @@ function handlePlayerExit(socketId: string, explicitRoomId?: string, preserveRec
 
     clearTimeout(room.cpuActionTimer);
     room.cpuActionTimer = undefined;
+    clearElevenHandDecisionTimeout(room);
 
     if (remainingHumans.length === 0) {
       closedRoomIds.add(room.id);
@@ -1252,6 +1265,37 @@ function getCpuActionDelay(room: Room): number {
   const initialDealDelayMs = Math.max(0, (room.cpuActionAllowedAt ?? 0) - Date.now());
 
   return Math.max(baseDelayMs, initialDealDelayMs);
+}
+
+function clearElevenHandDecisionTimeout(room: Room): void {
+  clearTimeout(room.elevenHandDecisionTimer);
+  room.elevenHandDecisionTimer = undefined;
+}
+
+function scheduleElevenHandDecisionTimeout(room: Room): void {
+  if (!room.elevenHandDecision || room.elevenHandDecision.isIronHand || room.elevenHandDecisionTimer) {
+    return;
+  }
+
+  const expectedHandSequence = room.handSequence;
+
+  room.elevenHandDecisionTimer = setTimeout(() => {
+    room.elevenHandDecisionTimer = undefined;
+
+    if (
+      closedRoomIds.has(room.id) ||
+      room.status !== "playing" ||
+      room.handSequence !== expectedHandSequence ||
+      !room.elevenHandDecision ||
+      room.elevenHandDecision.isIronHand
+    ) {
+      return;
+    }
+
+    room.handValue = 3;
+    room.elevenHandDecision = undefined;
+    broadcastState(room);
+  }, elevenHandDecisionTimeoutMs);
 }
 
 function scheduleCpuAction(room: Room): void {
@@ -1301,6 +1345,7 @@ function scheduleCpuAction(room: Room): void {
 function respondElevenHandAsCpu(room: Room, cpu: PlayerState): void {
   const opponent = getOpposingPlayer(room, cpu.id);
 
+  clearElevenHandDecisionTimeout(room);
   room.elevenHandDecision = undefined;
 
   if (!opponent) {
@@ -1566,7 +1611,7 @@ socket.on("room:leave", ({ roomId }, ack?: () => void) => {
       return;
     }
 
-    if (room.elevenHandDecision && room.elevenHandDecision.playerId === socket.id && !room.elevenHandDecision.isIronHand) {
+    if (room.elevenHandDecision && !room.elevenHandDecision.isIronHand) {
       failAction(socket, ack, "Decida se vai jogar a mao de 11");
       return;
     }
@@ -1816,7 +1861,7 @@ socket.on("room:leave", ({ roomId }, ack?: () => void) => {
       return;
     }
 
-    if (decision.playerId !== socket.id) {
+    if (!areSameTeam(room, decision.playerId, socket.id)) {
       failAction(socket, ack, "A decisao da mao de 11 e do jogador com 11 pontos");
       return;
     }
@@ -1824,6 +1869,7 @@ socket.on("room:leave", ({ roomId }, ack?: () => void) => {
     const opponent = getOpposingPlayer(room, socket.id);
 
     if (!opponent) {
+      clearElevenHandDecisionTimeout(room);
       room.elevenHandDecision = undefined;
       broadcastState(room);
       acknowledgeAction(ack);
@@ -1831,6 +1877,7 @@ socket.on("room:leave", ({ roomId }, ack?: () => void) => {
     }
 
     if (action === "run") {
+      clearElevenHandDecisionTimeout(room);
       room.elevenHandDecision = undefined;
       markActionProcessed(room, actionId);
       awardHand(room, opponent, 1);
@@ -1840,6 +1887,7 @@ socket.on("room:leave", ({ roomId }, ack?: () => void) => {
     }
 
     room.handValue = 3;
+    clearElevenHandDecisionTimeout(room);
     room.elevenHandDecision = undefined;
     markActionProcessed(room, actionId);
     broadcastState(room);

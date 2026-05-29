@@ -47,7 +47,7 @@ import memeTmpUrl from "./audio/memes/tmpyhr2sh8l.mp3";
 import memeVouNadaUrl from "./audio/memes/vou-nada.mp3";
 import memeWowUrl from "./audio/memes/wow_8.mp3";
 import memeZeMangaUrl from "./audio/memes/ze-da-manga_G3QwWGi.mp3";
-
+//solmedinaof
 const memeAudios = [
   { id: "67.mp3", key: "meme-67.mp3", name: "67", url: meme67Url },
   { id: "a-risada-do-kiko.mp3", key: "meme-a-risada-do-kiko.mp3", name: "A Risada Do Kiko", url: memeKikoUrl },
@@ -543,6 +543,7 @@ class TableScene extends Phaser.Scene {
   private trucoResponseRaiseText!: Phaser.GameObjects.Text;
   private trucoResponseProgress!: Phaser.GameObjects.Graphics;
   private elevenHandGroup!: Phaser.GameObjects.Container;
+  private elevenHandProgress!: Phaser.GameObjects.Graphics;
   private handGroup!: Phaser.GameObjects.Container;
   private handHintGroup!: Phaser.GameObjects.Container;
   private opponentHandGroup!: Phaser.GameObjects.Container;
@@ -603,6 +604,9 @@ class TableScene extends Phaser.Scene {
   private trucoResponseTimerKey: string | null = null;
   private trucoResponseTimerStartedAt = 0;
   private autoRejectTrucoTriggeredForKey: string | null = null;
+  private readonly elevenHandDecisionTimeoutMs = 30000;
+  private elevenHandTimerKey: string | null = null;
+  private elevenHandTimerStartedAt = 0;
   constructor() {
     super("table");
   }
@@ -931,15 +935,16 @@ exitButtonHitZone.on("pointerup", () => {
             12: "DOZE"
           }[state.lastTrucoRaise.value] ?? "TRUCO"
         );
-          this.showOpponentSpeechBubble(
-  {
-    1: "TRUCO!",
-    3: "TRUCO!",
-    6: "SEIS!",
-    9: "NOVE!",
-    12: "DOZE!"
-  }[state.lastTrucoRaise.value] ?? "TRUCO!"
-);
+        this.showTrucoRaiseSpeechBubble(
+          state.lastTrucoRaise.playerId,
+          {
+            1: "TRUCO!",
+            3: "TRUCO!",
+            6: "SEIS!",
+            9: "NOVE!",
+            12: "DOZE!"
+          }[state.lastTrucoRaise.value] ?? "TRUCO!"
+        );
 
         if (pendingTrucoResponseKey) {
           this.delayTrucoResponseOptions(pendingTrucoResponseKey, trucoAnimationDuration);
@@ -1023,6 +1028,7 @@ exitButtonHitZone.on("pointerup", () => {
     this.audioStopTimer?.remove(false);
     this.audioStopTimer = null;
     this.clearPostDealHandUnlockDelay();
+    this.clearElevenHandTimer();
 
     if (this.socket) {
       this.socket.removeAllListeners();
@@ -1262,6 +1268,7 @@ exitButtonHitZone.on("pointerup", () => {
     this.audioStopTimer?.remove(false);
     this.audioStopTimer = null;
     this.clearPostDealHandUnlockDelay();
+    this.clearElevenHandTimer();
     this.isRecordingAudio = false;
     this.audioRecordingSession += 1;
 
@@ -1766,11 +1773,18 @@ exitButtonHitZone.on("pointerup", () => {
       fontSize: "32px",
       fontStyle: "900"
     }).setOrigin(0.5);
+    const footer = this.add.text(0, 78, "Se o tempo acabar, joga automaticamente.", {
+      color: "#d8d3c6",
+      fontFamily: "Arial",
+      fontSize: "15px"
+    }).setOrigin(0.5);
+    const progress = this.add.graphics();
 
     const play = this.createElevenHandButton(-92, 32, "JOGAR", 0x1f7a2e, "play");
     const run = this.createElevenHandButton(92, 32, "CORRER", 0x8b4a12, "run");
-    const group = this.add.container(0, 0, [bg, title, play, run]);
+    const group = this.add.container(0, 0, [bg, title, progress, play, run, footer]);
 
+    this.elevenHandProgress = progress;
     group.setDepth(15001);
     group.setVisible(false);
 
@@ -1984,6 +1998,12 @@ exitButtonHitZone.on("pointerup", () => {
     this.showSpeechBubbleOn(this.opponentAvatarGroup, message);
   }
 
+  private showTrucoRaiseSpeechBubble(playerId: string, message: string): void {
+    const target = this.getSpeechBubbleTargetForPlayer(playerId);
+
+    this.showSpeechBubbleOn(target, message);
+  }
+
   private showDuoCpuSpeechBubbles(message: string): void {
     const cpuOpponents = this.getCpuOpponents();
 
@@ -1992,6 +2012,19 @@ exitButtonHitZone.on("pointerup", () => {
         this.showSpeechBubbleOn(sidePlayer.container, message);
       }
     });
+  }
+
+  private getSpeechBubbleTargetForPlayer(playerId: string): Phaser.GameObjects.Container {
+    if (this.roomState?.mode === "duo-cpu") {
+      const cpuOpponents = this.getCpuOpponents();
+      const cpuIndex = cpuOpponents.findIndex((player) => player.id === playerId);
+
+      if (cpuIndex >= 0) {
+        return this.duoCpuSidePlayers[cpuIndex]?.container ?? this.opponentAvatarGroup;
+      }
+    }
+
+    return this.opponentAvatarGroup;
   }
 
   private showSpeechBubbleOn(parent: Phaser.GameObjects.Container, message: string): void {
@@ -2465,6 +2498,7 @@ this.exitButton.setPosition(
   update(): void {
     this.updateTurnProgress();
     this.updateTrucoResponseProgress();
+    this.updateElevenHandProgress();
   }
 
   private renderState(): void {
@@ -4355,9 +4389,76 @@ this.exitButton.setPosition(
 
   private renderElevenHandDecision(): void {
     const decision = this.roomState?.elevenHandDecision;
-    const shouldShow = Boolean(decision && decision.playerId === this.roomState?.self?.id);
+    const shouldShow = Boolean(decision && this.isSameTeamAsSelf(decision.playerId));
 
     this.elevenHandGroup.setVisible(shouldShow);
+
+    if (!shouldShow || !decision) {
+      this.clearElevenHandTimer();
+      return;
+    }
+
+    const timerKey = `${this.roomState?.roomId}:${this.roomState?.handSequence}:${decision.playerId}`;
+
+    if (this.elevenHandTimerKey !== timerKey) {
+      this.elevenHandTimerKey = timerKey;
+      this.elevenHandTimerStartedAt = Date.now();
+    }
+
+    this.drawElevenHandProgress();
+  }
+
+  private isSameTeamAsSelf(playerId: string | undefined): boolean {
+    const self = this.roomState?.self;
+
+    if (!self || !playerId) {
+      return false;
+    }
+
+    if (playerId === self.id) {
+      return true;
+    }
+
+    const player = this.roomState?.players.find((item) => item.id === playerId);
+
+    return Boolean(player && self.teamId !== undefined && player.teamId === self.teamId);
+  }
+
+  private clearElevenHandTimer(): void {
+    this.elevenHandTimerKey = null;
+    this.elevenHandTimerStartedAt = 0;
+    this.elevenHandProgress?.clear();
+  }
+
+  private updateElevenHandProgress(): void {
+    if (!this.elevenHandTimerKey) {
+      return;
+    }
+
+    this.drawElevenHandProgress();
+  }
+
+  private drawElevenHandProgress(): void {
+    this.elevenHandProgress.clear();
+
+    if (!this.elevenHandTimerKey || !this.elevenHandTimerStartedAt) {
+      return;
+    }
+
+    const ratio = Phaser.Math.Clamp(
+      (Date.now() - this.elevenHandTimerStartedAt) / this.elevenHandDecisionTimeoutMs,
+      0,
+      1
+    );
+    const progressWidth = 320;
+    const progressHeight = 8;
+    const progressX = -progressWidth / 2;
+    const progressY = 92;
+
+    this.elevenHandProgress.fillStyle(0xffffff, 0.16);
+    this.elevenHandProgress.fillRoundedRect(progressX, progressY, progressWidth, progressHeight, progressHeight / 2);
+    this.elevenHandProgress.fillStyle(0xffcf5a, 0.94);
+    this.elevenHandProgress.fillRoundedRect(progressX, progressY, progressWidth * (1 - ratio), progressHeight, progressHeight / 2);
   }
 
   private setTrucoResponseRaiseEnabled(enabled: boolean): void {
@@ -4439,7 +4540,9 @@ this.exitButton.setPosition(
 
     const players = this.roomState?.players ?? [];
     const self = this.roomState?.self ?? players[0];
-    const opponent = this.getPrimaryOpponent() ?? players[1] ?? players[0];
+    const opponent = this.roomState?.mode === "duo-cpu" && self
+      ? players.find((player) => player.id !== self.id && player.teamId !== self.teamId) ?? this.getPrimaryOpponent() ?? players[1] ?? players[0]
+      : this.getPrimaryOpponent() ?? players[1] ?? players[0];
     const availableWidth = Math.min(this.getViewWidth() - 96 * this.uiScale, 620 * this.uiScale);
     const gap = 14 * this.uiScale;
     const sideWidth = Phaser.Math.Clamp(185 * this.uiScale, 124 * this.uiScale, availableWidth * 0.34);
@@ -4560,14 +4663,35 @@ this.exitButton.setPosition(
     addLabel(centerX + centerWidth * 0.38, mainY - 35 * this.uiScale, "ELES", "#ff5a50", 26, "normal");
 
     const trickResults = this.roomState?.trickResults ?? [];
+    const isSameScoreboardTeam = (
+      winnerPlayerId: string | undefined,
+      referencePlayer: RoomState["players"][number] | undefined
+    ) => {
+      if (!winnerPlayerId || !referencePlayer) {
+        return false;
+      }
+
+      if (winnerPlayerId === referencePlayer.id) {
+        return true;
+      }
+
+      const winnerPlayer = players.find((player) => player.id === winnerPlayerId);
+
+      return Boolean(
+        winnerPlayer &&
+          referencePlayer.teamId !== undefined &&
+          winnerPlayer.teamId === referencePlayer.teamId
+      );
+    };
     const getRoundDotColor = (playerId: string | undefined, index: number) => {
       const winnerPlayerId = trickResults[index]?.winnerPlayerId;
+      const referencePlayer = players.find((player) => player.id === playerId);
 
       if (!winnerPlayerId || !playerId) {
         return 0x8f8a82;
       }
 
-      if (winnerPlayerId === playerId) {
+      if (isSameScoreboardTeam(winnerPlayerId, referencePlayer)) {
         return 0x42e878;
       }
 
