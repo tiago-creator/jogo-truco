@@ -520,7 +520,7 @@ function buildMessage(room: Room, viewerId: string): string {
   }
 
   if (room.trucoRequest) {
-    return room.trucoRequest.responderPlayerId === viewerId
+    return areSameTeam(room, room.trucoRequest.responderPlayerId, viewerId)
       ? `${room.trucoRequest.requestedByPlayerName} pediu ${trucoValueName(room.trucoRequest.requestedValue)}`
       : "Aguardando resposta do oponente";
   }
@@ -1748,7 +1748,7 @@ socket.on("room:leave", ({ roomId }, ack?: () => void) => {
       return;
     }
 
-    if (request.responderPlayerId !== socket.id) {
+    if (!areSameTeam(room, request.responderPlayerId, socket.id)) {
       failAction(socket, ack, "A resposta e do oponente");
       return;
     }

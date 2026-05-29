@@ -568,6 +568,7 @@ class TableScene extends Phaser.Scene {
   private tableGroup!: Phaser.GameObjects.Container;
   private tableBackground!: Phaser.GameObjects.Image;
   private lastAnimatedTrucoValue: number | null = null;
+  private trucoRaiseAnimationAvailableAt = 0;
   private delayedTrucoResponseKey: string | null = null;
   private visibleTrucoResponseKey: string | null = null;
   private trucoResponseDelayTimer: Phaser.Time.TimerEvent | null = null;
@@ -709,9 +710,7 @@ class TableScene extends Phaser.Scene {
           9: "DOZE",
           12: "DOZE"
         }[state.handValue] ?? "TRUCO";
-        this.playGameSound("truco-alert", 0.82);
-        this.playTrucoRaiseAnimation(state.self?.name ?? "Jogador",
-          value);
+        this.scheduleTrucoRaiseAnimation("Voce", value);
 
       }
     });
@@ -877,7 +876,9 @@ exitButtonHitZone.on("pointerup", () => {
         this.lastShownTrucoResponseKey = trucoResponseKey;
         const responsePlayer = state.players.find((player) => player.id === trucoResponse.playerId);
 
-        if (state.mode === "duo-cpu" && responsePlayer?.isCpu && trucoResponse.action === "accept") {
+        if (trucoResponse.action === "raise") {
+          // O balão de SEIS/NOVE/DOZE acompanha a animação de aumento logo abaixo.
+        } else if (state.mode === "duo-cpu" && responsePlayer?.isCpu && trucoResponse.action === "accept") {
           this.showDuoCpuSpeechBubbles("ACEITA O TRUCO");
         } else {
           this.showOpponentSpeechBubble(this.getTrucoResponseMessage(trucoResponse.action));
@@ -922,28 +923,25 @@ exitButtonHitZone.on("pointerup", () => {
         state.lastTrucoRaise.playerId !== state.self?.id &&
         this.lastAnimatedTrucoValue !== state.lastTrucoRaise.value
       ) {
-        this.lastAnimatedTrucoValue = state.lastTrucoRaise.value;
+        const lastTrucoRaise = state.lastTrucoRaise;
 
-        this.playGameSound("truco-alert", 0.82);
-        const trucoAnimationDuration = this.playTrucoRaiseAnimation(
-          state.lastTrucoRaise.playerName,
+        this.lastAnimatedTrucoValue = lastTrucoRaise.value;
+
+        const trucoAnimationDuration = this.scheduleTrucoRaiseAnimation(
+          lastTrucoRaise.playerId === state.self?.id ? "Voce" : lastTrucoRaise.playerName,
           {
             1: "TRUCO",
             3: "TRUCO",
             6: "SEIS",
             9: "NOVE",
             12: "DOZE"
-          }[state.lastTrucoRaise.value] ?? "TRUCO"
-        );
-        this.showTrucoRaiseSpeechBubble(
-          state.lastTrucoRaise.playerId,
-          {
-            1: "TRUCO!",
-            3: "TRUCO!",
-            6: "SEIS!",
-            9: "NOVE!",
-            12: "DOZE!"
-          }[state.lastTrucoRaise.value] ?? "TRUCO!"
+          }[lastTrucoRaise.value] ?? "TRUCO",
+          () => {
+            this.showTrucoRaiseSpeechBubble(
+              lastTrucoRaise.playerId,
+              this.getTrucoRaiseSpeechMessage(lastTrucoRaise.value)
+            );
+          }
         );
 
         if (pendingTrucoResponseKey) {
@@ -1027,6 +1025,7 @@ exitButtonHitZone.on("pointerup", () => {
     this.audioRecorder.cancel();
     this.audioStopTimer?.remove(false);
     this.audioStopTimer = null;
+    this.trucoRaiseAnimationAvailableAt = 0;
     this.clearPostDealHandUnlockDelay();
     this.clearElevenHandTimer();
 
@@ -1305,6 +1304,7 @@ exitButtonHitZone.on("pointerup", () => {
     this.roomState = null;
     this.previousRoomState = null;
     this.lastAnimatedTrucoValue = null;
+    this.trucoRaiseAnimationAvailableAt = 0;
     this.locallyPlayedCardIds.clear();
     this.faceDownHandCardIds.clear();
     this.pendingFaceDownTableCardIds.clear();
@@ -1763,9 +1763,9 @@ exitButtonHitZone.on("pointerup", () => {
     const bg = this.add.graphics();
 
     bg.fillStyle(0x06130f, 0.94);
-    bg.fillRoundedRect(-210, -106, 420, 212, 22);
+    bg.fillRoundedRect(-210, -128, 420, 256, 22);
     bg.lineStyle(3, 0xffcf5a, 1);
-    bg.strokeRoundedRect(-210, -106, 420, 212, 22);
+    bg.strokeRoundedRect(-210, -128, 420, 256, 22);
 
     const title = this.add.text(0, -62, "Mao de 11", {
       color: "#fff3a3",
@@ -1773,15 +1773,15 @@ exitButtonHitZone.on("pointerup", () => {
       fontSize: "32px",
       fontStyle: "900"
     }).setOrigin(0.5);
-    const footer = this.add.text(0, 78, "Se o tempo acabar, joga automaticamente.", {
+    const footer = this.add.text(0, 108, "Se o tempo acabar, joga automaticamente.", {
       color: "#d8d3c6",
       fontFamily: "Arial",
       fontSize: "15px"
     }).setOrigin(0.5);
     const progress = this.add.graphics();
 
-    const play = this.createElevenHandButton(-92, 32, "JOGAR", 0x1f7a2e, "play");
-    const run = this.createElevenHandButton(92, 32, "CORRER", 0x8b4a12, "run");
+    const play = this.createElevenHandButton(-92, 26, "JOGAR", "play");
+    const run = this.createElevenHandButton(92, 26, "CORRER", "run");
     const group = this.add.container(0, 0, [bg, title, progress, play, run, footer]);
 
     this.elevenHandProgress = progress;
@@ -1795,36 +1795,44 @@ exitButtonHitZone.on("pointerup", () => {
     x: number,
     y: number,
     label: string,
-    color: number,
     action: "play" | "run"
   ): Phaser.GameObjects.Container {
     const bg = this.add.graphics();
+    const style = {
+      play: { fill: 0x0f2608, border: 0x9be85d, iconTint: 0x8fe26a, subtitle: "Continuar rodada", subtitleColor: "#5cff55" },
+      run: { fill: 0x170e05, border: 0xc98b24, iconTint: 0xf0bd4f, subtitle: "-1 ponto", subtitleColor: "#ff8b34" }
+    }[action];
 
     bg.fillStyle(0x000000, 0.38);
-    bg.fillRoundedRect(-72, -38, 150, 80, 12);
-    bg.fillGradientStyle(
-      action === "play" ? 0x66d05f : 0xf2a334,
-      color,
-      action === "play" ? 0x0d3914 : 0x4a1e07,
-      action === "play" ? 0x061907 : 0x160804,
-      1
-    );
-    bg.fillRoundedRect(-76, -42, 150, 80, 12);
-    bg.lineStyle(3, 0xffffff, 0.22);
-    bg.strokeRoundedRect(-76, -42, 150, 80, 12);
+    bg.fillRoundedRect(-80, -68, 160, 136, 14);
+    bg.fillStyle(style.fill, 0.96);
+    bg.fillRoundedRect(-84, -72, 160, 136, 14);
+    bg.lineStyle(1.6, style.border, 0.88);
+    bg.strokeRoundedRect(-84, -72, 160, 136, 14);
+    bg.lineStyle(0.8, 0xffffff, 0.14);
+    bg.strokeRoundedRect(-78, -66, 148, 124, 10);
 
-    const text = this.add.text(0, 0, label, {
+    const icon = action === "play"
+      ? this.add.image(0, -32, "check-action-icon").setDisplaySize(54, 54).setTint(style.iconTint)
+      : this.add.image(0, -32, "running-player-icon").setDisplaySize(54, 54).setTint(style.iconTint);
+
+    const text = this.add.text(0, 23, label, {
+      align: "center",
       color: "#ffffff",
-      fontFamily: "Arial Black",
+      fontFamily: "Arial",
       fontSize: "22px",
-      fontStyle: "900",
-      stroke: "#000000",
-      strokeThickness: 3
+      fontStyle: "bold"
     }).setOrigin(0.5);
-    const hitZone = this.add.zone(0, 0, 158, 88);
-    const button = this.add.container(x, y, [bg, text, hitZone]);
+    const subtitle = this.add.text(0, 43, style.subtitle, {
+      color: style.subtitleColor,
+      fontFamily: "Arial",
+      fontSize: "15px",
+      fontStyle: "bold"
+    }).setOrigin(0.5);
+    const hitZone = this.add.zone(0, 0, 176, 152);
+    const button = this.add.container(x, y, [bg, icon, text, subtitle, hitZone]);
 
-    button.setSize(150, 80);
+    button.setSize(160, 136);
     hitZone.setInteractive({ useHandCursor: true });
     hitZone.on("pointerup", () => {
       this.playButtonClickSound();
@@ -1918,8 +1926,7 @@ exitButtonHitZone.on("pointerup", () => {
           12: "DOZE"
         }[request.requestedValue] ?? "SEIS";
 
-        this.playGameSound("truco-alert", 0.82);
-        this.playTrucoRaiseAnimation(this.roomState?.self?.name ?? "Jogador", raisedValue);
+        this.scheduleTrucoRaiseAnimation("Voce", raisedValue);
       }
     }
 
@@ -2002,6 +2009,16 @@ exitButtonHitZone.on("pointerup", () => {
     const target = this.getSpeechBubbleTargetForPlayer(playerId);
 
     this.showSpeechBubbleOn(target, message);
+  }
+
+  private getTrucoRaiseSpeechMessage(value: RoomState["handValue"]): string {
+    return {
+      1: "TRUCO!",
+      3: "TRUCO!",
+      6: "SEIS!",
+      9: "NOVE!",
+      12: "DOZE!"
+    }[value] ?? "TRUCO!";
   }
 
   private showDuoCpuSpeechBubbles(message: string): void {
@@ -2163,7 +2180,7 @@ exitButtonHitZone.on("pointerup", () => {
   private getTrucoResponseKey(state: RoomState): string | null {
     const request = state.trucoRequest;
 
-    if (!request || request.responderPlayerId !== state.self?.id) {
+    if (!request || !this.isSameTeamAsSelf(request.responderPlayerId)) {
       return null;
     }
 
@@ -2738,6 +2755,9 @@ this.exitButton.setPosition(
     const previousHandLength = this.previousRoomState?.self?.hand.length ?? 0;
 
     if (hand.length === 3 && previousHandLength !== 3) {
+      this.locallyPlayedCardIds.clear();
+      this.animatingHandCardIds.clear();
+      this.activeDealAnimationKey = null;
       this.faceDownHandCardIds.clear();
       this.revealedDealCardIds.clear();
       return;
@@ -2906,7 +2926,12 @@ this.exitButton.setPosition(
     const state = this.roomState;
     const selfId = state?.self?.id;
 
-    return Boolean(this.trucoResponseTimerKey && selfId && state?.trucoRequest?.responderPlayerId !== selfId);
+    return Boolean(
+      this.trucoResponseTimerKey &&
+        selfId &&
+        state?.trucoRequest &&
+        !this.isSameTeamAsSelf(state.trucoRequest.responderPlayerId)
+    );
   }
 
   private drawOpponentNameBox(hasProgress: boolean): void {
@@ -3047,6 +3072,32 @@ this.exitButton.setPosition(
     return container;
   }
 
+  private scheduleTrucoRaiseAnimation(playerName: string, value: string, onStart?: () => void): number {
+    const animationDurationMs = 2300;
+    const now = this.time.now;
+    const delay = Math.max(0, this.trucoRaiseAnimationAvailableAt - now);
+
+    this.trucoRaiseAnimationAvailableAt = now + delay + animationDurationMs;
+
+    const playAnimation = () => {
+      if (this.isLeavingTable || !this.scene.isActive()) {
+        return;
+      }
+
+      this.playGameSound("truco-alert", 0.82);
+      onStart?.();
+      this.playTrucoRaiseAnimation(playerName, value);
+    };
+
+    if (delay > 0) {
+      this.time.delayedCall(delay, playAnimation);
+    } else {
+      playAnimation();
+    }
+
+    return delay + animationDurationMs;
+  }
+
   private playTrucoRaiseAnimation(playerName: string, value: string): number {
     const animationDurationMs = 2300;
     const width = this.getViewWidth();
@@ -3132,25 +3183,25 @@ this.exitButton.setPosition(
     shine.fillEllipse(-52 * scale, -34 * scale, 170 * scale, 30 * scale);
     shine.setRotation(-0.14);
 
-    const captionY = 184 * scale;
-    const captionBg = this.add.graphics();
-
-    captionBg.fillStyle(0x000000, 0.68);
-    captionBg.fillRoundedRect(-92 * scale, captionY - 17 * scale, 184 * scale, 34 * scale, 8 * scale);
-    captionBg.lineStyle(1 * scale, 0xffcf5a, 0.72);
-    captionBg.strokeRoundedRect(-92 * scale, captionY - 17 * scale, 184 * scale, 34 * scale, 8 * scale);
-
-    const captionName = this.add.text(0, captionY, `${playerName} pediu `, {
-      color: "#f8f1d9",
+    const captionY = -92 * scale;
+    const captionText = this.add.text(0, captionY, `${playerName} pediu`, {
+      align: "center",
+      color: "#050505",
       fontFamily: "Arial",
-      fontSize: `${18 * scale}px`
-    }).setOrigin(1, 0.5);
-    const captionValue = this.add.text(0, captionY, valueUpper.toLowerCase(), {
-      color: "#ffcf5a",
-      fontFamily: "Arial",
-      fontSize: `${18 * scale}px`,
-      fontStyle: "bold"
-    }).setOrigin(0, 0.5);
+      fontSize: `${36 * scale}px`,
+      fontStyle: "bold",
+      stroke: "#ffffff",
+      strokeThickness: 5 * scale,
+      wordWrap: { width: 380 * scale, useAdvancedWrap: true }
+    }).setOrigin(0.5);
+    const captionDecor = this.add.graphics();
+
+    captionDecor.lineStyle(2 * scale, 0xffcf5a, 0.88);
+    captionDecor.lineBetween(-176 * scale, captionY, -122 * scale, captionY);
+    captionDecor.lineBetween(122 * scale, captionY, 176 * scale, captionY);
+    captionDecor.fillStyle(0xffcf5a, 0.95);
+    captionDecor.fillTriangle(-112 * scale, captionY, -94 * scale, captionY - 7 * scale, -94 * scale, captionY + 7 * scale);
+    captionDecor.fillTriangle(112 * scale, captionY, 94 * scale, captionY - 7 * scale, 94 * scale, captionY + 7 * scale);
 
     const makeStar = (x: number, y: number, size: number): Phaser.GameObjects.Container => {
       const star = this.add.container(x, y);
@@ -3220,11 +3271,10 @@ this.exitButton.setPosition(
       ...flyingCards,
       ribbon,
       titleGlow,
+      captionDecor,
+      captionText,
       title,
       shine,
-      captionBg,
-      captionName,
-      captionValue
     ]);
 
     stars.forEach((star, index) => {
@@ -4354,7 +4404,7 @@ this.exitButton.setPosition(
     const selfId = state?.self?.id;
     const ratio = this.getTrucoResponseProgressRatio();
 
-    if (selfId && state?.trucoRequest?.responderPlayerId !== selfId) {
+    if (selfId && state?.trucoRequest && !this.isSameTeamAsSelf(state.trucoRequest.responderPlayerId)) {
       this.drawOpponentTurnProgress(ratio);
       return;
     }
@@ -4378,7 +4428,7 @@ this.exitButton.setPosition(
       !timerKey ||
       this.autoRejectTrucoTriggeredForKey === timerKey ||
       !request ||
-      request.responderPlayerId !== this.roomState?.self?.id
+      !this.isSameTeamAsSelf(request.responderPlayerId)
     ) {
       return;
     }
@@ -4453,7 +4503,7 @@ this.exitButton.setPosition(
     const progressWidth = 320;
     const progressHeight = 8;
     const progressX = -progressWidth / 2;
-    const progressY = 92;
+    const progressY = 121;
 
     this.elevenHandProgress.fillStyle(0xffffff, 0.16);
     this.elevenHandProgress.fillRoundedRect(progressX, progressY, progressWidth, progressHeight, progressHeight / 2);
@@ -5028,7 +5078,7 @@ this.exitButton.setPosition(
     visibleCards.forEach((cardData, index) => {
       activeCardIds.add(cardData.id);
 
-      if (this.animatingHandCardIds.has(cardData.id)) {
+      if (this.activeDealAnimationKey && this.animatingHandCardIds.has(cardData.id)) {
         this.destroyCachedHandCard(cardData.id);
         return;
       }
@@ -5187,7 +5237,7 @@ this.exitButton.setPosition(
     const middleIndex = (cards.length - 1) / 2;
 
     cards.forEach((cardData, index) => {
-      if (this.animatingHandCardIds.has(cardData.id)) {
+      if (this.activeDealAnimationKey && this.animatingHandCardIds.has(cardData.id)) {
         return;
       }
 
