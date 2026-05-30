@@ -58,7 +58,7 @@ type TrucoResponseAction = TrucoResponseVote["action"];
 
 type Room = {
   id: string;
-  mode?: "classic" | "duo-cpu";
+  mode?: "classic" | "duo-cpu" | "solo-cpu";
   players: PlayerState[];
   table: TableCard[];
   vira?: Card;
@@ -327,7 +327,7 @@ function persistRoom(room: Room): void {
 }
 
 function createAutoRoom(mode: Room["mode"] = "classic"): Room {
-  const prefix = mode === "duo-cpu" ? "duplas-cpu" : "mesa";
+  const prefix = mode === "duo-cpu" ? "duplas-cpu" : mode === "solo-cpu" ? "cpu" : "mesa";
   let roomId = `${prefix}-${nextAutoRoomNumber}`;
 
   while (rooms.has(roomId)) {
@@ -374,7 +374,15 @@ function shouldRejoinMemoryRoom(room: Room, token: string): boolean {
 }
 
 function getRoomTargetHumanCount(room: Room): number {
+  if (room.mode === "solo-cpu") {
+    return 1;
+  }
+
   return room.mode === "duo-cpu" ? 2 : 2;
+}
+
+function getRoomMode(room: { mode?: string }): NonNullable<Room["mode"]> {
+  return room.mode === "duo-cpu" || room.mode === "solo-cpu" ? room.mode : "classic";
 }
 
 function getHumanCount(room: Room): number {
@@ -442,7 +450,7 @@ async function getJoinRoom(roomId: string | undefined, token: string, mode: Room
 
   const memoryRoom = findRoomByPlayerToken(token);
 
-  if (memoryRoom && shouldRejoinMemoryRoom(memoryRoom, token)) {
+  if (memoryRoom && getRoomMode(memoryRoom) === mode && shouldRejoinMemoryRoom(memoryRoom, token)) {
     return memoryRoom;
   }
 
@@ -451,6 +459,13 @@ async function getJoinRoom(roomId: string | undefined, token: string, mode: Room
     return null;
   });
   if (restoredSnapshot && closedRoomIds.has(restoredSnapshot.id)) {
+    runDatabaseTask(async () => {
+      await deleteActiveRoom(restoredSnapshot.id);
+    });
+    return findWaitingRoom(mode) ?? createAutoRoom(mode);
+  }
+
+  if (restoredSnapshot && getRoomMode(restoredSnapshot) !== mode) {
     runDatabaseTask(async () => {
       await deleteActiveRoom(restoredSnapshot.id);
     });
@@ -549,9 +564,15 @@ function buildState(room: Room, viewerId: string): RoomState {
 
 function buildMessage(room: Room, viewerId: string): string {
   if (room.status === "waiting") {
-    return room.mode === "duo-cpu"
-      ? "Procurando parceiro para enfrentar dupla CPU"
-      : "Esperando outro jogador";
+    if (room.mode === "duo-cpu") {
+      return "Procurando parceiro para enfrentar dupla CPU";
+    }
+
+    if (room.mode === "solo-cpu") {
+      return "Preparando partida contra CPU";
+    }
+
+    return "Esperando outro jogador";
   }
 
   if (room.trucoRequest) {
@@ -735,6 +756,10 @@ function areSameTeam(room: Room, leftPlayerId: string | null | undefined, rightP
 function getOpposingPlayer(room: Room, playerId: string | undefined): PlayerState | undefined {
   const player = room.players.find((item) => item.id === playerId);
 
+  if (player?.teamId === undefined) {
+    return room.players.find((item) => item.id !== playerId);
+  }
+
   return room.players.find((item) => item.id !== playerId && item.teamId !== player?.teamId);
 }
 
@@ -782,6 +807,13 @@ function createCpuPlayer(room: Room, index: number): PlayerState {
   };
 }
 
+function createSoloCpuPlayer(room: Room): PlayerState {
+  return {
+    ...createCpuPlayer(room, 1),
+    teamId: undefined
+  };
+}
+
 function completeDuoCpuRoom(room: Room): void {
   if (room.mode !== "duo-cpu") {
     return;
@@ -799,6 +831,21 @@ function completeDuoCpuRoom(room: Room): void {
 
   const cpus = [createCpuPlayer(room, 1), createCpuPlayer(room, 2)];
   room.players = [humans[0], cpus[0], humans[1], cpus[1]];
+}
+
+function completeSoloCpuRoom(room: Room): void {
+  if (room.mode !== "solo-cpu") {
+    return;
+  }
+
+  const human = room.players.find((player) => !player.isCpu);
+
+  if (!human) {
+    return;
+  }
+
+  human.teamId = undefined;
+  room.players = [human, createSoloCpuPlayer(room)];
 }
 
 function suitName(suit: Card["suit"]): string {
@@ -1643,7 +1690,7 @@ function playCardAsCpu(room: Room): void {
 
 io.on("connection", (socket) => {
   socket.on("room:join", async ({ roomId, name, token, mode }) => {
-    const joinMode: Room["mode"] = mode === "duo-cpu" ? "duo-cpu" : "classic";
+    const joinMode: Room["mode"] = mode === "duo-cpu" || mode === "solo-cpu" ? mode : "classic";
     const profile = await getProfileForJoin(token);
     const playerName = (profile?.name ?? name.trim()) || "Jogador";
     const avatarUrl = profile?.avatarUrl ?? undefined;
@@ -1716,10 +1763,13 @@ io.on("connection", (socket) => {
       });
     }
 
-    if (room.mode === "duo-cpu" && getHumanCount(room) === 2 && room.status === "waiting") {
+    if (room.mode === "solo-cpu" && getHumanCount(room) === 1 && room.status === "waiting") {
+      completeSoloCpuRoom(room);
+      startMatch(room);
+    } else if (room.mode === "duo-cpu" && getHumanCount(room) === 2 && room.status === "waiting") {
       completeDuoCpuRoom(room);
       startMatch(room);
-    } else if (room.mode !== "duo-cpu" && room.players.length === 2 && room.status === "waiting") {
+    } else if ((room.mode ?? "classic") === "classic" && room.players.length === 2 && room.status === "waiting") {
       startMatch(room);
     }
 

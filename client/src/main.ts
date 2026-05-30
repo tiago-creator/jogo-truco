@@ -71,7 +71,7 @@ const memeAudios = [
 ];
 
 type TrucoSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
-type OnlineGameMode = "classic" | "duo-cpu";
+type OnlineGameMode = "classic" | "duo-cpu" | "solo-cpu";
 type PlayerProfile = {
   token: string;
   name: string;
@@ -850,7 +850,11 @@ exitButtonHitZone.on("pointerup", () => {
       }
 
       if (state.status === "waiting") {
-        showWaitingRoom(state.message);
+        if (state.mode === "solo-cpu") {
+          showGameTable();
+        } else {
+          showWaitingRoom(state.message);
+        }
       }
 
       if (state.status === "playing") {
@@ -880,7 +884,7 @@ exitButtonHitZone.on("pointerup", () => {
         if (trucoResponse.action === "raise") {
           // O balão de SEIS/NOVE/DOZE acompanha a animação de aumento logo abaixo.
         } else if (state.mode === "duo-cpu" && responsePlayer?.isCpu && trucoResponse.action === "accept") {
-          this.showDuoCpuSpeechBubbles("ACEITA O TRUCO");
+          this.showTrucoRaiseSpeechBubble(responsePlayer.id, "ACEITA O TRUCO");
         } else {
           this.showOpponentSpeechBubble(this.getTrucoResponseMessage(trucoResponse.action));
         }
@@ -900,7 +904,7 @@ exitButtonHitZone.on("pointerup", () => {
       } else if (
         previousState &&
         previousGameWinnerKey !== gameWinnerKey &&
-        state.lastGameWinnerId === state.self?.id &&
+        this.isSameTeamAsSelf(state.lastGameWinnerId) &&
         this.lastCelebratedGameWinnerKey !== gameWinnerKey
       ) {
         this.lastCelebratedGameWinnerKey = gameWinnerKey;
@@ -1312,6 +1316,11 @@ exitButtonHitZone.on("pointerup", () => {
     this.clearCachedCardObjects();
 
     if (returnTo === "mode") {
+      if (selectedOnlineGameMode === "solo-cpu") {
+        returnToCpuModeMenu();
+        return;
+      }
+
       returnToGameModeMenu();
       return;
     }
@@ -5793,6 +5802,7 @@ function showHomeMenu(): void {
   document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
   document.getElementById("game-mode")?.classList.add("is-hidden");
+  document.getElementById("cpu-mode")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
 }
@@ -5805,6 +5815,7 @@ function showLoginMenu(): void {
   document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
   document.getElementById("game-mode")?.classList.add("is-hidden");
+  document.getElementById("cpu-mode")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
 }
@@ -5817,6 +5828,7 @@ function showSettingsMenu(): void {
   document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.remove("is-hidden");
   document.getElementById("game-mode")?.classList.add("is-hidden");
+  document.getElementById("cpu-mode")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
   renderBackgroundOptions();
@@ -5830,6 +5842,7 @@ function showProfileMenu(): void {
   document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
   document.getElementById("game-mode")?.classList.add("is-hidden");
+  document.getElementById("cpu-mode")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
   renderProfileForm();
@@ -5844,6 +5857,7 @@ function showRankMenu(): void {
   document.getElementById("rank")?.classList.remove("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
   document.getElementById("game-mode")?.classList.add("is-hidden");
+  document.getElementById("cpu-mode")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
   void renderRanking();
@@ -5857,6 +5871,20 @@ function showGameModeMenu(): void {
   document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
   document.getElementById("game-mode")?.classList.remove("is-hidden");
+  document.getElementById("cpu-mode")?.classList.add("is-hidden");
+  document.getElementById("waiting-room")?.classList.add("is-hidden");
+  document.getElementById("game")?.classList.add("is-hidden");
+}
+
+function showCpuModeMenu(): void {
+  stopWaitingTimer();
+  document.getElementById("login")?.classList.add("is-hidden");
+  document.getElementById("home")?.classList.add("is-hidden");
+  document.getElementById("profile")?.classList.add("is-hidden");
+  document.getElementById("rank")?.classList.add("is-hidden");
+  document.getElementById("settings")?.classList.add("is-hidden");
+  document.getElementById("game-mode")?.classList.add("is-hidden");
+  document.getElementById("cpu-mode")?.classList.remove("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
 }
@@ -5869,6 +5897,7 @@ function showWaitingRoom(message = "Procurando outro jogador para iniciar a part
   document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
   document.getElementById("game-mode")?.classList.add("is-hidden");
+  document.getElementById("cpu-mode")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.remove("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
   const waitingMessage = document.getElementById("waiting-message");
@@ -5886,6 +5915,7 @@ function showGameTable(): void {
   document.getElementById("rank")?.classList.add("is-hidden");
   document.getElementById("settings")?.classList.add("is-hidden");
   document.getElementById("game-mode")?.classList.add("is-hidden");
+  document.getElementById("cpu-mode")?.classList.add("is-hidden");
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.remove("is-hidden");
 }
@@ -6225,6 +6255,19 @@ function returnToGameModeMenu(): void {
   currentGame?.destroy(true);
 }
 
+function returnToCpuModeMenu(): void {
+  const currentGame = game;
+
+  game = null;
+  if (resizeGameCanvas) {
+    window.removeEventListener("resize", resizeGameCanvas);
+    window.removeEventListener("orientationchange", resizeGameCanvas);
+    resizeGameCanvas = null;
+  }
+  showCpuModeMenu();
+  currentGame?.destroy(true);
+}
+
 function leaveOnlineGame(): void {
   const tableScene = game?.scene.getScene("table");
 
@@ -6244,6 +6287,11 @@ function cancelWaitingSearch(): void {
     return;
   }
 
+  if (selectedOnlineGameMode === "solo-cpu") {
+    returnToCpuModeMenu();
+    return;
+  }
+
   returnToGameModeMenu();
 }
 
@@ -6256,9 +6304,13 @@ async function startOnlineGame(mode: OnlineGameMode = "classic"): Promise<void> 
   selectedOnlineGameMode = mode;
   await fetchPlayerProfile().catch(() => currentPlayerProfile);
   void unlockAudioPlayback().catch(() => undefined);
-  showWaitingRoom(mode === "duo-cpu"
-    ? "Procurando parceiro para jogar contra dupla CPU."
-    : "Procurando outro jogador para iniciar a partida.");
+  if (mode === "solo-cpu") {
+    showGameTable();
+  } else {
+    showWaitingRoom(mode === "duo-cpu"
+      ? "Procurando parceiro para jogar contra dupla CPU."
+      : "Procurando outro jogador para iniciar a partida.");
+  }
 
   const config: Phaser.Types.Core.GameConfig = {
     type: Phaser.AUTO,
@@ -6304,9 +6356,17 @@ document.getElementById("play-online")?.addEventListener("click", () => {
   void unlockAudioPlayback().catch(() => undefined);
   showGameModeMenu();
 });
+document.getElementById("play-cpu")?.addEventListener("click", () => {
+  void unlockAudioPlayback().catch(() => undefined);
+  showCpuModeMenu();
+});
 document.getElementById("play-mode-1v1")?.addEventListener("click", () => {
   void unlockAudioPlayback().catch(() => undefined);
   void startOnlineGame();
+});
+document.getElementById("play-mode-1v1-cpu")?.addEventListener("click", () => {
+  void unlockAudioPlayback().catch(() => undefined);
+  void startOnlineGame("solo-cpu");
 });
 document.getElementById("play-mode-2v2-cpu")?.addEventListener("click", () => {
   void unlockAudioPlayback().catch(() => undefined);
@@ -6324,6 +6384,7 @@ document.getElementById("back-home")?.addEventListener("click", showHomeMenu);
 document.getElementById("back-home-profile")?.addEventListener("click", showHomeMenu);
 document.getElementById("back-home-rank")?.addEventListener("click", showHomeMenu);
 document.getElementById("back-home-mode")?.addEventListener("click", showHomeMenu);
+document.getElementById("back-home-cpu-mode")?.addEventListener("click", showHomeMenu);
 document.getElementById("cancel-waiting")?.addEventListener("click", cancelWaitingSearch);
 document.getElementById("profile-form")?.addEventListener("submit", (event) => {
   void saveProfile(event);

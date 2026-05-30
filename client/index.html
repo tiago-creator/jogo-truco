@@ -73,6 +73,10 @@
             <span>Jogar online</span>
             <small>Encontrar mesa agora</small>
           </button>
+          <button id="play-cpu" class="play-button play-button-secondary" type="button">
+            <span>Jogar contra CPU</span>
+            <small>Escolher modo offline</small>
+          </button>
           <div class="home-menu-grid">
             <button id="open-profile" class="menu-button" type="button">
               <img class="menu-icon menu-icon-image" src="/src/img/icons/profile-gold.svg" alt="" />
@@ -347,6 +351,55 @@
             </span>
             <strong>Milhares online</strong>
             <small>Jogadores ativos 24 horas por dia</small>
+          </div>
+        </div>
+      </section>
+    </main>
+    <main id="cpu-mode" class="game-mode-screen is-hidden">
+      <section class="game-mode-content" aria-labelledby="cpu-mode-title">
+        <div class="game-mode-topbar">
+          <button id="back-home-cpu-mode" class="game-mode-back" type="button" aria-label="Voltar">
+            <span aria-hidden="true"></span>
+          </button>
+
+          <div class="home-wallet" aria-label="Moedas e gemas">
+            <div class="home-currency">
+              <span class="home-currency-icon">$</span>
+              <strong>12.450</strong>
+              <span class="home-plus">+</span>
+            </div>
+            <div class="home-currency">
+              <span class="home-currency-icon home-gem"></span>
+              <strong>85</strong>
+              <span class="home-plus">+</span>
+            </div>
+          </div>
+        </div>
+        <img class="game-mode-logo" src="/src/img/truco.png" alt="Truco" />
+        <h2 id="cpu-mode-title">Contra CPU</h2>
+        <p class="game-mode-subtitle">Treine contra o computador e jogue no seu ritmo.</p>
+        <img src="/src/img/divisoria-dourada.png" alt="Divisoria" aria-hidden="true" class="game-mode-divider" />
+        <h3 class="game-mode-section-title">Truco Paulista</h3>
+        <div class="game-mode-options game-mode-options-single">
+          <button id="play-mode-1v1-cpu" class="game-mode-option" type="button">
+            <span class="game-mode-icon">1 x 1</span>
+            <span class="game-mode-players game-mode-players-cpu-duel" aria-hidden="true">
+              <span></span>
+              <span></span>
+            </span>
+            <strong>1 x 1 CPU</strong>
+            <small>Jogue uma partida individual contra um adversario CPU.</small>
+            <span class="game-mode-cta">Jogar agora</span>
+          </button>
+        </div>
+        <div class="game-mode-security">
+          <img class="game-mode-shield" src="/src/img/seguranca.png" alt="" aria-hidden="true" />
+          <div>
+            <strong>Modo de treino</strong>
+            <span>Entre direto na mesa contra CPU, sem esperar outro jogador online.</span>
+          </div>
+          <div class="game-mode-lock">
+            <img src="/src/img/padlock.svg" alt="" aria-hidden="true" />
           </div>
         </div>
       </section>

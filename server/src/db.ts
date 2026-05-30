@@ -51,6 +51,7 @@ export type RankingPlayer = {
 
 export type ActiveRoomSnapshot = {
   id: string;
+  mode?: string;
   status?: string;
   players?: Array<{ token?: string; cpuToken?: string; isCpu?: boolean }>;
 };
