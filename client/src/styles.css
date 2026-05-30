@@ -1247,6 +1247,79 @@ canvas {
   background-repeat: no-repeat;
 }
 
+.cpu-difficulty-options {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.cpu-difficulty-option {
+  display: grid;
+  align-content: center;
+  gap: 8px;
+  min-height: 96px;
+  padding: 14px;
+}
+
+.cpu-difficulty-option strong,
+.cpu-difficulty-option span {
+  display: block;
+}
+
+.cpu-difficulty-option strong {
+  color: #ffcf5a;
+  font-size: 16px;
+}
+
+.cpu-difficulty-option span {
+  color: rgba(248, 241, 217, 0.78);
+  font: 700 11px Arial, Helvetica, sans-serif;
+  line-height: 1.28;
+  text-transform: none;
+}
+
+.offline-progress {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  width: min(100%, 380px);
+  margin: 0 auto 24px;
+  padding: 14px;
+  border: 1px solid rgba(255, 207, 90, 0.28);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0)),
+    rgba(0, 0, 0, 0.42);
+  text-align: left;
+}
+
+.offline-progress > strong {
+  grid-column: 1 / -1;
+  color: #ffcf5a;
+  font: 900 15px Arial Black, Arial, Helvetica, sans-serif;
+  text-transform: uppercase;
+}
+
+.offline-progress div {
+  display: grid;
+  gap: 4px;
+  min-height: 58px;
+  padding: 10px;
+  border: 1px solid rgba(255, 207, 90, 0.16);
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.28);
+}
+
+.offline-progress span {
+  color: rgba(248, 241, 217, 0.72);
+  font: 800 11px Arial, Helvetica, sans-serif;
+  text-transform: uppercase;
+}
+
+.offline-progress b {
+  color: #fff8d8;
+  font: 900 24px Arial Black, Arial, Helvetica, sans-serif;
+  line-height: 1;
+}
+
 .waiting-content h2 {
   margin: 22px 0 10px;
   color: #f8f1d9;

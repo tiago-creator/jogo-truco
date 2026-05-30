@@ -1,0 +1,18 @@
+{
+  "name": "Truco Online",
+  "short_name": "Truco",
+  "description": "Jogue truco online ou offline contra CPU.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#060807",
+  "theme_color": "#12372a",
+  "icons": [
+    {
+      "src": "/truco-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}

@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="theme-color" content="#12372a" />
+    <link rel="manifest" href="/manifest.webmanifest" />
     <title>Truco Online</title>
   </head>
   <body>
@@ -208,6 +209,44 @@
             <span class="background-preview card-back-preview"></span>
             <span>Gray</span>
           </button>
+        </div>
+        <h2>Dificuldade da CPU</h2>
+        <div id="cpu-difficulty-options" class="background-options cpu-difficulty-options" aria-label="Escolha a dificuldade da CPU">
+          <button class="background-option cpu-difficulty-option" type="button" data-cpu-difficulty="easy">
+            <strong>🥉 Novato</strong>
+            <span>CPU mais simples e menos agressiva.</span>
+          </button>
+          <button class="background-option cpu-difficulty-option" type="button" data-cpu-difficulty="medium">
+            <strong>🥈 Experiente</strong>
+            <span>Equilibrado para partidas normais.</span>
+          </button>
+          <button class="background-option cpu-difficulty-option" type="button" data-cpu-difficulty="hard">
+            <strong>🥇 Veterano</strong>
+            <span>CPU joga mais forte e aumenta mais.</span>
+          </button>
+          <button class="background-option cpu-difficulty-option" type="button" data-cpu-difficulty="legendary">
+            <strong>👑 Mestre do Truco</strong>
+            <span>CPU tenta sempre a melhor resposta.</span>
+          </button>
+        </div>
+        <div class="offline-progress" aria-label="Progresso offline contra CPU">
+          <strong>Progresso offline</strong>
+          <div>
+            <span>Vitorias</span>
+            <b id="offline-wins">0</b>
+          </div>
+          <div>
+            <span>Derrotas</span>
+            <b id="offline-losses">0</b>
+          </div>
+          <div>
+            <span>Melhor sequencia</span>
+            <b id="offline-best-streak">0</b>
+          </div>
+          <div>
+            <span>Sequencia atual</span>
+            <b id="offline-current-streak">0</b>
+          </div>
         </div>
         <button id="back-home"  type="button">
           Voltar

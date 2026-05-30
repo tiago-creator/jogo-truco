@@ -55,6 +55,8 @@ export type TrucoResponseVote = {
   action: "accept" | "reject" | "raise";
 };
 
+export type CpuDifficulty = "easy" | "medium" | "hard" | "legendary";
+
 export type TrickResult = {
   winnerPlayerId: string | null;
 };
@@ -82,6 +84,7 @@ export type RoomState = {
   footPlayerId?: string;
   status: "waiting" | "playing" | "finished";
   message: string;
+  cpuDifficulty?: CpuDifficulty;
   isIronHand?: boolean;
   elevenHandDecision?: ElevenHandDecision;
   trucoRequest?: TrucoRequest;
@@ -98,7 +101,7 @@ export type RoomState = {
 };
 
 export type ClientToServerEvents = {
-  "room:join": (payload: { roomId?: string; name: string; token: string; mode?: "classic" | "duo-cpu" | "solo-cpu" }) => void;
+  "room:join": (payload: { roomId?: string; name: string; token: string; mode?: "classic" | "duo-cpu" | "solo-cpu"; cpuDifficulty?: CpuDifficulty }) => void;
   "room:leave": (payload: { roomId: string }, ack?: () => void) => void;
   "card:play": (payload: { roomId: string; cardId: string; faceDown?: boolean } & ReliableActionPayload, ack?: (response: ActionAck) => void) => void;
   "truco:raise": (payload: { roomId: string } & ReliableActionPayload, ack?: (response: ActionAck) => void) => void;

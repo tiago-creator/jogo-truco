@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#12372a"/>
+  <circle cx="256" cy="256" r="178" fill="#07130c" stroke="#ffcf5a" stroke-width="22"/>
+  <rect x="172" y="118" width="142" height="212" rx="18" fill="#fff8d8" stroke="#7a3500" stroke-width="12" transform="rotate(-10 243 224)"/>
+  <rect x="214" y="150" width="142" height="212" rx="18" fill="#fff8d8" stroke="#7a3500" stroke-width="12" transform="rotate(12 285 256)"/>
+  <text x="256" y="282" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="96" font-weight="900" fill="#b92727">3</text>
+  <text x="256" y="394" text-anchor="middle" font-family="Arial Black, Arial, sans-serif" font-size="58" font-weight="900" fill="#ffcf5a">TRUCO</text>
+</svg>

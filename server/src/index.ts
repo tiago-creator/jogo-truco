@@ -5,6 +5,7 @@ import { Server, type Socket } from "socket.io";
 import {
   type Card,
   type ClientToServerEvents,
+  type CpuDifficulty,
   type ActionAck,
   compareCardsWithVira,
   createDeck,
@@ -88,6 +89,7 @@ type Room = {
   elevenHandDecisionTimer?: ReturnType<typeof setTimeout>;
   stuckTurnRecoveryTimer?: ReturnType<typeof setTimeout>;
   cpuActionAllowedAt?: number;
+  cpuDifficulty?: CpuDifficulty;
 };
 
 type TrucoServerSocket = Socket<ClientToServerEvents, ServerToClientEvents>;
@@ -210,6 +212,15 @@ const cpuInitialDealDelayMs = 4600;
 const elevenHandDecisionTimeoutMs = 30000;
 const stuckTurnRecoveryDelayMs = 3500;
 let nextAutoRoomNumber = 1;
+const defaultCpuDifficulty: CpuDifficulty = "medium";
+
+function isCpuDifficulty(value: unknown): value is CpuDifficulty {
+  return value === "easy" || value === "medium" || value === "hard" || value === "legendary";
+}
+
+function getCpuDifficulty(room: Room): CpuDifficulty {
+  return isCpuDifficulty(room.cpuDifficulty) ? room.cpuDifficulty : defaultCpuDifficulty;
+}
 
 function toPublicPlayer(player: PlayerState): PublicPlayer {
   return {
@@ -245,7 +256,8 @@ function getRoom(roomId: string): Room {
     status: "waiting",
     handSequence: 0,
     trickResults: [],
-    processedActionIds: []
+    processedActionIds: [],
+    cpuDifficulty: defaultCpuDifficulty
   };
 
   rooms.set(roomId, room);
@@ -281,6 +293,7 @@ function restoreRoomSnapshot(snapshot: unknown): Room | null {
   room.handSequence ??= 0;
   room.trickResults ??= [];
   room.processedActionIds ??= [];
+  room.cpuDifficulty = isCpuDifficulty(room.cpuDifficulty) ? room.cpuDifficulty : defaultCpuDifficulty;
   rooms.set(room.id, room);
   resumeRestoredRoom(room);
   return room;
@@ -548,6 +561,7 @@ function buildState(room: Room, viewerId: string): RoomState {
     footPlayerId: room.footPlayerId,
     status: room.status,
     message: buildMessage(room, viewerId),
+    cpuDifficulty: getCpuDifficulty(room),
     isIronHand: room.isIronHand,
     elevenHandDecision: room.elevenHandDecision,
     trucoRequest: room.trucoRequest,
@@ -1559,6 +1573,19 @@ function shouldCpuPlayElevenHand(room: Room, cpu: PlayerState): boolean {
   const manilhaRankIndex = (ranks.indexOf(room.vira.rank) + 1) % ranks.length;
   const manilhaCount = cpu.hand.filter((card) => ranks.indexOf(card.rank) === manilhaRankIndex).length;
   const highCardCount = cpu.hand.filter((card) => ["3", "2", "A"].includes(card.rank)).length;
+  const difficulty = getCpuDifficulty(room);
+
+  if (difficulty === "easy") {
+    return manilhaCount >= 2 || handStrength >= 34;
+  }
+
+  if (difficulty === "hard") {
+    return manilhaCount > 0 || highCardCount >= 1 || handStrength >= 18;
+  }
+
+  if (difficulty === "legendary") {
+    return manilhaCount > 0 || highCardCount >= 1 || handStrength >= 15;
+  }
 
   return manilhaCount > 0 || highCardCount >= 2 || handStrength >= 21;
 }
@@ -1605,6 +1632,21 @@ function respondTrucoAsCpu(room: Room): void {
     return;
   }
 
+  if (!shouldCpuAcceptTruco(room, cpu, request.requestedValue)) {
+    const points = request.currentValue;
+
+    room.lastTrucoResponse = {
+      playerId: cpu.id,
+      playerName: cpu.name,
+      action: "reject",
+      requestedValue: request.requestedValue
+    };
+    clearTrucoRequest(room);
+    awardHand(room, requester, points);
+    broadcastState(room);
+    return;
+  }
+
   room.lastTrucoResponse = {
     playerId: cpu.id,
     playerName: cpu.name,
@@ -1616,6 +1658,31 @@ function respondTrucoAsCpu(room: Room): void {
   broadcastState(room);
 }
 
+function shouldCpuAcceptTruco(room: Room, cpu: PlayerState, requestedValue: TrucoRequest["requestedValue"]): boolean {
+  if (!room.vira || cpu.hand.length === 0) {
+    return true;
+  }
+
+  const difficulty = getCpuDifficulty(room);
+  const handStrength = cpu.hand.reduce((total, card) => total + getCardStrength(room, card), 0);
+  const manilhaRankIndex = (ranks.indexOf(room.vira.rank) + 1) % ranks.length;
+  const hasManilha = cpu.hand.some((card) => ranks.indexOf(card.rank) === manilhaRankIndex);
+
+  if (difficulty === "easy") {
+    return requestedValue <= 3 || hasManilha || handStrength >= 18;
+  }
+
+  if (difficulty === "hard") {
+    return requestedValue <= 6 || hasManilha || handStrength >= 16;
+  }
+
+  if (difficulty === "legendary") {
+    return requestedValue <= 9 || hasManilha || handStrength >= 13;
+  }
+
+  return requestedValue <= 6 || hasManilha || handStrength >= 19;
+}
+
 function shouldCpuRaiseTruco(room: Room, cpu: PlayerState, requestedValue: TrucoRequest["requestedValue"]): boolean {
   if (!room.vira || requestedValue >= 12 || cpu.hand.length === 0) {
     return false;
@@ -1625,6 +1692,35 @@ function shouldCpuRaiseTruco(room: Room, cpu: PlayerState, requestedValue: Truco
   const manilhaRankIndex = (ranks.indexOf(room.vira.rank) + 1) % ranks.length;
   const hasManilha = cpu.hand.some((card) => ranks.indexOf(card.rank) === manilhaRankIndex);
   const hasHighCard = cpu.hand.some((card) => ["3", "2", "A"].includes(card.rank));
+  const difficulty = getCpuDifficulty(room);
+
+  if (difficulty === "easy") {
+    return false;
+  }
+
+  if (difficulty === "hard") {
+    if (requestedValue === 3) {
+      return hasManilha || handStrength >= 18;
+    }
+
+    if (requestedValue === 6) {
+      return hasManilha || handStrength >= 22;
+    }
+
+    return hasManilha && hasHighCard;
+  }
+
+  if (difficulty === "legendary") {
+    if (requestedValue === 3) {
+      return hasManilha || hasHighCard || handStrength >= 15;
+    }
+
+    if (requestedValue === 6) {
+      return hasManilha || handStrength >= 20;
+    }
+
+    return hasManilha || handStrength >= 24;
+  }
 
   if (requestedValue === 3) {
     return hasManilha || handStrength >= 22;
@@ -1651,6 +1747,39 @@ function getCardStrength(room: Room, card: Card): number {
   return ranks.indexOf(card.rank);
 }
 
+function selectCpuCard(room: Room, cpu: PlayerState): { card: Card; index: number } | undefined {
+  const cardsByStrength = cpu.hand
+    .map((card, index) => ({ card, index }))
+    .sort((left, right) => room.vira ? compareCardsWithVira(left.card, right.card, room.vira) : 0);
+
+  const difficulty = getCpuDifficulty(room);
+
+  if (difficulty === "easy" || difficulty === "medium") {
+    return cardsByStrength[0];
+  }
+
+  if (difficulty === "hard") {
+    return cardsByStrength.at(-1);
+  }
+
+  const tableCards = room.table.filter((entry) => !entry.faceDown);
+
+  if (!room.vira || tableCards.length === 0) {
+    return cardsByStrength.at(-1);
+  }
+
+  let currentWinner = tableCards[0];
+
+  for (const tableCard of tableCards.slice(1)) {
+    if (compareCardsWithVira(tableCard.card, currentWinner.card, room.vira) > 0) {
+      currentWinner = tableCard;
+    }
+  }
+
+  return cardsByStrength.find((candidate) => compareCardsWithVira(candidate.card, currentWinner.card, room.vira!) > 0)
+    ?? cardsByStrength[0];
+}
+
 function playCardAsCpu(room: Room): void {
   const cpu = room.players.find((player) => player.isCpu && player.id === room.turnPlayerId);
 
@@ -1658,10 +1787,7 @@ function playCardAsCpu(room: Room): void {
     return;
   }
 
-  const sortedCards = cpu.hand
-    .map((card, index) => ({ card, index }))
-    .sort((left, right) => room.vira ? compareCardsWithVira(left.card, right.card, room.vira) : 0);
-  const selected = sortedCards[0];
+  const selected = selectCpuCard(room, cpu);
 
   if (!selected) {
     return;
@@ -1689,13 +1815,17 @@ function playCardAsCpu(room: Room): void {
 }
 
 io.on("connection", (socket) => {
-  socket.on("room:join", async ({ roomId, name, token, mode }) => {
+  socket.on("room:join", async ({ roomId, name, token, mode, cpuDifficulty }) => {
     const joinMode: Room["mode"] = mode === "duo-cpu" || mode === "solo-cpu" ? mode : "classic";
+    const joinCpuDifficulty = isCpuDifficulty(cpuDifficulty) ? cpuDifficulty : defaultCpuDifficulty;
     const profile = await getProfileForJoin(token);
     const playerName = (profile?.name ?? name.trim()) || "Jogador";
     const avatarUrl = profile?.avatarUrl ?? undefined;
     const room = await getJoinRoom(roomId, token, joinMode);
     room.mode ??= joinMode;
+    if ((joinMode === "duo-cpu" || joinMode === "solo-cpu") && room.status === "waiting") {
+      room.cpuDifficulty = joinCpuDifficulty;
+    }
     const existing = room.players.find((player) => player.token === token);
 
     const targetHumanCount = getRoomTargetHumanCount(room);

@@ -1,6 +1,6 @@
 import Phaser from "phaser";
 import { io, type Socket } from "socket.io-client";
-import { compareCards, compareCardsWithVira, type ActionAck, type Card, type ClientToServerEvents, type RoomState, type ServerToClientEvents } from "@truco/shared";
+import { compareCards, compareCardsWithVira, createDeck, ranks, shuffle, type ActionAck, type Card, type ClientToServerEvents, type CpuDifficulty, type RoomState, type ServerToClientEvents, type TrucoRequest } from "@truco/shared";
 import "./styles.css";
 import opponentAvatarUrl from "./img/avatar/user-secret.svg";
 import cpuAvatarUrl from "./img/bot_cpu.svg";
@@ -70,7 +70,7 @@ const memeAudios = [
   { id: "ze-da-manga_G3QwWGi.mp3", key: "meme-ze-da-manga_G3QwWGi.mp3", name: "Ze Da Manga", url: memeZeMangaUrl }
 ];
 
-type TrucoSocket = Socket<ServerToClientEvents, ClientToServerEvents>;
+type TrucoSocket = Socket<ServerToClientEvents, ClientToServerEvents> | LocalSoloCpuSocket;
 type OnlineGameMode = "classic" | "duo-cpu" | "solo-cpu";
 type PlayerProfile = {
   token: string;
@@ -108,6 +108,708 @@ type ReliableActionInput =
   | { roomId: string; action: "play" | "run" }
   | { roomId: string; audio: ArrayBuffer; mimeType: string }
   | { roomId: string; memeId: string };
+
+type LocalPlayer = RoomState["players"][number] & { token: string };
+type LocalSocketHandler = (...args: any[]) => void;
+
+class LocalSoloCpuSocket {
+  connected = true;
+
+  private handlers = new Map<string, Set<LocalSocketHandler>>();
+  private room: RoomState | null = null;
+  private humanToken = "";
+  private cpuActionTimer: number | null = null;
+  private trickTimer: number | null = null;
+
+  on(event: string, handler: LocalSocketHandler): this {
+    if (!this.handlers.has(event)) {
+      this.handlers.set(event, new Set());
+    }
+
+    this.handlers.get(event)?.add(handler);
+
+    if (event === "connect" && this.connected) {
+      window.setTimeout(() => handler(), 0);
+    }
+
+    return this;
+  }
+
+  emit(event: string, payload?: any, ack?: (response?: ActionAck) => void): this {
+    if (event === "room:join") {
+      this.joinRoom(payload);
+      return this;
+    }
+
+    if (event === "room:leave") {
+      this.disconnect();
+      ack?.({ ok: true });
+      return this;
+    }
+
+    if (!this.room || this.room.status !== "playing") {
+      ack?.({ ok: false, message: "Partida indisponivel" });
+      return this;
+    }
+
+    if (event === "card:play") {
+      ack?.(this.playHumanCard(payload?.cardId, Boolean(payload?.faceDown)));
+      return this;
+    }
+
+    if (event === "truco:raise") {
+      ack?.(this.raiseTrucoAsHuman());
+      return this;
+    }
+
+    if (event === "truco:respond") {
+      ack?.(this.respondTrucoAsHuman(payload?.action));
+      return this;
+    }
+
+    if (event === "eleven-hand:respond") {
+      ack?.(this.respondElevenHandAsHuman(payload?.action));
+      return this;
+    }
+
+    ack?.({ ok: true });
+    return this;
+  }
+
+  timeout(_milliseconds: number): { emit: (event: string, payload: ReliableActionPayload, callback: (error: Error | null, response?: ActionAck) => void) => void } {
+    return {
+      emit: (event, payload, callback) => {
+        this.emit(event, payload, (response) => callback(null, response));
+      }
+    };
+  }
+
+  removeAllListeners(event?: string): this {
+    if (event) {
+      this.handlers.delete(event);
+    } else {
+      this.handlers.clear();
+    }
+
+    return this;
+  }
+
+  disconnect(): this {
+    this.connected = false;
+    this.clearTimers();
+    return this;
+  }
+
+  private dispatch(event: string, ...args: any[]): void {
+    for (const handler of this.handlers.get(event) ?? []) {
+      handler(...args);
+    }
+  }
+
+  private joinRoom(payload: { roomId?: string; name?: string; token?: string; cpuDifficulty?: CpuDifficulty } = {}): void {
+    const roomId = payload.roomId || `offline-cpu-${Date.now()}`;
+    const humanName = (payload.name || "Jogador").trim() || "Jogador";
+
+    this.humanToken = payload.token || "offline-player";
+    this.room = {
+      roomId,
+      mode: "solo-cpu",
+      players: [
+        this.createPlayer("offline-human", humanName, false, this.humanToken),
+        this.createPlayer("offline-cpu", "CPU 1", true, "offline-cpu")
+      ],
+      self: undefined,
+      table: [],
+      handSequence: 0,
+      handValue: 1,
+      trickResults: [],
+      turnPlayerId: null,
+      status: "playing",
+      message: "Preparando partida contra CPU",
+      cpuDifficulty: isCpuDifficulty(payload.cpuDifficulty ?? null) ? payload.cpuDifficulty : currentCpuDifficulty
+    };
+    this.dealHand();
+    this.broadcast();
+  }
+
+  private createPlayer(id: string, name: string, isCpu: boolean, token: string): LocalPlayer {
+    return {
+      id,
+      name,
+      isCpu,
+      token,
+      cardCount: 0,
+      roundWins: 0,
+      points: 0,
+      games: 0,
+      hand: []
+    };
+  }
+
+  private dealHand(rotateFirst = true): void {
+    if (!this.room) {
+      return;
+    }
+
+    const deck = shuffle(createDeck());
+    const [human, cpu] = this.room.players as LocalPlayer[];
+
+    human.hand = deck.slice(0, 3);
+    cpu.hand = deck.slice(3, 6);
+    human.cardCount = human.hand.length;
+    cpu.cardCount = cpu.hand.length;
+    human.roundWins = 0;
+    cpu.roundWins = 0;
+
+    this.room.vira = deck[6];
+    this.room.table = [];
+    this.room.trickResults = [];
+    this.room.handSequence += 1;
+    this.room.handValue = human.points === 11 || cpu.points === 11 ? 3 : 1;
+    this.room.turnPlayerId = rotateFirst && this.room.handSequence % 2 === 0 ? cpu.id : human.id;
+    this.room.elevenHandDecision = human.points === 11 && cpu.points !== 11
+      ? { playerId: human.id, playerName: human.name, isIronHand: false }
+      : cpu.points === 11 && human.points !== 11
+        ? { playerId: cpu.id, playerName: cpu.name, isIronHand: false }
+        : undefined;
+    this.room.isIronHand = human.points === 11 && cpu.points === 11;
+    this.room.trucoRequest = undefined;
+    this.room.trucoResponseVotes = undefined;
+    this.room.lastTrucoRaise = undefined;
+    this.room.lastTrucoResponse = undefined;
+    this.room.lastGameWinnerId = undefined;
+    this.room.lastGameWinnerName = undefined;
+    this.room.lastGameWinnerSequence = undefined;
+    this.updateMessage();
+    this.scheduleCpuAction();
+  }
+
+  private broadcast(): void {
+    if (!this.room) {
+      return;
+    }
+
+    const human = this.getHuman();
+    const state: RoomState = {
+      ...this.room,
+      players: this.room.players.map((player) => ({
+        ...player,
+        cardCount: player.hand.length
+      })),
+      self: human ? { ...human, cardCount: human.hand.length } : undefined
+    };
+
+    window.setTimeout(() => this.dispatch("room:state", state), 0);
+  }
+
+  private updateMessage(): void {
+    if (!this.room) {
+      return;
+    }
+
+    if (this.room.trucoRequest) {
+      this.room.message = this.room.trucoRequest.responderPlayerId === this.getHuman()?.id
+        ? `${this.room.trucoRequest.requestedByPlayerName} pediu truco`
+        : "Aguardando resposta do oponente";
+      return;
+    }
+
+    if (this.room.elevenHandDecision) {
+      this.room.message = this.room.elevenHandDecision.playerId === this.getHuman()?.id
+        ? "Mao de 11: jogar ou correr?"
+        : "Aguardando decisao da mao de 11";
+      return;
+    }
+
+    const turnPlayer = this.room.players.find((player) => player.id === this.room?.turnPlayerId);
+    this.room.message = turnPlayer?.id === this.getHuman()?.id
+      ? "Sua vez de jogar"
+      : turnPlayer
+        ? `Vez de ${turnPlayer.name}`
+        : "Aguardando jogada";
+  }
+
+  private getHuman(): LocalPlayer | undefined {
+    return this.room?.players.find((player) => !player.isCpu) as LocalPlayer | undefined;
+  }
+
+  private getCpu(): LocalPlayer | undefined {
+    return this.room?.players.find((player) => player.isCpu) as LocalPlayer | undefined;
+  }
+
+  private getPlayer(playerId: string | undefined): LocalPlayer | undefined {
+    return this.room?.players.find((player) => player.id === playerId) as LocalPlayer | undefined;
+  }
+
+  private playHumanCard(cardId: string | undefined, faceDown: boolean): ActionAck {
+    const human = this.getHuman();
+
+    if (!this.room || !human || this.room.turnPlayerId !== human.id) {
+      return { ok: false, message: "Nao e sua vez" };
+    }
+
+    if (this.room.trucoRequest || this.room.elevenHandDecision) {
+      return { ok: false, message: "Resolva a acao pendente antes de jogar" };
+    }
+
+    const cardIndex = human.hand.findIndex((card) => card.id === cardId);
+
+    if (cardIndex < 0) {
+      return { ok: false, message: "Carta indisponivel" };
+    }
+
+    const [card] = human.hand.splice(cardIndex, 1);
+    this.room.table.push({ playerId: human.id, card, faceDown });
+    this.afterCardPlayed(human.id);
+    return { ok: true };
+  }
+
+  private afterCardPlayed(playerId: string): void {
+    if (!this.room) {
+      return;
+    }
+
+    if (this.room.table.length < this.room.players.length) {
+      const next = this.room.players.find((player) => player.id !== playerId && !this.room?.table.some((entry) => entry.playerId === player.id));
+      this.room.turnPlayerId = next?.id ?? null;
+      this.updateMessage();
+      this.broadcast();
+      this.scheduleCpuAction();
+      return;
+    }
+
+    this.room.turnPlayerId = null;
+    this.updateMessage();
+    this.broadcast();
+    this.trickTimer = window.setTimeout(() => this.finishTrick(), 900);
+  }
+
+  private finishTrick(): void {
+    if (!this.room || !this.room.vira) {
+      return;
+    }
+
+    const winnerId = this.getTrickWinnerId();
+    this.room.trickResults.push({ winnerPlayerId: winnerId });
+    this.room.table = [];
+
+    const outcome = this.getHandOutcome();
+
+    if (outcome === "draw") {
+      this.dealHand();
+      this.broadcast();
+      return;
+    }
+
+    if (outcome) {
+      const winner = this.getPlayer(outcome);
+
+      if (winner) {
+        this.awardHand(winner);
+      }
+
+      this.broadcast();
+      return;
+    }
+
+    this.room.turnPlayerId = winnerId ?? this.getHuman()?.id ?? null;
+    this.updateMessage();
+    this.broadcast();
+    this.scheduleCpuAction();
+  }
+
+  private getTrickWinnerId(): string | null {
+    if (!this.room?.vira) {
+      return null;
+    }
+
+    const openCards = this.room.table.filter((entry) => !entry.faceDown);
+
+    if (openCards.length === 0) {
+      return null;
+    }
+
+    const [first, second] = openCards;
+
+    if (!second) {
+      return first.playerId;
+    }
+
+    const comparison = compareCardsWithVira(first.card, second.card, this.room.vira);
+    return comparison === 0 ? null : comparison > 0 ? first.playerId : second.playerId;
+  }
+
+  private getHandOutcome(): string | "draw" | null {
+    const [first, second, third] = this.room?.trickResults.map((result) => result.winnerPlayerId) ?? [];
+
+    if (!this.room || this.room.trickResults.length < 2) {
+      return null;
+    }
+
+    if (!first) {
+      if (second) {
+        return second;
+      }
+
+      return this.room.trickResults.length < 3 ? null : third ?? "draw";
+    }
+
+    if (!second || second === first) {
+      return first;
+    }
+
+    if (this.room.trickResults.length < 3) {
+      return null;
+    }
+
+    return !third || third === first ? first : third;
+  }
+
+  private awardHand(winner: LocalPlayer, points = this.room?.handValue ?? 1): void {
+    if (!this.room) {
+      return;
+    }
+
+    winner.points += points;
+
+    if (winner.points >= 12) {
+      recordOfflineCpuGameResult(winner.id === this.getHuman()?.id);
+      winner.games += 1;
+      this.room.lastGameWinnerId = winner.id;
+      this.room.lastGameWinnerName = winner.name;
+      this.room.lastGameWinnerSequence = Date.now();
+      for (const player of this.room.players as LocalPlayer[]) {
+        player.points = 0;
+        player.roundWins = 0;
+      }
+    }
+
+    window.setTimeout(() => {
+      this.dealHand();
+      this.broadcast();
+    }, 900);
+  }
+
+  private raiseTrucoAsHuman(): ActionAck {
+    const human = this.getHuman();
+    const cpu = this.getCpu();
+    const requestedValue = this.nextHandValue(this.room?.handValue ?? 1);
+
+    if (!this.room || !human || !cpu || !requestedValue || this.room.trucoRequest) {
+      return { ok: false, message: "Nao e possivel pedir truco agora" };
+    }
+
+    this.room.trucoRequest = {
+      requestedByPlayerId: human.id,
+      requestedByPlayerName: human.name,
+      responderPlayerId: cpu.id,
+      currentValue: this.room.handValue,
+      requestedValue
+    };
+    this.room.lastTrucoRaise = {
+      playerId: human.id,
+      playerName: human.name,
+      value: requestedValue
+    };
+    this.updateMessage();
+    this.broadcast();
+    this.scheduleCpuAction();
+    return { ok: true };
+  }
+
+  private respondTrucoAsHuman(action: "accept" | "reject" | "raise"): ActionAck {
+    const human = this.getHuman();
+    const request = this.room?.trucoRequest;
+
+    if (!this.room || !human || !request || request.responderPlayerId !== human.id) {
+      return { ok: false, message: "A resposta e do oponente" };
+    }
+
+    const requester = this.getPlayer(request.requestedByPlayerId);
+    this.room.lastTrucoResponse = {
+      playerId: human.id,
+      playerName: human.name,
+      action,
+      requestedValue: request.requestedValue
+    };
+
+    if (action === "reject") {
+      this.room.trucoRequest = undefined;
+      if (requester) {
+        this.awardHand(requester, request.currentValue);
+      }
+      this.broadcast();
+      return { ok: true };
+    }
+
+    if (action === "raise") {
+      const raisedValue = this.nextHandValue(request.requestedValue);
+
+      if (!raisedValue) {
+        return { ok: false, message: "A mao ja esta valendo doze" };
+      }
+
+      this.room.handValue = request.requestedValue;
+      this.room.trucoRequest = {
+        requestedByPlayerId: human.id,
+        requestedByPlayerName: human.name,
+        responderPlayerId: request.requestedByPlayerId,
+        currentValue: request.requestedValue,
+        requestedValue: raisedValue
+      };
+      this.room.lastTrucoRaise = {
+        playerId: human.id,
+        playerName: human.name,
+        value: raisedValue
+      };
+      this.updateMessage();
+      this.broadcast();
+      this.scheduleCpuAction();
+      return { ok: true };
+    }
+
+    this.room.handValue = request.requestedValue;
+    this.room.trucoRequest = undefined;
+    this.updateMessage();
+    this.broadcast();
+    this.scheduleCpuAction();
+    return { ok: true };
+  }
+
+  private respondElevenHandAsHuman(action: "play" | "run"): ActionAck {
+    const human = this.getHuman();
+    const cpu = this.getCpu();
+
+    if (!this.room || !human || !cpu || this.room.elevenHandDecision?.playerId !== human.id) {
+      return { ok: false, message: "Nao existe decisao pendente" };
+    }
+
+    this.room.elevenHandDecision = undefined;
+
+    if (action === "run") {
+      this.awardHand(cpu, 1);
+    } else {
+      this.room.handValue = 3;
+      this.updateMessage();
+      this.broadcast();
+      this.scheduleCpuAction();
+    }
+
+    return { ok: true };
+  }
+
+  private scheduleCpuAction(): void {
+    if (!this.room || this.cpuActionTimer !== null) {
+      return;
+    }
+
+    const cpu = this.getCpu();
+
+    if (!cpu || (this.room.turnPlayerId !== cpu.id && this.room.trucoRequest?.responderPlayerId !== cpu.id && this.room.elevenHandDecision?.playerId !== cpu.id)) {
+      return;
+    }
+
+    this.cpuActionTimer = window.setTimeout(() => {
+      this.cpuActionTimer = null;
+      this.runCpuAction();
+    }, 900);
+  }
+
+  private runCpuAction(): void {
+    const cpu = this.getCpu();
+
+    if (!this.room || !cpu) {
+      return;
+    }
+
+    if (this.room.trucoRequest?.responderPlayerId === cpu.id) {
+      this.respondTrucoAsCpu(cpu);
+      return;
+    }
+
+    if (this.room.elevenHandDecision?.playerId === cpu.id) {
+      this.room.elevenHandDecision = undefined;
+      this.room.handValue = 3;
+      this.updateMessage();
+      this.broadcast();
+      this.scheduleCpuAction();
+      return;
+    }
+
+    if (this.room.turnPlayerId !== cpu.id || cpu.hand.length === 0) {
+      return;
+    }
+
+    const selected = this.selectCpuCard(cpu);
+
+    if (!selected) {
+      return;
+    }
+
+    const [card] = cpu.hand.splice(selected.index, 1);
+    this.room.table.push({ playerId: cpu.id, card });
+    this.afterCardPlayed(cpu.id);
+  }
+
+  private respondTrucoAsCpu(cpu: LocalPlayer): void {
+    if (!this.room?.trucoRequest) {
+      return;
+    }
+
+    const request = this.room.trucoRequest;
+    const requester = this.getPlayer(request.requestedByPlayerId);
+
+    if (this.shouldCpuRaiseTruco(cpu, request.requestedValue)) {
+      const raisedValue = this.nextHandValue(request.requestedValue);
+
+      if (raisedValue) {
+        this.room.handValue = request.requestedValue;
+        this.room.lastTrucoResponse = {
+          playerId: cpu.id,
+          playerName: cpu.name,
+          action: "raise",
+          requestedValue: raisedValue
+        };
+        this.room.trucoRequest = {
+          requestedByPlayerId: cpu.id,
+          requestedByPlayerName: cpu.name,
+          responderPlayerId: request.requestedByPlayerId,
+          currentValue: request.requestedValue,
+          requestedValue: raisedValue
+        };
+        this.room.lastTrucoRaise = {
+          playerId: cpu.id,
+          playerName: cpu.name,
+          value: raisedValue
+        };
+        this.updateMessage();
+        this.broadcast();
+        return;
+      }
+    }
+
+    if (!this.shouldCpuAcceptTruco(cpu, request.requestedValue)) {
+      this.room.lastTrucoResponse = {
+        playerId: cpu.id,
+        playerName: cpu.name,
+        action: "reject",
+        requestedValue: request.requestedValue
+      };
+      this.room.trucoRequest = undefined;
+      if (requester) {
+        this.awardHand(requester, request.currentValue);
+      }
+      this.broadcast();
+      return;
+    }
+
+    this.room.lastTrucoResponse = {
+      playerId: cpu.id,
+      playerName: cpu.name,
+      action: "accept",
+      requestedValue: request.requestedValue
+    };
+    this.room.handValue = request.requestedValue;
+    this.room.trucoRequest = undefined;
+    this.updateMessage();
+    this.broadcast();
+  }
+
+  private selectCpuCard(cpu: LocalPlayer): { card: Card; index: number } | undefined {
+    const cards = cpu.hand
+      .map((card, index) => ({ card, index }))
+      .sort((left, right) => this.room?.vira ? compareCardsWithVira(left.card, right.card, this.room.vira) : compareCards(left.card, right.card));
+
+    if (currentCpuDifficulty === "easy" || currentCpuDifficulty === "medium") {
+      return cards[0];
+    }
+
+    if (currentCpuDifficulty === "hard") {
+      return cards.at(-1);
+    }
+
+    const tableCard = this.room?.table.find((entry) => !entry.faceDown);
+
+    if (!tableCard || !this.room?.vira) {
+      return cards.at(-1);
+    }
+
+    return cards.find((candidate) => compareCardsWithVira(candidate.card, tableCard.card, this.room!.vira!) > 0) ?? cards[0];
+  }
+
+  private shouldCpuRaiseTruco(cpu: LocalPlayer, requestedValue: TrucoRequest["requestedValue"]): boolean {
+    if (!this.room?.vira || requestedValue >= 12 || currentCpuDifficulty === "easy") {
+      return false;
+    }
+
+    const strength = cpu.hand.reduce((total, card) => total + this.getCardStrength(card), 0);
+    const hasStrongCard = cpu.hand.some((card) => this.getCardStrength(card) >= 8);
+
+    if (currentCpuDifficulty === "legendary") {
+      return requestedValue === 3 ? strength >= 14 || hasStrongCard : strength >= 18;
+    }
+
+    if (currentCpuDifficulty === "hard") {
+      return requestedValue === 3 ? strength >= 18 || hasStrongCard : strength >= 22;
+    }
+
+    return requestedValue === 3 ? strength >= 22 : strength >= 26;
+  }
+
+  private shouldCpuAcceptTruco(cpu: LocalPlayer, requestedValue: TrucoRequest["requestedValue"]): boolean {
+    const strength = cpu.hand.reduce((total, card) => total + this.getCardStrength(card), 0);
+
+    if (currentCpuDifficulty === "easy") {
+      return requestedValue <= 3 || strength >= 18;
+    }
+
+    if (currentCpuDifficulty === "hard") {
+      return requestedValue <= 6 || strength >= 16;
+    }
+
+    if (currentCpuDifficulty === "legendary") {
+      return requestedValue <= 9 || strength >= 13;
+    }
+
+    return requestedValue <= 6 || strength >= 19;
+  }
+
+  private getCardStrength(card: Card): number {
+    if (!this.room?.vira) {
+      return ranks.indexOf(card.rank);
+    }
+
+    const manilhaRank = ranks[(ranks.indexOf(this.room.vira.rank) + 1) % ranks.length];
+
+    if (card.rank === manilhaRank) {
+      return 20;
+    }
+
+    return ranks.indexOf(card.rank);
+  }
+
+  private nextHandValue(value: RoomState["handValue"]): TrucoRequest["requestedValue"] | null {
+    return {
+      1: 3,
+      3: 6,
+      6: 9,
+      9: 12,
+      12: null
+    }[value] as TrucoRequest["requestedValue"] | null;
+  }
+
+  private clearTimers(): void {
+    if (this.cpuActionTimer !== null) {
+      window.clearTimeout(this.cpuActionTimer);
+      this.cpuActionTimer = null;
+    }
+
+    if (this.trickTimer !== null) {
+      window.clearTimeout(this.trickTimer);
+      this.trickTimer = null;
+    }
+  }
+}
 type PendingReliableAction = {
   event: ReliableClientEvent;
   payload: ReliableActionPayload;
@@ -119,7 +821,7 @@ type PendingReliableAction = {
 const opponentAvatarPhotoSize = 122;
 const opponentAvatarMaskRadius = 57;
 
-const serverUrl = import.meta.env.VITE_SERVER_URL ?? "https://app-truco-9ddcf4b48235.herokuapp.com";
+const serverUrl = "https://app-truco-9ddcf4b48235.herokuapp.com"//import.meta.env.VITE_SERVER_URL ?? "https://app-truco-9ddcf4b48235.herokuapp.com";
 const tableBackgrounds = {
   "felt-default": { label: "Default", url: feltDefaultUrl },
   "felt-teal": { label: "Teal", url: feltTealUrl },
@@ -138,14 +840,29 @@ const cardBacks = {
   "gray": { label: "Gray", url: grayCardBackUrl }
 } as const;
 const defaultCardBack = "ivory-emerald";
+const cpuDifficulties = {
+  easy: "🥉 Novato",
+  medium: "🥈 Experiente",
+  hard: "🥇 Veterano",
+  legendary: "👑 Mestre do Truco"
+} as const satisfies Record<CpuDifficulty, string>;
+const defaultCpuDifficulty: CpuDifficulty = "medium";
 const tableBackgroundStorageKey = "truco-table-background";
 const cardBackStorageKey = "truco-card-back";
+const cpuDifficultyStorageKey = "truco-cpu-difficulty";
+const offlineCpuStatsStorageKey = "truco-offline-cpu-stats";
 const profileStorageKey = "truco-player-profile";
 const sessionProfileStorageKey = "truco-session-profile";
 const playerTokenStorageKey = "truco-player-token";
 
 type TableBackgroundId = keyof typeof tableBackgrounds;
 type CardBackId = keyof typeof cardBacks;
+type OfflineCpuStats = {
+  wins: number;
+  losses: number;
+  currentStreak: number;
+  bestStreak: number;
+};
 
 function isTableBackgroundId(value: string | null): value is TableBackgroundId {
   return Boolean(value && value in tableBackgrounds);
@@ -153,6 +870,10 @@ function isTableBackgroundId(value: string | null): value is TableBackgroundId {
 
 function isCardBackId(value: string | null): value is CardBackId {
   return Boolean(value && value in cardBacks);
+}
+
+function isCpuDifficulty(value: string | null): value is CpuDifficulty {
+  return Boolean(value && value in cpuDifficulties);
 }
 
 function getSelectedTableBackground(): TableBackgroundId {
@@ -649,9 +1370,11 @@ class TableScene extends Phaser.Scene {
     this.tableBackground = this.add.image(0, 0, currentTableBackground)
       .setOrigin(0.5)
       .setDepth(-100);
-    this.socket = io(serverUrl, {
-      transports: ["websocket"]
-    });
+    this.socket = selectedOnlineGameMode === "solo-cpu"
+      ? new LocalSoloCpuSocket()
+      : io(serverUrl, {
+        transports: ["websocket"]
+      });
     this.input.dragDistanceThreshold = 6;
 
     this.statusBg = this.add.graphics();
@@ -827,11 +1550,12 @@ exitButtonHitZone.on("pointerup", () => {
   roomId: this.roomId,
   name: this.playerName,
   token: playerToken,
-  mode: selectedOnlineGameMode
+  mode: selectedOnlineGameMode,
+  cpuDifficulty: currentCpuDifficulty
 });
     });
 
-    this.socket.on("room:state", (state) => {
+    this.socket.on("room:state", (state: RoomState) => {
       if (this.isLeavingTable || !this.scene.isActive()) {
         return;
       }
@@ -850,7 +1574,7 @@ exitButtonHitZone.on("pointerup", () => {
       }
 
       if (state.status === "waiting") {
-        if (state.mode === "solo-cpu") {
+        if (selectedOnlineGameMode === "solo-cpu" || state.mode === "solo-cpu") {
           showGameTable();
         } else {
           showWaitingRoom(state.message);
@@ -2569,11 +3293,13 @@ this.exitButton.setPosition(
     this.updateDuoCpuSidePlayers();
     this.renderFootMarkers();
 
-    this.setStatusMessage(this.roomState.message);
-    this.quickActionButton.setVisible(this.roomState.status === "playing");
-    this.quickActionMenu.setVisible(this.roomState.status === "playing" && this.quickActionMenu.visible);
+    this.setStatusMessage(this.getDisplayStatusMessage());
+    const shouldShowMessageButton = this.roomState.status === "playing" && !this.isSoloCpuMode();
+
+    this.quickActionButton.setVisible(shouldShowMessageButton);
+    this.quickActionMenu.setVisible(shouldShowMessageButton && this.quickActionMenu.visible);
     this.drawQuickActionToggleButton(this.quickActionMenu.visible);
-    if (this.roomState.status !== "playing") {
+    if (!shouldShowMessageButton) {
       this.memePopup.setVisible(false);
       this.setQuickActionMenuVisible(false);
     }
@@ -2677,6 +3403,27 @@ this.exitButton.setPosition(
     }
 
     this.layoutStatusText();
+  }
+
+  private getDisplayStatusMessage(): string {
+    const message = this.roomState?.message ?? "";
+
+    if (
+      selectedOnlineGameMode === "solo-cpu" &&
+      (
+        this.roomState?.status === "waiting" ||
+        message.toLowerCase().includes("esperando outro jogador") ||
+        message.toLowerCase().includes("aguardando jogadores")
+      )
+    ) {
+      return "Preparando partida contra CPU";
+    }
+
+    return message;
+  }
+
+  private isSoloCpuMode(): boolean {
+    return selectedOnlineGameMode === "solo-cpu" || this.roomState?.mode === "solo-cpu";
   }
 
   private layoutStatusText(): void {
@@ -5718,6 +6465,7 @@ let game: Phaser.Game | null = null;
 let selectedOnlineGameMode: OnlineGameMode = "classic";
 let currentTableBackground = getSelectedTableBackground();
 let currentCardBack = getSelectedCardBack();
+let currentCpuDifficulty = getSelectedCpuDifficulty();
 let resizeGameCanvas: (() => void) | null = null;
 
 function getGameResolution(): number {
@@ -5807,6 +6555,72 @@ function showHomeMenu(): void {
   document.getElementById("game")?.classList.add("is-hidden");
 }
 
+function getSelectedCpuDifficulty(): CpuDifficulty {
+  try {
+    const storedDifficulty = localStorage.getItem(cpuDifficultyStorageKey);
+
+    if (isCpuDifficulty(storedDifficulty)) {
+      return storedDifficulty;
+    }
+  } catch {
+    // localStorage can be blocked on some mobile browsers.
+  }
+
+  return defaultCpuDifficulty;
+}
+
+function saveSelectedCpuDifficulty(difficulty: CpuDifficulty): void {
+  try {
+    localStorage.setItem(cpuDifficultyStorageKey, difficulty);
+  } catch {
+    // The current session still uses the selected value through the DOM state.
+  }
+}
+
+function getOfflineCpuStats(): OfflineCpuStats {
+  try {
+    const rawStats = localStorage.getItem(offlineCpuStatsStorageKey);
+    const stats = rawStats ? JSON.parse(rawStats) as Partial<OfflineCpuStats> : {};
+
+    return {
+      wins: Math.max(0, Number(stats.wins) || 0),
+      losses: Math.max(0, Number(stats.losses) || 0),
+      currentStreak: Math.max(0, Number(stats.currentStreak) || 0),
+      bestStreak: Math.max(0, Number(stats.bestStreak) || 0)
+    };
+  } catch {
+    return {
+      wins: 0,
+      losses: 0,
+      currentStreak: 0,
+      bestStreak: 0
+    };
+  }
+}
+
+function saveOfflineCpuStats(stats: OfflineCpuStats): void {
+  try {
+    localStorage.setItem(offlineCpuStatsStorageKey, JSON.stringify(stats));
+  } catch {
+    // Offline stats are optional if localStorage is unavailable.
+  }
+}
+
+function recordOfflineCpuGameResult(didWin: boolean): void {
+  const stats = getOfflineCpuStats();
+
+  if (didWin) {
+    stats.wins += 1;
+    stats.currentStreak += 1;
+    stats.bestStreak = Math.max(stats.bestStreak, stats.currentStreak);
+  } else {
+    stats.losses += 1;
+    stats.currentStreak = 0;
+  }
+
+  saveOfflineCpuStats(stats);
+}
+
 function showLoginMenu(): void {
   stopWaitingTimer();
   document.getElementById("login")?.classList.remove("is-hidden");
@@ -5832,6 +6646,8 @@ function showSettingsMenu(): void {
   document.getElementById("waiting-room")?.classList.add("is-hidden");
   document.getElementById("game")?.classList.add("is-hidden");
   renderBackgroundOptions();
+  renderCpuDifficultyOptions();
+  renderOfflineCpuStats();
 }
 
 function showProfileMenu(): void {
@@ -6255,6 +7071,42 @@ function returnToGameModeMenu(): void {
   currentGame?.destroy(true);
 }
 
+function renderCpuDifficultyOptions(): void {
+  document.querySelectorAll<HTMLButtonElement>(".cpu-difficulty-option").forEach((button) => {
+    const rawDifficulty = button.dataset.cpuDifficulty ?? null;
+
+    if (!isCpuDifficulty(rawDifficulty)) {
+      return;
+    }
+
+    button.classList.toggle("is-selected", rawDifficulty === currentCpuDifficulty);
+  });
+}
+
+function renderOfflineCpuStats(): void {
+  const stats = getOfflineCpuStats();
+  const wins = document.getElementById("offline-wins");
+  const losses = document.getElementById("offline-losses");
+  const bestStreak = document.getElementById("offline-best-streak");
+  const currentStreak = document.getElementById("offline-current-streak");
+
+  if (wins) {
+    wins.textContent = String(stats.wins);
+  }
+
+  if (losses) {
+    losses.textContent = String(stats.losses);
+  }
+
+  if (bestStreak) {
+    bestStreak.textContent = String(stats.bestStreak);
+  }
+
+  if (currentStreak) {
+    currentStreak.textContent = String(stats.currentStreak);
+  }
+}
+
 function returnToCpuModeMenu(): void {
   const currentGame = game;
 
@@ -6421,8 +7273,23 @@ document.querySelectorAll<HTMLButtonElement>(".card-back-option").forEach((butto
     (game?.scene.getScene("table") as TableScene | undefined)?.refreshCardBackSelection();
   });
 });
+document.querySelectorAll<HTMLButtonElement>(".cpu-difficulty-option").forEach((button) => {
+  button.addEventListener("click", () => {
+    const rawDifficulty = button.dataset.cpuDifficulty ?? null;
+
+    if (!isCpuDifficulty(rawDifficulty)) {
+      return;
+    }
+
+    currentCpuDifficulty = rawDifficulty;
+    saveSelectedCpuDifficulty(rawDifficulty);
+    renderCpuDifficultyOptions();
+  });
+});
 renderBackgroundOptions();
 renderCardBackOptions();
+renderCpuDifficultyOptions();
+renderOfflineCpuStats();
 if (currentPlayerProfile) {
   showHomeMenu();
 } else {
@@ -6433,3 +7300,9 @@ document.addEventListener("pointerdown", () => {
     void unlockAudioPlayback().catch(() => undefined);
   }
 });
+
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => {
+    void navigator.serviceWorker.register("/sw.js").catch(() => undefined);
+  });
+}
