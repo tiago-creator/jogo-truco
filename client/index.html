@@ -1,483 +1,493 @@
 <!doctype html>
 <html lang="pt-BR">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-    <meta name="theme-color" content="#12372a" />
-    <link rel="manifest" href="/manifest.webmanifest" />
-    <title>Truco Online</title>
-  </head>
-  <body>
-    <main id="login" class="login-screen">
-      <section class="login-content" aria-labelledby="login-title">
-        <div class="home-badge">Truco Online</div>
-        <h2 id="login-title">Entrar</h2>
-        <form id="login-form" class="profile-form">
-          <label>
-            Email
-            <input id="login-email" name="email" type="email" required autocomplete="email" />
-          </label>
-          <p id="login-message" class="profile-message" aria-live="polite"></p>
-          <button class="play-button" type="submit">Entrar</button>
-        </form>
-      </section>
-    </main>
-    <main id="home" class="home-screen is-hidden">
-      <section class="home-content" aria-labelledby="home-title">
-        <div class="home-topbar" aria-label="Resumo do jogador">
-          <div class="home-player">
-            <div class="home-avatar" aria-hidden="true"></div>
-            <div class="home-player-copy">
-              <strong>Jogador123</strong>
-              <span>Nivel 12</span>
-              <div class="home-level-bar" aria-hidden="true">
-                <span></span>
-              </div>
-            </div>
-          </div>
-          <div class="home-wallet" aria-label="Moedas e gemas">
-            <div class="home-currency">
-              <span class="home-currency-icon">$</span>
-              <strong>12.450</strong>
-              <span class="home-plus">+</span>
-            </div>
-            <div class="home-currency">
-              <span class="home-currency-icon home-gem"></span>
-              <strong>85</strong>
-              <span class="home-plus">+</span>
-            </div>
-          </div>
-        </div>
-        <div class="home-hero">
-          <div class="home-copy">
-            <img class="home-logo" src="/src/img/truco.png" alt="Truco" />
-            <h1 id="home-title">Mesa valendo</h1>
-            <p>Entre na mesa e mostre quem e o rei do truco!</p>
-          </div>
-          <div class="home-table" aria-hidden="true">
-            <div class="home-card home-card-left">
-              <span>4</span>
-              <strong>&clubs;</strong>
-            </div>
-            <div class="home-table-center">
-              <span>12</span>
-              <small>PONTOS</small>
-            </div>
-            <div class="home-card home-card-right">
-              <span>7</span>
-              <strong>&hearts;</strong>
-            </div>
-          </div>
-        </div>
-        <div class="home-actions">
-          <button id="play-online" class="play-button" type="button">
-            <span>Jogar online</span>
-            <small>Encontrar mesa agora</small>
-          </button>
-          <button id="play-cpu" class="play-button play-button-secondary" type="button">
-            <span>Jogar contra CPU</span>
-            <small>Escolher modo offline</small>
-          </button>
-          <div class="home-menu-grid">
-            <button id="open-profile" class="menu-button" type="button">
-              <img class="menu-icon menu-icon-image" src="/src/img/icons/profile-gold.svg" alt="" />
-              <span class="menu-icon">●</span>
-              <strong>Perfil</strong>
-              <small>Veja suas estatisticas</small>
-            </button>
-            <button id="open-rank" class="menu-button" type="button">
-              <img class="menu-icon menu-icon-image" src="/src/img/icons/rank-gold.svg" alt="" />
-              <span class="menu-icon">T</span>
-              <strong>Rank</strong>
-              <small>Veja o ranking geral</small>
-            </button>
-            <button id="open-settings" class="menu-button" type="button">
-              <img class="menu-icon menu-icon-image" src="/src/img/icons/settings-gold.svg" alt="" />
-              <span class="menu-icon">*</span>
-              <strong>Configuracao</strong>
-              <small>Ajustes do jogo</small>
-            </button>
-          </div>
-        </div>
-        <div class="home-daily">
-          <img class="home-chest" src="/src/img/bau.png" alt="" aria-hidden="true" />
-          <div>
-            <strong>Bau diario</strong>
-            <span>Volte todos os dias e ganhe recompensas incriveis!</span>
-          </div>
-          <button class="home-chest-button" type="button">Abrir bau</button>
-        </div>
-        <nav class="home-bottom-nav" aria-label="Navegacao principal">
-          <button class="is-active" type="button">
-            <span>⌂</span>
-            Inicio
-          </button>
-          <button type="button">
-            <span>●●</span>
-            Amigos
-          </button>
-          <button type="button">
-            <span>□</span>
-            Loja
-          </button>
-          <button type="button">
-            <span>?</span>
-            Ajuda
-          </button>
-        </nav>
-      </section>
-    </main>
-    <main id="profile" class="profile-screen is-hidden">
-      <section class="profile-content" aria-labelledby="profile-title">
-        <div class="home-badge">Perfil</div>
-        <h2 id="profile-title">Seu jogador</h2>
-        <form id="profile-form" class="profile-form">
-          <label>
-            Nome
-            <input id="profile-name" name="name" type="text" maxlength="24" required autocomplete="name" />
-          </label>
-          <label>
-            Email
-            <input id="profile-email" name="email" type="email" required autocomplete="email" />
-          </label>
-          <label class="photo-field">
-            Foto
-            <input id="profile-photo" name="photo" type="file" accept="image/*" />
-          </label>
-          <img id="profile-preview" class="profile-preview" alt="Foto do perfil" />
-          <p id="profile-message" class="profile-message" aria-live="polite"></p>
-          <button class="play-button" type="submit">Salvar perfil</button>
-        </form>
-        <button id="back-home-profile" type="button">
-          Voltar
-        </button>
-      </section>
-    </main>
-    <main id="settings" class="settings-screen is-hidden">
-      <section class="settings-content" aria-labelledby="settings-title">
-        <div class="home-badge">Configuração</div>
-        <h2 id="settings-title">Fundo da mesa</h2>
-        <div id="background-options" class="background-options" aria-label="Escolha o fundo da tela do jogo">
-          <button class="background-option" type="button" data-background="felt-default">
-            <span class="background-preview"></span>
-            <span>Default</span>
-          </button>
-          <button class="background-option" type="button" data-background="felt-teal">
-            <span class="background-preview"></span>
-            <span>Teal</span>
-          </button>
-          <button class="background-option" type="button" data-background="felt-emerald">
-            <span class="background-preview"></span>
-            <span>Emerald</span>
-          </button>
-          <button class="background-option" type="button" data-background="felt-navy">
-            <span class="background-preview"></span>
-            <span>Navy</span>
-          </button>
-          <button class="background-option" type="button" data-background="felt-burgundy">
-            <span class="background-preview"></span>
-            <span>Burgundy</span>
-          </button>
-          <button class="background-option" type="button" data-background="felt-charcoal">
-            <span class="background-preview"></span>
-            <span>Charcoal</span>
-          </button>
-        </div>
-        <h2>Fundo da carta</h2>
-        <div id="card-back-options" class="background-options card-back-options" aria-label="Escolha o fundo das cartas">
-          <button class="background-option card-back-option" type="button" data-card-back="ivory-emerald">
-            <span class="background-preview card-back-preview"></span>
-            <span>Ivory</span>
-          </button>
-          <button class="background-option card-back-option" type="button" data-card-back="crimson-gold">
-            <span class="background-preview card-back-preview"></span>
-            <span>Crimson</span>
-          </button>
-          <button class="background-option card-back-option" type="button" data-card-back="royal-blue">
-            <span class="background-preview card-back-preview"></span>
-            <span>Royal</span>
-          </button>
-          <button class="background-option card-back-option" type="button" data-card-back="midnight-purple">
-            <span class="background-preview card-back-preview"></span>
-            <span>Midnight</span>
-          </button>
-          <button class="background-option card-back-option" type="button" data-card-back="black">
-            <span class="background-preview card-back-preview"></span>
-            <span>Black</span>
-          </button>
-          <button class="background-option card-back-option" type="button" data-card-back="gray">
-            <span class="background-preview card-back-preview"></span>
-            <span>Gray</span>
-          </button>
-        </div>
-        <h2>Dificuldade da CPU</h2>
-        <div id="cpu-difficulty-options" class="background-options cpu-difficulty-options" aria-label="Escolha a dificuldade da CPU">
-          <button class="background-option cpu-difficulty-option" type="button" data-cpu-difficulty="easy">
-            <strong>🥉 Novato</strong>
-            <span>CPU mais simples e menos agressiva.</span>
-          </button>
-          <button class="background-option cpu-difficulty-option" type="button" data-cpu-difficulty="medium">
-            <strong>🥈 Experiente</strong>
-            <span>Equilibrado para partidas normais.</span>
-          </button>
-          <button class="background-option cpu-difficulty-option" type="button" data-cpu-difficulty="hard">
-            <strong>🥇 Veterano</strong>
-            <span>CPU joga mais forte e aumenta mais.</span>
-          </button>
-          <button class="background-option cpu-difficulty-option" type="button" data-cpu-difficulty="legendary">
-            <strong>👑 Mestre do Truco</strong>
-            <span>CPU tenta sempre a melhor resposta.</span>
-          </button>
-        </div>
-        <div class="offline-progress" aria-label="Progresso offline contra CPU">
-          <strong>Progresso offline</strong>
-          <div>
-            <span>Vitorias</span>
-            <b id="offline-wins">0</b>
-          </div>
-          <div>
-            <span>Derrotas</span>
-            <b id="offline-losses">0</b>
-          </div>
-          <div>
-            <span>Melhor sequencia</span>
-            <b id="offline-best-streak">0</b>
-          </div>
-          <div>
-            <span>Sequencia atual</span>
-            <b id="offline-current-streak">0</b>
-          </div>
-        </div>
-        <button id="back-home"  type="button">
-          Voltar
-        </button>
-      </section>
-    </main>
-    <main id="rank" class="rank-screen is-hidden">
-      <section class="rank-content" aria-labelledby="rank-title">
-        <div class="rank-topbar">
-          <button id="back-home-rank" class="game-mode-back" type="button" aria-label="Voltar">
-            <span aria-hidden="true"></span>
-          </button>
-          <div class="rank-heading">
-            <h2 id="rank-title" class="sr-only">Ranking dos jogadores</h2>
-            <img src="/src/img/rank.png" alt="" aria-hidden="true" />
-          </div>
-          <button class="rank-help-button" type="button" aria-label="Ajuda">?</button>
-        </div>
-        <div class="rank-tabs" aria-label="Filtros do ranking">
-          <button class="is-active" type="button">Geral</button>
-          <button type="button">Amigos</button>
-          <button type="button">Regional</button>
-          <button type="button">Clas</button>
-        </div>
-        <div class="rank-summary">
-          <div class="rank-summary-medal" aria-hidden="true">♛</div>
-          <div>
-            <span>Sua posição</span>
-            <strong id="rank-self-position">--</strong>
-            <small>Entre os melhores</small>
-          </div>
-          <div>
-            <span>Pontos</span>
-            <strong id="rank-self-points">0</strong>
-            <small id="rank-self-wins">0 vitórias</small>
-          </div>
-          <div class="rank-win-rate">
-            <strong id="rank-self-rate">0%</strong>
-            <small>Taxa de vitórias</small>
-          </div>
-        </div>
-        <div class="rank-table-head" aria-hidden="true">
-          <span>Posição</span>
-          <span>Jogador</span>
-          <span>Pontos</span>
-          <span>Vitórias</span>
-        </div>
-        <div id="rank-list" class="rank-list" aria-live="polite"></div>
-        <p class="rank-updated">Ranking atualizado agora</p>
-      </section>
-    </main>
-    <main id="game-mode" class="game-mode-screen is-hidden">
-      <section class="game-mode-content" aria-labelledby="game-mode-title">
-        <div class="game-mode-topbar">
-          <button id="back-home-mode" class="game-mode-back" type="button" aria-label="Voltar">
-            <span aria-hidden="true"></span>
-          </button>
-         
-          <div class="home-wallet" aria-label="Moedas e gemas">
-            <div class="home-currency">
-              <span class="home-currency-icon">$</span>
-              <strong>12.450</strong>
-              <span class="home-plus">+</span>
-            </div>
-            <div class="home-currency">
-              <span class="home-currency-icon home-gem"></span>
-              <strong>85</strong>
-              <span class="home-plus">+</span>
-            </div>
-          </div>
-        </div>
-         <img class="game-mode-logo" src="/src/img/truco.png" alt="Truco" />
-        <h2 id="game-mode-title">Escolha o modo</h2>
-        <p class="game-mode-subtitle">Jogue online e mostre quem e o rei do truco!</p>
-        <img src="/src/img/divisoria-dourada.png" alt="Divisoria" aria-hidden="true" class="game-mode-divider" />
-        <h3 class="game-mode-section-title">Truco Paulista</h3>
-        <div class="game-mode-options">
-          <button id="play-mode-1v1" class="game-mode-option" type="button">
-            <span class="game-mode-icon">1 x 1</span>
-            <span class="game-mode-players" aria-hidden="true">
-              <span></span>
-              <span></span>
-            </span>
-            <strong>Duelo online</strong>
-            <small>Procure outro jogador e entre em uma mesa em tempo real.</small>
-            <span class="game-mode-cta">Jogar agora</span>
-          </button>
-          <button id="play-mode-2v2" class="game-mode-option" type="button">
-            <span class="game-mode-icon">2 x 2</span>
-            <span class="game-mode-players game-mode-players-four" aria-hidden="true">
-              <span></span>
-              <span></span>
-              <span></span>
-              <span></span>
-            </span>
-            <strong>Duplas online</strong>
-            <small>Jogue em duplas com outros dois jogadores em tempo real.</small>
-            <span class="game-mode-cta">Jogar agora</span>
-          </button>
-          <button id="play-mode-2v2-cpu" class="game-mode-option" type="button">
-            <span class="game-mode-icon">2 x 2</span>
-            <span class="game-mode-players game-mode-players-four game-mode-players-cpu" aria-hidden="true">
-              <span></span>
-              <span></span>
-              <span></span>
-              <span></span>
-            </span>
-            <strong>Duplas CPU</strong>
-            <small>Jogue em duplas com outros adversarios controlados pela CPU.</small>
-            <span class="game-mode-cta">Jogar agora</span>
-          </button>
-        </div>
-        <div class="game-mode-security">
-          <img class="game-mode-shield" src="/src/img/seguranca.png" alt="" aria-hidden="true" />
-          <div>
-            <strong>Jogo seguro e justo</strong>
-            <span>Todos os jogos sao protegidos contra trapacas para garantir uma experiencia justa para todos.</span>
-          </div>
-          <div class="game-mode-lock">
-            <img src="/src/img/padlock.svg" alt="" aria-hidden="true" />
-          </div>
-        </div>
-        <div class="game-mode-features">
-          <div>
-            <span class="game-mode-feature-icon game-mode-feature-clean" aria-hidden="true">
-              <img src="/src/img/sem-trapacas.svg" alt="" />
-            </span>
-            <strong>Sem trapacas</strong>
-            <small>Jogo limpo e protegido</small>
-          </div>
-          <div>
-            <span class="game-mode-feature-icon game-mode-feature-image" aria-hidden="true">
-              <img src="/src/img/conexao-estavel.svg" alt="" />
-            </span>
-            <strong>Conexao estavel</strong>
-            <small>Partidas rapidas e sem quedas</small>
-          </div>
-          <div>
-            <span class="game-mode-feature-icon game-mode-feature-image" aria-hidden="true">
-              <img src="/src/img/milhares-online.svg" alt="" />
-            </span>
-            <strong>Milhares online</strong>
-            <small>Jogadores ativos 24 horas por dia</small>
-          </div>
-        </div>
-      </section>
-    </main>
-    <main id="cpu-mode" class="game-mode-screen is-hidden">
-      <section class="game-mode-content" aria-labelledby="cpu-mode-title">
-        <div class="game-mode-topbar">
-          <button id="back-home-cpu-mode" class="game-mode-back" type="button" aria-label="Voltar">
-            <span aria-hidden="true"></span>
-          </button>
 
-          <div class="home-wallet" aria-label="Moedas e gemas">
-            <div class="home-currency">
-              <span class="home-currency-icon">$</span>
-              <strong>12.450</strong>
-              <span class="home-plus">+</span>
-            </div>
-            <div class="home-currency">
-              <span class="home-currency-icon home-gem"></span>
-              <strong>85</strong>
-              <span class="home-plus">+</span>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#12372a" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <title>Truco Online</title>
+</head>
+
+<body>
+  <main id="login" class="login-screen">
+    <section class="login-content" aria-labelledby="login-title">
+      <div class="home-badge">Truco Online</div>
+      <h2 id="login-title">Entrar</h2>
+      <form id="login-form" class="profile-form">
+        <label>
+          Email
+          <input id="login-email" name="email" type="email" required autocomplete="email" />
+        </label>
+        <p id="login-message" class="profile-message" aria-live="polite"></p>
+        <button class="play-button" type="submit">Entrar</button>
+      </form>
+    </section>
+  </main>
+  <main id="home" class="home-screen is-hidden">
+    <section class="home-content" aria-labelledby="home-title">
+      <div class="home-topbar" aria-label="Resumo do jogador">
+        <div class="home-player">
+          <div class="home-avatar" aria-hidden="true"></div>
+          <div class="home-player-copy">
+            <strong>Jogador123</strong>
+            <span>Nivel 12</span>
+            <div class="home-level-bar" aria-hidden="true">
+              <span></span>
             </div>
           </div>
         </div>
-        <img class="game-mode-logo" src="/src/img/truco.png" alt="Truco" />
-        <h2 id="cpu-mode-title">Contra CPU</h2>
-        <p class="game-mode-subtitle">Treine contra o computador e jogue no seu ritmo.</p>
-        <img src="/src/img/divisoria-dourada.png" alt="Divisoria" aria-hidden="true" class="game-mode-divider" />
-        <h3 class="game-mode-section-title">Truco Paulista</h3>
-        <div class="game-mode-options game-mode-options-single">
-          <button id="play-mode-1v1-cpu" class="game-mode-option" type="button">
-            <span class="game-mode-icon">1 x 1</span>
-            <span class="game-mode-players game-mode-players-cpu-duel" aria-hidden="true">
-              <span></span>
-              <span></span>
-            </span>
-            <strong>1 x 1 CPU</strong>
-            <small>Jogue uma partida individual contra um adversario CPU.</small>
-            <span class="game-mode-cta">Jogar agora</span>
+        <div class="home-wallet" aria-label="Moedas e gemas">
+          <div class="home-currency">
+            <span class="home-currency-icon">$</span>
+            <strong>12.450</strong>
+            <span class="home-plus">+</span>
+          </div>
+          <div class="home-currency">
+            <span class="home-currency-icon home-gem"></span>
+            <strong>85</strong>
+            <span class="home-plus">+</span>
+          </div>
+        </div>
+      </div>
+      <div class="home-hero">
+        <div class="home-copy">
+          <img class="home-logo" src="/src/img/truco.png" alt="Truco" />
+          <h1 id="home-title">Mesa valendo</h1>
+          <p>Entre na mesa e mostre quem e o rei do truco!</p>
+        </div>
+        <div class="home-table" aria-hidden="true">
+          <div class="home-card home-card-left">
+            <span>4</span>
+            <strong>&clubs;</strong>
+          </div>
+          <div class="home-table-center">
+            <span>12</span>
+            <small>PONTOS</small>
+          </div>
+          <div class="home-card home-card-right">
+            <span>7</span>
+            <strong>&hearts;</strong>
+          </div>
+        </div>
+      </div>
+      <div class="home-actions">
+        <button id="play-online" class="play-button" type="button">
+          <span>Jogar online</span>
+          <small>Encontrar mesa agora</small>
+        </button>
+        <button id="play-cpu" class="play-button play-button-secondary" type="button">
+          <span>Jogar contra CPU</span>
+          <small>Escolher modo offline</small>
+        </button>
+        <div class="home-menu-grid">
+          <button id="open-profile" class="menu-button" type="button">
+            <img class="menu-icon menu-icon-image" src="/src/img/icons/profile-gold.svg" alt="" />
+            <span class="menu-icon">●</span>
+            <strong>Perfil</strong>
+            <small>Veja suas estatisticas</small>
+          </button>
+          <button id="open-rank" class="menu-button" type="button">
+            <img class="menu-icon menu-icon-image" src="/src/img/icons/rank-gold.svg" alt="" />
+            <span class="menu-icon">T</span>
+            <strong>Rank</strong>
+            <small>Veja o ranking geral</small>
+          </button>
+          <button id="open-settings" class="menu-button" type="button">
+            <img class="menu-icon menu-icon-image" src="/src/img/icons/settings-gold.svg" alt="" />
+            <span class="menu-icon">*</span>
+            <strong>Configuracao</strong>
+            <small>Ajustes do jogo</small>
           </button>
         </div>
-        <div class="game-mode-security">
-          <img class="game-mode-shield" src="/src/img/seguranca.png" alt="" aria-hidden="true" />
-          <div>
-            <strong>Modo de treino</strong>
-            <span>Entre direto na mesa contra CPU, sem esperar outro jogador online.</span>
-          </div>
-          <div class="game-mode-lock">
-            <img src="/src/img/padlock.svg" alt="" aria-hidden="true" />
-          </div>
+      </div>
+      <div class="home-daily">
+        <img class="home-chest" src="/src/img/bau.png" alt="" aria-hidden="true" />
+        <div>
+          <strong>Bau diario</strong>
+          <span>Volte todos os dias e ganhe recompensas incriveis!</span>
         </div>
-      </section>
-    </main>
-    <main id="waiting-room" class="waiting-screen is-hidden">
-      <section class="waiting-content" aria-labelledby="waiting-title">
-        <div class="waiting-brand" aria-hidden="true">
-          <img src="/src/img/truco.png" alt="" />
-        </div>
-        <div class="waiting-table" aria-hidden="true">
-          <div class="waiting-card waiting-card-left">
-            <span>A</span>
-            <strong>♠</strong>
-          </div>
-          <div class="waiting-ring">
-            <div class="loading-ring"></div>
-            <div class="waiting-dots">
-              <span></span>
-              <span></span>
-              <span></span>
-            </div>
-          </div>
-          <div class="waiting-card waiting-card-right">
-            <span>7</span>
-            <strong>♦</strong>
-          </div>
-        </div>
-        <h2 id="waiting-title">Aguardando jogadores</h2>
-        <p id="waiting-message">Procurando outro jogador para iniciar a partida.</p>
-        <div class="waiting-timer" aria-live="polite">
-          <span class="waiting-hourglass" aria-hidden="true"></span>
-          Tempo aguardando <strong id="waiting-timer">00:00</strong>
-        </div>
-        <button id="cancel-waiting" class="waiting-cancel-button" type="button">
-          Cancelar
+        <button class="home-chest-button" type="button">Abrir bau</button>
+      </div>
+      <nav class="home-bottom-nav" aria-label="Navegacao principal">
+        <button class="is-active" type="button">
+          <span>⌂</span>
+          Inicio
         </button>
-      </section>
-    </main>
-    <div id="game" class="is-hidden"></div>
-    <script type="module" src="/src/main.ts"></script>
-  </body>
+        <button type="button">
+          <span>●●</span>
+          Amigos
+        </button>
+        <button type="button">
+          <span>□</span>
+          Loja
+        </button>
+        <button type="button">
+          <span>?</span>
+          Ajuda
+        </button>
+      </nav>
+    </section>
+  </main>
+  <main id="profile" class="profile-screen is-hidden">
+    <section class="profile-content" aria-labelledby="profile-title">
+      <div class="home-badge">Perfil</div>
+      <h2 id="profile-title">Seu jogador</h2>
+      <form id="profile-form" class="profile-form">
+        <label>
+          Nome
+          <input id="profile-name" name="name" type="text" maxlength="24" required autocomplete="name" />
+        </label>
+        <label>
+          Email
+          <input id="profile-email" name="email" type="email" required autocomplete="email" />
+        </label>
+        <label class="photo-field">
+          Foto
+          <input id="profile-photo" name="photo" type="file" accept="image/*" />
+        </label>
+        <img id="profile-preview" class="profile-preview" alt="Foto do perfil" />
+        <p id="profile-message" class="profile-message" aria-live="polite"></p>
+        <button class="play-button" type="submit">Salvar perfil</button>
+      </form>
+      <button id="back-home-profile" type="button">
+        Voltar
+      </button>
+    </section>
+  </main>
+  <main id="settings" class="settings-screen is-hidden">
+    <section class="settings-content" aria-labelledby="settings-title">
+      <div class="home-badge">Configuração</div>
+      <h2 id="settings-title">Fundo da mesa</h2>
+      <div id="background-options" class="background-options" aria-label="Escolha o fundo da tela do jogo">
+        <button class="background-option" type="button" data-background="felt-default">
+          <span class="background-preview"></span>
+          <span>Default</span>
+        </button>
+        <button class="background-option" type="button" data-background="felt-teal">
+          <span class="background-preview"></span>
+          <span>Teal</span>
+        </button>
+        <button class="background-option" type="button" data-background="felt-emerald">
+          <span class="background-preview"></span>
+          <span>Emerald</span>
+        </button>
+        <button class="background-option" type="button" data-background="felt-navy">
+          <span class="background-preview"></span>
+          <span>Navy</span>
+        </button>
+        <button class="background-option" type="button" data-background="felt-burgundy">
+          <span class="background-preview"></span>
+          <span>Burgundy</span>
+        </button>
+        <button class="background-option" type="button" data-background="felt-charcoal">
+          <span class="background-preview"></span>
+          <span>Charcoal</span>
+        </button>
+      </div>
+      <h2>Fundo da carta</h2>
+      <div id="card-back-options" class="background-options card-back-options" aria-label="Escolha o fundo das cartas">
+        <button class="background-option card-back-option" type="button" data-card-back="ivory-emerald">
+          <span class="background-preview card-back-preview"></span>
+          <span>Ivory</span>
+        </button>
+        <button class="background-option card-back-option" type="button" data-card-back="crimson-gold">
+          <span class="background-preview card-back-preview"></span>
+          <span>Crimson</span>
+        </button>
+        <button class="background-option card-back-option" type="button" data-card-back="royal-blue">
+          <span class="background-preview card-back-preview"></span>
+          <span>Royal</span>
+        </button>
+        <button class="background-option card-back-option" type="button" data-card-back="midnight-purple">
+          <span class="background-preview card-back-preview"></span>
+          <span>Midnight</span>
+        </button>
+        <button class="background-option card-back-option" type="button" data-card-back="black">
+          <span class="background-preview card-back-preview"></span>
+          <span>Black</span>
+        </button>
+        <button class="background-option card-back-option" type="button" data-card-back="gray">
+          <span class="background-preview card-back-preview"></span>
+          <span>Gray</span>
+        </button>
+      </div>
+      <h2>Dificuldade da CPU</h2>
+      <div id="cpu-difficulty-options" class="background-options cpu-difficulty-options"
+        aria-label="Escolha a dificuldade da CPU">
+        <button class="background-option cpu-difficulty-option" type="button" data-cpu-difficulty="easy">
+          <strong>🥉 Novato</strong>
+          <span>CPU mais simples e menos agressiva.</span>
+        </button>
+        <button class="background-option cpu-difficulty-option" type="button" data-cpu-difficulty="medium">
+          <strong>🥈 Experiente</strong>
+          <span>Equilibrado para partidas normais.</span>
+        </button>
+        <button class="background-option cpu-difficulty-option" type="button" data-cpu-difficulty="hard">
+          <strong>🥇 Veterano</strong>
+          <span>CPU joga mais forte e aumenta mais.</span>
+        </button>
+        <button class="background-option cpu-difficulty-option" type="button" data-cpu-difficulty="legendary">
+          <strong>👑 Mestre do Truco</strong>
+          <span>CPU tenta sempre a melhor resposta.</span>
+        </button>
+      </div>
+      <div class="offline-progress" aria-label="Progresso offline contra CPU">
+        <strong>Progresso offline</strong>
+        <div>
+          <span>Vitorias</span>
+          <b id="offline-wins">0</b>
+        </div>
+        <div>
+          <span>Derrotas</span>
+          <b id="offline-losses">0</b>
+        </div>
+        <div>
+          <span>Melhor sequencia</span>
+          <b id="offline-best-streak">0</b>
+        </div>
+        <div>
+          <span>Sequencia atual</span>
+          <b id="offline-current-streak">0</b>
+        </div>
+      </div>
+      <button id="back-home" type="button">
+        Voltar
+      </button>
+    </section>
+  </main>
+  <main id="rank" class="rank-screen is-hidden">
+    <section class="rank-content" aria-labelledby="rank-title">
+      <div class="rank-topbar">
+        <button id="back-home-rank" class="game-mode-back" type="button" aria-label="Voltar">
+          <span aria-hidden="true"></span>
+        </button>
+        <div class="rank-heading">
+          <h2 id="rank-title" class="sr-only">Ranking dos jogadores</h2>
+          <img src="/src/img/rank.png" alt="" aria-hidden="true" />
+        </div>
+        <button class="rank-help-button" type="button" aria-label="Ajuda">?</button>
+      </div>
+      <div class="rank-tabs" aria-label="Filtros do ranking">
+        <button class="is-active" type="button">Geral</button>
+        <button type="button">Amigos</button>
+        <button type="button">Regional</button>
+        <button type="button">Clas</button>
+      </div>
+      <div class="rank-summary">
+        <div class="rank-summary-medal" aria-hidden="true">
+          <img src="/src/img/rank-logo.png" alt="" />
+        </div>
+        <div>
+          <span>Sua posição</span>
+          <strong id="rank-self-position">--</strong>
+          <small>Entre os melhores</small>
+        </div>
+        <div>
+          <span>Pontos</span>
+          <strong id="rank-self-points">0</strong>
+          <small>vitórias</small>
+          <small id="rank-self-wins">0</small>
+        </div>
+        <div class="rank-win-rate">
+          <div>
+            <strong id="rank-self-rate">0%</strong>
+          </div>
+          <small>Taxa de vitórias</small>
+        </div>
+
+      </div>
+      <div class="rank-table-head" aria-hidden="true">
+        <span>Posição</span>
+        <span>Jogador</span>
+        <span>Pontos</span>
+        <span>Vitórias</span>
+      </div>
+      <div id="rank-list" class="rank-list" aria-live="polite"></div>
+      <p class="rank-updated">Ranking atualizado agora</p>
+    </section>
+  </main>
+  <main id="game-mode" class="game-mode-screen is-hidden">
+    <section class="game-mode-content" aria-labelledby="game-mode-title">
+      <div class="game-mode-topbar">
+        <button id="back-home-mode" class="game-mode-back" type="button" aria-label="Voltar">
+          <span aria-hidden="true"></span>
+        </button>
+
+        <div class="home-wallet" aria-label="Moedas e gemas">
+          <div class="home-currency">
+            <span class="home-currency-icon">$</span>
+            <strong>12.450</strong>
+            <span class="home-plus">+</span>
+          </div>
+          <div class="home-currency">
+            <span class="home-currency-icon home-gem"></span>
+            <strong>85</strong>
+            <span class="home-plus">+</span>
+          </div>
+        </div>
+      </div>
+      <img class="game-mode-logo" src="/src/img/truco.png" alt="Truco" />
+      <h2 id="game-mode-title">Escolha o modo</h2>
+      <p class="game-mode-subtitle">Jogue online e mostre quem e o rei do truco!</p>
+      <img src="/src/img/divisoria-dourada.png" alt="Divisoria" aria-hidden="true" class="game-mode-divider" />
+      <h3 class="game-mode-section-title">Truco Paulista</h3>
+      <div class="game-mode-options">
+        <button id="play-mode-1v1" class="game-mode-option" type="button">
+          <span class="game-mode-icon">1 x 1</span>
+          <span class="game-mode-players" aria-hidden="true">
+            <span></span>
+            <span></span>
+          </span>
+          <strong>Duelo online</strong>
+          <small>Procure outro jogador e entre em uma mesa em tempo real.</small>
+          <span class="game-mode-cta">Jogar agora</span>
+        </button>
+        <button id="play-mode-2v2" class="game-mode-option" type="button">
+          <span class="game-mode-icon">2 x 2</span>
+          <span class="game-mode-players game-mode-players-four" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+          </span>
+          <strong>Duplas online</strong>
+          <small>Jogue em duplas com outros dois jogadores em tempo real.</small>
+          <span class="game-mode-cta">Jogar agora</span>
+        </button>
+        <button id="play-mode-2v2-cpu" class="game-mode-option" type="button">
+          <span class="game-mode-icon">2 x 2</span>
+          <span class="game-mode-players game-mode-players-four game-mode-players-cpu" aria-hidden="true">
+            <span></span>
+            <span></span>
+            <span></span>
+            <span></span>
+          </span>
+          <strong>Duplas CPU</strong>
+          <small>Jogue em duplas com outros adversarios controlados pela CPU.</small>
+          <span class="game-mode-cta">Jogar agora</span>
+        </button>
+      </div>
+      <div class="game-mode-security">
+        <img class="game-mode-shield" src="/src/img/seguranca.png" alt="" aria-hidden="true" />
+        <div>
+          <strong>Jogo seguro e justo</strong>
+          <span>Todos os jogos sao protegidos contra trapacas para garantir uma experiencia justa para todos.</span>
+        </div>
+        <div class="game-mode-lock">
+          <img src="/src/img/padlock.svg" alt="" aria-hidden="true" />
+        </div>
+      </div>
+      <div class="game-mode-features">
+        <div>
+          <span class="game-mode-feature-icon game-mode-feature-clean" aria-hidden="true">
+            <img src="/src/img/sem-trapacas.svg" alt="" />
+          </span>
+          <strong>Sem trapacas</strong>
+          <small>Jogo limpo e protegido</small>
+        </div>
+        <div>
+          <span class="game-mode-feature-icon game-mode-feature-image" aria-hidden="true">
+            <img src="/src/img/conexao-estavel.svg" alt="" />
+          </span>
+          <strong>Conexao estavel</strong>
+          <small>Partidas rapidas e sem quedas</small>
+        </div>
+        <div>
+          <span class="game-mode-feature-icon game-mode-feature-image" aria-hidden="true">
+            <img src="/src/img/milhares-online.svg" alt="" />
+          </span>
+          <strong>Milhares online</strong>
+          <small>Jogadores ativos 24 horas por dia</small>
+        </div>
+      </div>
+    </section>
+  </main>
+  <main id="cpu-mode" class="game-mode-screen is-hidden">
+    <section class="game-mode-content" aria-labelledby="cpu-mode-title">
+      <div class="game-mode-topbar">
+        <button id="back-home-cpu-mode" class="game-mode-back" type="button" aria-label="Voltar">
+          <span aria-hidden="true"></span>
+        </button>
+
+        <div class="home-wallet" aria-label="Moedas e gemas">
+          <div class="home-currency">
+            <span class="home-currency-icon">$</span>
+            <strong>12.450</strong>
+            <span class="home-plus">+</span>
+          </div>
+          <div class="home-currency">
+            <span class="home-currency-icon home-gem"></span>
+            <strong>85</strong>
+            <span class="home-plus">+</span>
+          </div>
+        </div>
+      </div>
+      <img class="game-mode-logo" src="/src/img/truco.png" alt="Truco" />
+      <h2 id="cpu-mode-title">Contra CPU</h2>
+      <p class="game-mode-subtitle">Treine contra o computador e jogue no seu ritmo.</p>
+      <img src="/src/img/divisoria-dourada.png" alt="Divisoria" aria-hidden="true" class="game-mode-divider" />
+      <h3 class="game-mode-section-title">Truco Paulista</h3>
+      <div class="game-mode-options game-mode-options-single">
+        <button id="play-mode-1v1-cpu" class="game-mode-option" type="button">
+          <span class="game-mode-icon">1 x 1</span>
+          <span class="game-mode-players game-mode-players-cpu-duel" aria-hidden="true">
+            <span></span>
+            <span></span>
+          </span>
+          <strong>1 x 1 CPU</strong>
+          <small>Jogue uma partida individual contra um adversario CPU.</small>
+          <span class="game-mode-cta">Jogar agora</span>
+        </button>
+      </div>
+      <div class="game-mode-security">
+        <img class="game-mode-shield" src="/src/img/seguranca.png" alt="" aria-hidden="true" />
+        <div>
+          <strong>Modo de treino</strong>
+          <span>Entre direto na mesa contra CPU, sem esperar outro jogador online.</span>
+        </div>
+        <div class="game-mode-lock">
+          <img src="/src/img/padlock.svg" alt="" aria-hidden="true" />
+        </div>
+      </div>
+    </section>
+  </main>
+  <main id="waiting-room" class="waiting-screen is-hidden">
+    <section class="waiting-content" aria-labelledby="waiting-title">
+      <div class="waiting-brand" aria-hidden="true">
+        <img src="/src/img/truco.png" alt="" />
+      </div>
+      <div class="waiting-table" aria-hidden="true">
+        <div class="waiting-card waiting-card-left">
+          <span>A</span>
+          <strong>♠</strong>
+        </div>
+        <div class="waiting-ring">
+          <div class="loading-ring"></div>
+          <div class="waiting-dots">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+        </div>
+        <div class="waiting-card waiting-card-right">
+          <span>7</span>
+          <strong>♦</strong>
+        </div>
+      </div>
+      <h2 id="waiting-title">Aguardando jogadores</h2>
+      <p id="waiting-message">Procurando outro jogador para iniciar a partida.</p>
+      <div class="waiting-timer" aria-live="polite">
+        <span class="waiting-hourglass" aria-hidden="true"></span>
+        Tempo aguardando <strong id="waiting-timer">00:00</strong>
+      </div>
+      <button id="cancel-waiting" class="waiting-cancel-button" type="button">
+        Cancelar
+      </button>
+    </section>
+  </main>
+  <div id="game" class="is-hidden"></div>
+  <script type="module" src="/src/main.ts"></script>
+</body>
+
 </html>

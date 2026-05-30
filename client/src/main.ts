@@ -6820,7 +6820,7 @@ function renderSelfRankSummary(ranking: RankingPlayer[] | null): void {
   }
 
   if (wins) {
-    wins.textContent = `${self?.gamesWon ?? 0} vitórias`;
+    wins.textContent = `${self?.gamesWon ?? 0}`;
   }
 
   if (rate) {

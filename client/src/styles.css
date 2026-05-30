@@ -109,7 +109,6 @@ canvas {
 .waiting-content,
 .game-mode-content,
 .settings-content,
-.rank-content,
 .profile-content {
   position: relative;
   width: min(100%, 440px);
@@ -868,21 +867,24 @@ canvas {
 .rank-tabs {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 4px 0 0;
+  margin: 4px 12px 0;
   overflow: visible;
   border: 1px solid rgba(160, 100, 25, 0.58);
   border-radius: 16px 16px 0 0;
   background: rgba(0, 0, 0, 0.56);
+  top: 2px;
+  position: relative;
+  z-index: 1;
 }
 
 .rank-tabs button {
   position: relative;
-  min-height: 54px;
+  min-height: 20px;
   border: 0;
   border-right: 1px solid rgba(160, 100, 25, 0.46);
   background: transparent;
   color: rgba(255, 234, 181, 0.78);
-  font: 900 13px Arial Black, Arial, Helvetica, sans-serif;
+  font: 400 10px Arial, Helvetica, sans-serif;
   text-transform: uppercase;
 }
 
@@ -915,89 +917,117 @@ canvas {
 }
 
 .rank-tabs button.is-active::before {
-  content: "\1F3C6";
+  display: inline-block;
+  width: 16px;
+  height: 16px;
   margin-right: 7px;
+  content: "";
+  background: url("./img/icons/trophy.svg") center / contain no-repeat;
+  vertical-align: -3px;
 }
 
 .rank-summary {
   display: grid;
-  grid-template-columns: 142px 1fr 1fr 116px;
+  grid-template-columns: 100px 110px 1fr 78px;
   align-items: center;
-  min-height: 134px;
-  padding: 14px 20px;
+  min-height: 94px;
+  padding: 10px;
   border: 1px solid rgba(255, 207, 90, 0.52);
-  border-top: 0;
-  border-radius: 0 0 16px 16px;
-  background:
-    radial-gradient(circle at 18% 50%, rgba(255, 207, 90, 0.12), transparent 22%),
-    linear-gradient(90deg, rgba(2, 43, 24, 0.8), rgba(1, 9, 6, 0.98));
+  border-radius: 16px;
+  background:radial-gradient(circle at 18% 50%, rgba(255, 207, 90, 0.12), transparent 22%),
+    linear-gradient(190deg, rgba(2, 43, 24, 0.8), rgba(1, 9, 6, 0.98));
+    z-index: 2;
 }
 
 .rank-summary-medal {
   display: grid;
   place-items: center;
-  width: 106px;
-  height: 106px;
-  border: 3px solid rgba(255, 207, 90, 0.72);
-  border-radius: 50%;
-  color: #ffcf5a;
-  font-size: 54px;
-  box-shadow:
-    inset 0 0 18px rgba(0, 0, 0, 0.7),
-    0 0 22px rgba(255, 207, 90, 0.22);
+  width: 75px;
+  height: 75px;
+}
+
+.rank-summary-medal img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .rank-summary span,
 .rank-summary small {
   display: block;
-  color: rgba(255, 234, 181, 0.72);
-  font: 800 13px Arial, Helvetica, sans-serif;
+  color: rgb(195 193 186 / 72%);
+  font: 400 8.5px Arial, Helvetica, sans-serif;
   text-transform: uppercase;
+  text-align: left;
+  letter-spacing: -0.2px;
+  transform: scaleY(1.1);
 }
 
-.rank-summary strong {
-  display: block;
+#rank-self-position{
+ display: block;
   margin: 5px 0;
   color: #ffcf5a;
-  font: 900 42px Arial Black, Arial, Helvetica, sans-serif;
+  font: 400 42px  Arial, Helvetica, sans-serif;
   line-height: 1;
 }
 
-.rank-win-rate {
+#rank-self-points{
+display: block;
+  margin: 5px 0;
+  color: #70d743;
+  font: 400 18px Arial, Helvetica, sans-serif;
+  line-height: 1;
+}
+
+#rank-self-wins{
+   color: #fff;
+    font-size: 14px;
+
+}
+
+.rank-win-rate{
+text-align: center;
+    width: 100%;
+}
+
+.rank-win-rate div {
+  position: relative;
   display: grid;
   place-items: center;
-  width: 92px;
-  height: 92px;
-  justify-self: end;
-  border: 8px solid #70d743;
+  width: 46px;
+  height: 46px;
+  justify-self: center;
+  border: 5px solid #70d743;
   border-left-color: #ffcf5a;
   border-radius: 50%;
-  text-align: center;
+  margin:auto;
+      margin-bottom: 9px;
 }
 
 .rank-win-rate strong {
   margin: 0;
   color: #f8f1d9;
-  font-size: 24px;
+  font-size: 12px;
 }
 
 .rank-win-rate small {
-  max-width: 80px;
-  font-size: 9px;
+  position: absolute;
+  text-align: center;
 }
 
 .rank-table-head {
   display: grid;
-  grid-template-columns: 102px minmax(0, 1fr) 122px 92px 28px;
+ grid-template-columns: 52px minmax(0, 1fr) 70px 48px 16px;
   align-items: center;
-  min-height: 38px;
+   min-height: 25px;
   margin-top: 8px;
-  padding: 0 16px;
+   padding: 0 8px;
   border: 1px solid rgba(255, 207, 90, 0.42);
   border-radius: 12px 12px 0 0;
   background: rgba(0, 0, 0, 0.72);
   color: rgba(255, 234, 181, 0.78);
-  font: 900 12px Arial, Helvetica, sans-serif;
+  font: 400 9px Arial, Helvetica, sans-serif;
   text-transform: uppercase;
 }
 
@@ -2273,61 +2303,8 @@ canvas {
     font-size: 20px;
   }
 
-  .rank-tabs button {
-    min-height: 42px;
-    font-size: 10px;
-  }
 
-  .rank-summary {
-    grid-template-columns: 62px 1fr 1fr;
-    gap: 10px;
-    min-height: 98px;
-    padding: 12px;
-  }
 
-  .rank-summary-medal {
-    width: 54px;
-    height: 54px;
-    border-width: 2px;
-    font-size: 30px;
-  }
-
-  .rank-summary span,
-  .rank-summary small {
-    font-size: 9px;
-  }
-
-  .rank-summary strong {
-    font-size: 24px;
-  }
-
-  .rank-win-rate {
-    grid-column: 1 / -1;
-    display: flex;
-    width: 100%;
-    height: auto;
-    min-height: 36px;
-    justify-content: center;
-    gap: 10px;
-    border-width: 2px;
-    border-radius: 999px;
-  }
-
-  .rank-win-rate strong {
-    font-size: 18px;
-  }
-
-  .rank-win-rate small {
-    max-width: none;
-    font-size: 9px;
-  }
-
-  .rank-table-head {
-    grid-template-columns: 52px minmax(0, 1fr) 70px 48px 16px;
-    min-height: 32px;
-    padding: 0 8px;
-    font-size: 9px;
-  }
 
   .rank-list {
     padding-inline: 0;
